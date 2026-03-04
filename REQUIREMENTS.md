@@ -4,7 +4,7 @@
 
 A general-purpose, web-based Human-Machine Interface (HMI) for monitoring and controlling industrial machines and processes. While the examples and simulation in this document use a packaging machine scenario, the system is **application-agnostic** — it can be deployed for any industrial control context including packaging, food & beverage, material handling, water/wastewater, HVAC, building automation, discrete manufacturing, and process control.
 
-The HMI communicates with data sources via a **pluggable protocol driver** architecture supporting OPC UA, EtherNet/IP (CIP), Modbus TCP, and MQTT — allowing connection to a wide range of industrial controllers from CODESYS-based PLCs to Allen-Bradley MicroLogix/CompactLogix, as well as MQTT brokers for IIoT sensors, edge gateways, and other publish/subscribe data sources. The HMI is **state-model agnostic** — it does not impose PackML or any other state machine. Instead, it reads and displays whatever tags the data sources expose and lets operators interact through configurable command buttons and parameter inputs. It provides real-time visualization, alarm management, historical trending, recipe management, and production reporting.
+The HMI communicates with data sources via a **pluggable protocol driver** architecture supporting OPC UA, EtherNet/IP (CIP), Modbus TCP, and MQTT — allowing connection to a wide range of industrial controllers from CODESYS-based PLCs to Allen-Bradley MicroLogix/CompactLogix, as well as MQTT brokers for IIoT sensors, edge gateways, and other publish/subscribe data sources. The HMI is **state-model agnostic** — it does not impose PackML or any other state machine. Instead, it reads and displays whatever tags the data sources expose and lets operators interact through configurable command buttons and parameter inputs. It provides real-time visualization, alarm management, historical trending, job management, and production reporting.
 
 The system is **multi-platform** — it runs on **Windows, Linux (x86_64), and ARM platforms** (including Raspberry Pi and ARM-based industrial panel PCs). Typical deployments include dedicated industrial panel PCs with touchscreen, Raspberry Pi units for cost-sensitive installations, and standard Windows or Linux PCs for development and auxiliary HMI stations.
 
@@ -34,8 +34,8 @@ The system is designed to run **fully offline** with no internet dependency — 
 | Role | Description |
 |------|-------------|
 | **Unauthenticated** | Default state — can view dashboards, trends, and alarms. No login required. Can use specific controls explicitly configured for unauthenticated access (e.g., fault reset, resettable counters). |
-| **Operator** | Can start/stop/reset machine, acknowledge alarms, select recipes. Logs in via numeric PIN. |
-| **Supervisor** | Operator permissions + recipe editing, production reports, user management (can manage Operator accounts only). Logs in via numeric PIN. |
+| **Operator** | Can start/stop/reset machine, acknowledge alarms, select jobs. Logs in via numeric PIN. |
+| **Supervisor** | Operator permissions + job editing, production reports, user management (can manage Operator accounts only). Logs in via numeric PIN. |
 | **Engineer** | Full access including PLC connection and tag configuration, system settings, audit logs, and full user management (all roles). Logs in via username/password. |
 | **Designer** | All Engineer permissions plus screen design capabilities: create and edit screen layouts, configure widgets, define navigation structure, and manage reusable screen templates. Logs in via username/password. |
 
@@ -119,24 +119,37 @@ The system provides a lightweight Python scripting engine that allows engineers 
 | FR-TREND-06 | Export trend data to CSV |
 | FR-TREND-07 | Down-sample large datasets for responsive chart rendering |
 
-### 3.5 Recipe Management
+### 3.5 Job Management
+
+Jobs (sometimes called "recipes" in other HMI systems) are named collections of tag setpoints that define how a machine should be configured for a particular product, process, or production run. A job captures all the parameters needed to set up or change over a machine — speeds, temperatures, positions, timers, and any other writable tag values.
+
+**Job interface overview:**
+
+The Job page has two sub-pages accessible via tabs: **Job List** and **Job Editor**.
+
+**Job List** displays all saved jobs in a searchable, sortable table showing: job name, description, version number, last-modified date, last-modified-by user, and status (active/inactive). The currently loaded job (if any) is highlighted. Operators can select a job and download it; Supervisors and above can create, edit, clone, and delete jobs.
+
+**Job Editor** provides a form-based interface for defining a job's parameters. Each parameter row shows: the bound tag's short name, description, the setpoint value, the tag's engineering units, and the tag's configured min/max range. Parameters that fall outside the tag's range are flagged with a validation warning. The editor supports grouping parameters by tag group for readability.
 
 | ID | Requirement |
 |----|-------------|
-| FR-RCP-01 | Define recipes as named collections of tag setpoints (e.g., speed, temperature, film length) |
-| FR-RCP-02 | CRUD operations on recipes (Create, Read, Update, Delete) |
-| FR-RCP-03 | Download recipe parameters to machine (write values to the corresponding PLC tags) |
-| FR-RCP-04 | Upload current machine parameters as a new recipe |
-| FR-RCP-05 | Compare two recipes side-by-side with differences highlighted |
-| FR-RCP-06 | Recipe versioning — track changes over time |
-| FR-RCP-07 | Require Supervisor role or above for recipe edits; Operator can select/download only |
-| FR-RCP-08 | Optionally restrict recipe download based on a configurable tag condition (e.g., only when a "ReadyForRecipe" tag is true) |
+| FR-JOB-01 | **Job definition** — a job is a named, versioned collection of tag-value pairs (setpoints). Each job contains: a unique name, an optional description, and a list of parameters where each parameter maps a tag (by short name) to a target value. Jobs are stored in the SQLite database. |
+| FR-JOB-02 | **CRUD operations** — create, read, update, and delete jobs. Creating a job can start from scratch (empty parameter list), by cloning an existing job, or by uploading current machine values (FR-JOB-04). |
+| FR-JOB-03 | **Download job to machine** — write all of a job's parameter values to the corresponding PLC tags in a single batch operation. The download shows a confirmation dialog listing every parameter and its target value. If any tag write fails, the system reports which parameters succeeded and which failed. The download is logged to the audit trail as a single event with the job name and all parameter values. |
+| FR-JOB-04 | **Upload from machine** — read the current values of a defined set of tags from the PLC and save them as a new job (or a new version of an existing job). The engineer configures which tags are included in the "upload set" — this is defined once and reused across all jobs. |
+| FR-JOB-05 | **Compare jobs** — select two jobs and display them side-by-side with differences highlighted (changed values in amber, parameters present in one but not the other in red/green). The comparison view also shows the engineering units and valid range for each parameter. |
+| FR-JOB-06 | **Job versioning** — every save creates a new version. The version history shows: version number, timestamp, user who made the change, and a diff against the previous version. Previous versions can be viewed and restored. |
+| FR-JOB-07 | **Role-based access** — Operators can view the job list and download (apply) a job to the machine. Supervisors and above can create, edit, clone, delete, and manage job versions. Individual jobs can optionally be locked by a Supervisor to prevent further edits. |
+| FR-JOB-08 | **Conditional download** — job download can be restricted based on a configurable tag condition (e.g., only when a `ReadyForJob` tag is true, or when `MachineRunning` is false). When the condition is not met, the "Download" button is disabled with a tooltip explaining why (e.g., "Machine must be stopped before loading a job"). |
+| FR-JOB-09 | **Job import/export** — jobs can be exported as JSON files and imported on another system. Import uses the same diff view as tag import (FR-TAG-10) to show new, changed, and deleted jobs. |
+| FR-JOB-10 | **Parameter validation** — when editing a job, each parameter value is validated against the bound tag's configured range (FR-TAG-04). Out-of-range values show a warning but can be saved (soft validation). On download, out-of-range values require explicit confirmation. |
+| FR-JOB-11 | **Active job tracking** — the system tracks which job was last downloaded to the machine. The active job name is available as a system-like tag (`$ACTIVE_JOB`) and can be displayed on dashboard screens. If an operator manually changes a parameter that differs from the active job, the system flags the job as "modified" (visual indicator on the dashboard). |
 
 ### 3.6 Production Reporting
 
 | ID | Requirement |
 |----|-------------|
-| FR-RPT-01 | Track production runs (start time, end time, recipe, counts, downtime) |
+| FR-RPT-01 | Track production runs (start time, end time, job, counts, downtime) |
 | FR-RPT-02 | Calculate and display OEE (Availability x Performance x Quality) per run and per shift |
 | FR-RPT-03 | Downtime tracking with reason codes (operator-entered or auto-detected from alarms) |
 | FR-RPT-04 | Shift-based reporting (configurable shift schedules) |
@@ -145,7 +158,7 @@ The system provides a lightweight Python scripting engine that allows engineers 
 
 ### 3.7 Data Source Connections & Protocol Drivers
 
-The backend uses a **pluggable protocol driver** architecture. Each data source connection specifies a protocol, and the corresponding driver handles communication. Data sources include PLCs (via OPC UA, EtherNet/IP, Modbus) and MQTT brokers (for IIoT sensors, edge gateways, and other pub/sub sources). The HMI application code (widgets, recipes, alarms, trends) interacts only with the tag database by short name — it is completely protocol-agnostic.
+The backend uses a **pluggable protocol driver** architecture. Each data source connection specifies a protocol, and the corresponding driver handles communication. Data sources include PLCs (via OPC UA, EtherNet/IP, Modbus) and MQTT brokers (for IIoT sensors, edge gateways, and other pub/sub sources). The HMI application code (widgets, jobs, alarms, trends) interacts only with the tag database by short name — it is completely protocol-agnostic.
 
 | ID | Requirement |
 |----|-------------|
@@ -176,7 +189,7 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 |----|-------------|
 | FR-TAG-01 | **Data source management** — configure named data sources, each with a protocol type, endpoint/IP address (or broker hostname for MQTT), and protocol-specific settings (see FR-PROTO-02 through FR-PROTO-04, FR-PROTO-08). Each data source has a unique name (e.g., "Main PLC", "Packaging Line 2", "Roof Sensor Gateway") and a single protocol. Tags are created under a data source; the data source's protocol governs the tag's address format, available data types, and import methods. |
 | FR-TAG-02 | Import tags from external sources. Supported import sources: **(a)** browse a live OPC UA server address space and select nodes, **(b)** browse an EtherNet/IP controller's tag list, **(c)** import a CODESYS symbol configuration XML file (see FR-TAG-24), **(d)** import an RSLogix 500 CSV export file (see FR-TAG-25), **(e)** subscribe to an MQTT broker and discover topics with recent activity (see FR-PROTO-08). In all cases, the source address is auto-populated from the source. For Modbus (no browsing), tags are added manually or via CSV/JSON import. |
-| FR-TAG-03 | Each tag must have a unique short name (friendly identifier), a data source assignment, and a source address. Short names are used in widget bindings, recipes, alarms, and audit logs — the raw source address is not exposed to operators. The tag editor enforces the source address format based on the data source's protocol: when adding or editing a tag, the address input field provides protocol-appropriate validation, placeholder text, and format hints (e.g., Modbus shows `HR:40001:FLOAT32` format, OPC UA shows `ns=2;s=...` format). |
+| FR-TAG-03 | Each tag must have a unique short name (friendly identifier), a data source assignment, and a source address. Short names are used in widget bindings, jobs, alarms, and audit logs — the raw source address is not exposed to operators. The tag editor enforces the source address format based on the data source's protocol: when adding or editing a tag, the address input field provides protocol-appropriate validation, placeholder text, and format hints (e.g., Modbus shows `HR:40001:FLOAT32` format, OPC UA shows `ns=2;s=...` format). |
 | FR-TAG-04 | Each tag has configurable options: engineering units (e.g., "°C", "mm/s"), display format (decimal places, number format), range (min/max for validation and gauge scaling), deadband (minimum change before a value update is pushed), and read/write mode (read-only, read-write, write-only) |
 | FR-TAG-05 | Tags can be flagged as trended (logged to history) with a configurable sample rate per tag |
 | FR-TAG-06 | Tags can be flagged as alarm sources. Two alarm modes are supported: **threshold** — for analog tags, with high, high-high, low, low-low limits and severity per limit; **boolean** — for discrete tags, where a true value raises an alarm (e.g., `conveyorMotorFault` = true → Critical alarm "Conveyor Motor Fault"). Each alarm source has a configurable severity, message text, and active-on state (true or false, to handle both fault flags and healthy-state flags). |
@@ -185,7 +198,7 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 | FR-TAG-09 | Tag import/export via JSON or CSV for backup and transfer between systems |
 | FR-TAG-10 | When importing from any source (live OPC UA/EtherNet/IP browse, CODESYS XML, JSON, or CSV), the system compares the incoming tags against the existing tag database and presents a **diff view** showing: **(a)** new tags (exist in source but not in database), **(b)** deleted tags (exist in database but not in source), **(c)** changed tags (same short name or source address but different options/address). Each difference is individually selectable — the user can accept or reject each add, delete, and change before committing the import. |
 | FR-TAG-11 | The import diff view displays a summary count (e.g., "12 new, 3 changed, 2 removed") and supports select-all/deselect-all per category. Changed tags show a side-by-side comparison of old vs. new values for each modified field. |
-| FR-TAG-12 | Deleting a tag (manually or via import) warns if it is referenced by any widget, alarm, recipe, or trend configuration; optionally cascade-remove or block deletion |
+| FR-TAG-12 | Deleting a tag (manually or via import) warns if it is referenced by any widget, alarm, job, or trend configuration; optionally cascade-remove or block deletion |
 | FR-TAG-13 | All tag database changes are logged to the audit trail, including import operations (source, number of adds/changes/deletes applied) |
 | FR-TAG-14 | **Structured types (Structs)**: When importing struct-typed variables — from an OPC UA server (ExtensionObject nodes) or a CODESYS XML file (FR-TAG-24) — the engineer can choose to **(a)** auto-flatten the struct into individual scalar tags, one tag per field, with short names derived from the struct path (e.g., `Motor1.Speed`, `Motor1.Current`, `Motor1.FaultCode`), or **(b)** import the struct as a single compound tag. Flattened tags behave identically to manually created scalar tags. |
 | FR-TAG-15 | **Compound tag display**: A compound (non-flattened struct) tag stores the full struct value. Widgets that bind to a compound tag can reference individual fields using dot notation (e.g., binding to `Motor1Status.Speed` accesses the Speed field of the `Motor1Status` struct). The tag editor shows the struct's field list with data types. |
@@ -221,6 +234,7 @@ The system provides a set of **built-in system tags** that are always available 
 | `$APP_UPTIME` | Int32 | Seconds since the HMI backend process started |
 | `$COMM_STATUS` | String | Aggregate data source status: "OK" if all connected, "DEGRADED" if any disconnected, "OFFLINE" if all disconnected |
 | `$CURRENT_SHIFT` | String | Name of the currently active shift (from shift schedule configuration), or empty if no shift is active |
+| `$ACTIVE_JOB` | String | Name of the currently loaded job (see FR-JOB-11), or empty if no job has been downloaded |
 
 | ID | Requirement |
 |----|-------------|
@@ -245,7 +259,7 @@ The system provides a set of **built-in system tags** that are always available 
 
 | ID | Requirement |
 |----|-------------|
-| FR-AUDIT-01 | Log all control actions, recipe changes, alarm acknowledgments, and login events |
+| FR-AUDIT-01 | Log all control actions, job changes, alarm acknowledgments, and login events |
 | FR-AUDIT-02 | Each entry: timestamp, user, action type, details, source IP |
 | FR-AUDIT-03 | Searchable/filterable audit log page (Engineer role only) |
 | FR-AUDIT-04 | Audit log retention policy (see NFR-13) |
@@ -260,8 +274,8 @@ The system provides a set of **built-in system tags** that are always available 
 | FR-SCRN-03 | Widget palette includes: value displays, gauges, bar charts, trend charts, status indicators, buttons, parameter inputs, alarm tables, images/shapes, and text labels |
 | FR-SCRN-04 | Each widget exposes a property panel for configuration: tag binding, label, units, colors, thresholds, size, position, visibility, and enabled state (FR-CTRL-09/10). Tag binding uses a **dropdown selector** populated from the tag database, with **autocomplete** filtering as the engineer types (matching against short name, group, and template). The dropdown displays tags organized by group and template instance, and indicates each tag's data type. The engineer can also filter by data-type compatibility (e.g., a numeric input widget only shows numeric tags). |
 | FR-SCRN-05 | Support widget resize and move with visual guides (alignment lines, equal spacing indicators) |
-| FR-SCRN-06 | **Navigation shell** — the application uses a persistent navigation shell visible on all screens at runtime. The shell consists of: **(a)** a **top bar** containing the application title/logo, active alarm summary badge (tappable → alarm page), data source connection status indicators, the current user name with role, and a user menu (profile, logout); **(b)** a **side navigation rail** (collapsible to icons on small screens) listing the top-level pages (Dashboard, Trends, Alarms, Recipes, Reports, Settings, Profile). The active page is highlighted. Settings is visible only to Engineer/Designer roles. The navigation rail can be collapsed or expanded by the user; collapsed state is persisted per user. |
-| FR-SCRN-07 | **Page hierarchy and sub-navigation** — top-level pages that contain sub-pages (e.g., Alarms → Active Alarms / Alarm History; Recipes → Recipe List / Recipe Editor) use a **tab bar** or **segmented control** below the top bar to switch between sub-pages. The URL updates to reflect the current page and sub-page (e.g., `/alarms/active`, `/recipes/editor/3`), enabling direct linking and browser back/forward navigation. |
+| FR-SCRN-06 | **Navigation shell** — the application uses a persistent navigation shell visible on all screens at runtime. The shell consists of: **(a)** a **top bar** containing the application title/logo, active alarm summary badge (tappable → alarm page), data source connection status indicators, the current user name with role, and a user menu (profile, logout); **(b)** a **side navigation rail** (collapsible to icons on small screens) listing the top-level pages (Dashboard, Trends, Alarms, Jobs, Reports, Settings, Profile). The active page is highlighted. Settings is visible only to Engineer/Designer roles. The navigation rail can be collapsed or expanded by the user; collapsed state is persisted per user. |
+| FR-SCRN-07 | **Page hierarchy and sub-navigation** — top-level pages that contain sub-pages (e.g., Alarms → Active Alarms / Alarm History; Jobs → Job List / Job Editor) use a **tab bar** or **segmented control** below the top bar to switch between sub-pages. The URL updates to reflect the current page and sub-page (e.g., `/alarms/active`, `/jobs/editor/3`), enabling direct linking and browser back/forward navigation. |
 | FR-SCRN-08 | **Designer-created screen navigation** — the Dashboard top-level page hosts one or more designer-created screens. When multiple screens exist, the navigation rail shows them as nested entries under Dashboard (e.g., "Overview", "Sealing Station", "Film Feed"). The designer defines the screen order and display names. Each screen has a unique URL path (e.g., `/screens/sealing-station`). |
 | FR-SCRN-09 | **In-screen navigation links** — widgets can be configured as navigation links that navigate to another screen on tap (e.g., tapping a machine area graphic opens its detail screen). Navigation links can target: **(a)** another designer-created screen by name, **(b)** a built-in page (e.g., Trends pre-filtered to specific tags), or **(c)** an external URL (opens in new tab). Navigation links show a visual affordance (e.g., subtle arrow icon or underline on hover). |
 | FR-SCRN-10 | **Breadcrumb trail** — when navigating from one screen to another via an in-screen link, a breadcrumb trail appears below the top bar showing the navigation path (e.g., "Overview → Sealing Station → Heater Detail"). Tapping any breadcrumb navigates back to that screen. The breadcrumb clears when navigating via the side rail. |
@@ -334,31 +348,44 @@ The system provides a set of **built-in system tags** that are always available 
 
 ---
 
-### UC-03: Operator Performs a Recipe Changeover
+### UC-03: Operator Loads a Job for Production Changeover
 
 **Actor**: Operator
-**Precondition**: Machine is not running (or recipe download condition tag is satisfied)
+**Precondition**: Machine is not running (or job download condition tag is satisfied, FR-JOB-08)
 **Flow**:
-1. Operator navigates to the Recipe page
-2. Selects "Product-B 500ml" from the recipe list
-3. Reviews recipe parameters (speed, seal temp, film length, etc.)
-4. Presses "Download to Machine" — system confirms with a dialog
-5. Backend writes all recipe parameters to the PLC
-6. Dashboard shows the new recipe name; operator presses the "Start" command button
+1. Operator navigates to the Jobs page → Job List tab
+2. Scrolls or searches for "Product-B 500ml" — the list shows job name, description, and version
+3. Taps the job to preview its parameters: speed setpoint (120 ppm), seal temperature (185°C), film length (320mm), etc., each shown with engineering units and the current machine value for comparison
+4. Presses "Load Job" — confirmation dialog shows all parameters that will change, with current → new values highlighted
+5. Backend writes all job parameters to the PLC in a single batch; progress indicator shows completion
+6. Dashboard updates: the `$ACTIVE_JOB` indicator shows "Product-B 500ml"; operator presses the "Start" command button
 
 ---
 
-### UC-04: Supervisor Creates a New Recipe
+### UC-04: Supervisor Creates a New Job
 
 **Actor**: Supervisor
 **Precondition**: Logged in with Supervisor role
 **Flow**:
-1. Supervisor navigates to Recipe Management
-2. Taps "New Recipe" or "Clone from existing"
-3. Enters recipe name, fills in parameters (speed setpoint, temperatures, film settings)
-4. Saves the recipe — system validates parameter ranges
-5. Optionally compares the new recipe against an existing one side-by-side
-6. Recipe is stored in the database with version 1
+1. Supervisor navigates to Jobs → Job Editor tab
+2. Taps "New Job" — chooses to start from scratch or clone an existing job (e.g., clone "Product-A 250ml" as a starting point)
+3. Enters job name ("Product-C 750ml") and description ("Large format, high-speed configuration for 750ml pouches")
+4. Fills in parameters — the editor shows each tag's short name, current value, engineering units, and valid range; values outside the range are flagged with a warning (FR-JOB-10)
+5. Optionally compares the new job against the cloned source side-by-side to verify changes (FR-JOB-05)
+6. Saves — job is stored in the database as version 1; audit trail records the creation with all parameter values
+
+---
+
+### UC-04a: Supervisor Captures Current Machine State as a New Job
+
+**Actor**: Supervisor
+**Precondition**: Machine is running with a good configuration that should be saved
+**Flow**:
+1. Supervisor navigates to Jobs → Job Editor tab
+2. Taps "Upload from Machine" — system reads the current values of all tags in the upload set (FR-JOB-04)
+3. Parameter table auto-fills with the live machine values
+4. Supervisor enters a job name ("Product-A Optimized") and description, reviews the captured values
+5. Saves the job — system stores it as a new job with version 1
 
 ---
 
@@ -513,16 +540,16 @@ The system provides a set of **built-in system tags** that are always available 
 
 ---
 
-### UC-10: Supervisor Compares Recipes Before Changeover
+### UC-10: Supervisor Compares Jobs Before Changeover
 
 **Actor**: Supervisor
-**Precondition**: Logged in with Supervisor role; multiple recipes exist
+**Precondition**: Logged in with Supervisor role; multiple jobs exist
 **Flow**:
-1. Supervisor navigates to Recipe Management
-2. Selects the current recipe ("Product-A 250ml") and a candidate recipe ("Product-A 500ml")
-3. Taps "Compare" — system displays both recipes side-by-side with differences highlighted
-4. Supervisor reviews the parameter differences (e.g., film length, seal temperature, speed setpoint)
-5. Satisfied with the changes, supervisor selects the new recipe and taps "Download to Machine"
+1. Supervisor navigates to Jobs → Job List tab
+2. Selects the currently active job ("Product-A 250ml") and a candidate job ("Product-A 500ml") using checkboxes
+3. Taps "Compare" — system displays both jobs side-by-side with differences highlighted (changed values in amber, parameters present in one but not the other in red/green)
+4. Supervisor reviews the parameter differences (e.g., film length 200mm → 320mm, seal temperature 175°C → 185°C, speed setpoint 150 ppm → 120 ppm)
+5. Satisfied with the changes, supervisor selects the candidate job and taps "Load Job"
 
 ---
 
@@ -568,7 +595,7 @@ The system provides a set of **built-in system tags** that are always available 
 **Precondition**: Logged in with Designer role; multiple screens exist
 **Flow**:
 1. Designer navigates to Screen Editor and taps "Navigation"
-2. Sees the current page tree: Home → Line 3 Overview, Line 4 Overview, Alarms, Recipes
+2. Sees the current page tree: Home → Line 3 Overview, Line 4 Overview, Alarms, Jobs
 3. Creates a new group "Production Lines" and drags Line 3 and Line 4 screens under it
 4. Adds a drill-down link: tapping the Line 3 status indicator on the Home screen navigates to the Line 3 Overview
 5. Reorders the menu items and sets "Home" as the default landing page
@@ -629,7 +656,7 @@ The example screens are backed by a pre-configured tag set using a packaging mac
 | **Film Station** | FilmTension, FilmLength, SpliceDetect | Random/noise for analogs, toggle for SpliceDetect |
 | **Pressures** | VacuumPressure, AirPressure | Sine wave + noise |
 | **Digital I/O** | DoorClosed, EStopActive, FilmBreak, ProductDetect | Static (manually togglable) with periodic random fault injection |
-| **Production** | BatchID, RecipeName, ShiftNumber | Static (set via recipe writes) |
+| **Production** | BatchID, JobName, ShiftNumber | Static (set via job downloads) |
 | **Structured Types** | MotorStatus (Struct: Speed Float32, Current Float32, FaultCode UInt16, Running Bool), ZoneTemps (Array[6] of Float32), MachineState (Enum: 0=Stopped, 1=Running, 2=Faulted, 3=Maintenance) | Struct fields use individual behaviors; enum cycles through values |
 
 ### Simulation Indicator
@@ -654,7 +681,7 @@ The application shell provides a **side navigation rail** (left) and a **top bar
 │  Film Fd │  │   (designer screens, built-in pages,      │   │
 │ Trends   │  │    or settings panels rendered here)      │   │
 │ Alarms   │  │                                           │   │
-│ Recipes  │  │                                           │   │
+│ Jobs     │  │                                           │   │
 │ Reports  │  │                                           │   │
 │ Settings*│  └───────────────────────────────────────────┘   │
 │ Profile  │          [Tab: Active | History]  ← sub-pages    │
@@ -673,9 +700,9 @@ The application shell provides a **side navigation rail** (left) and a **top bar
 ├── Alarms                        /alarms
 │   ├── Active Alarms             /alarms/active        (tab)
 │   └── Alarm History             /alarms/history       (tab)
-├── Recipes                       /recipes
-│   ├── Recipe List               /recipes/list         (tab)
-│   └── Recipe Editor             /recipes/editor/:id   (tab)
+├── Jobs                          /jobs
+│   ├── Job List                  /jobs/list            (tab)
+│   └── Job Editor                /jobs/editor/:id      (tab)
 ├── Reports                       /reports
 │   ├── Production Runs           /reports/runs         (tab)
 │   └── OEE / Shift Report        /reports/oee          (tab)
