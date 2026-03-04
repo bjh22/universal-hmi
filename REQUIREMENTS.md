@@ -2,7 +2,9 @@
 
 ## 1. Project Overview
 
-A web-based Human-Machine Interface (HMI) for monitoring and controlling packaging machines, deployed on a **dedicated industrial panel PC** with touchscreen. The HMI communicates with PLCs via a **pluggable protocol driver** architecture supporting OPC UA, EtherNet/IP (CIP), and Modbus TCP — allowing connection to a wide range of industrial controllers from CODESYS-based PLCs to Allen-Bradley MicroLogix/CompactLogix. The HMI is **state-model agnostic** — it does not impose PackML or any other state machine. Instead, it reads and displays whatever tags the PLC exposes and lets operators interact through configurable command buttons and parameter inputs. It provides real-time visualization, alarm management, historical trending, recipe management, and production reporting.
+A web-based Human-Machine Interface (HMI) for monitoring and controlling packaging machines. The HMI communicates with PLCs via a **pluggable protocol driver** architecture supporting OPC UA, EtherNet/IP (CIP), and Modbus TCP — allowing connection to a wide range of industrial controllers from CODESYS-based PLCs to Allen-Bradley MicroLogix/CompactLogix. The HMI is **state-model agnostic** — it does not impose PackML or any other state machine. Instead, it reads and displays whatever tags the PLC exposes and lets operators interact through configurable command buttons and parameter inputs. It provides real-time visualization, alarm management, historical trending, recipe management, and production reporting.
+
+The system is **multi-platform** — it runs on **Windows, Linux (x86_64), and ARM platforms** (including Raspberry Pi and ARM-based industrial panel PCs). Typical deployments include dedicated industrial panel PCs with touchscreen, Raspberry Pi units for cost-sensitive installations, and standard Windows or Linux PCs for development and auxiliary HMI stations.
 
 The system is designed to run **fully offline** with no internet dependency — all assets are bundled locally.
 
@@ -227,14 +229,16 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 | NFR-04 | **Browser**: Chromium-based (panel PC runs Chromium in kiosk mode); also support Chrome and Edge for maintenance laptops |
 | NFR-05 | **Display**: Designed for the panel PC's native resolution (configurable, default 1920x1080); touch-first with minimum 44px touch targets |
 | NFR-06 | **Security**: All PLC credentials and passwords/PINs stored encrypted at rest. HTTPS/TLS for browser-to-backend communication is supported but optional — HTTP is acceptable on isolated factory networks. |
-| NFR-07 | **Deployment**: Runs as a systemd service (or equivalent); auto-starts on boot; watchdog restarts on crash. No Docker required. |
-| NFR-08 | **Kiosk mode**: Browser launches fullscreen on boot with no browser chrome; on-screen keyboard available for text input |
+| NFR-07 | **Deployment**: Platform-native service management — systemd on Linux/Raspberry Pi, Windows Service (or NSSM wrapper) on Windows. Auto-starts on boot with watchdog restart on crash. No Docker required. |
+| NFR-08 | **Kiosk mode**: Browser launches fullscreen on boot with no browser chrome; on-screen keyboard available for text input. Kiosk configuration is platform-specific (e.g., Chromium autostart on Linux/Raspberry Pi, Chrome in kiosk mode on Windows). |
 | NFR-09 | **Offline**: Fully self-contained — no CDN, external fonts, or internet-dependent resources. All assets bundled locally. |
 | NFR-10 | **Configuration**: Server endpoint, database, and basic settings via environment variables or config file |
 | NFR-11 | **Logging**: Structured application logging (JSON) with configurable log levels |
 | NFR-12 | **Testability**: Backend API unit tests, protocol driver integration tests using the tag simulation layer, and frontend component tests |
 | NFR-13 | **Data retention**: Configurable retention policy for trend data and audit logs with automatic purge to prevent disk filling (default: trends 90 days, audit 1 year) |
 | NFR-14 | **Database**: SQLite in WAL mode for concurrent read performance; periodic backup to configurable location (USB, network share) |
+| NFR-15 | **Multi-platform**: Runs on Windows (10/11, x86_64), Linux (x86_64), and ARM (armv7l / aarch64, including Raspberry Pi 3/4/5). All Python dependencies must have pure-Python fallbacks or provide pre-built wheels for all target platforms. Frontend assets are platform-independent. |
+| NFR-16 | **Packaging**: Provide a single-command install method per platform — e.g., a pip-installable package, a self-contained archive, or platform-specific installers. Avoid requiring users to compile native extensions. |
 
 ---
 
@@ -609,3 +613,4 @@ When any tag is in simulation mode, the HMI displays a clear visual indicator (e
 | 5 | **Display** | Touch-first design for panel PC touchscreen. Designed for native panel resolution (default 1920x1080). Maintenance laptops can connect via browser on the local network. |
 | 6 | **Regulatory** | No special regulatory requirements. Standard audit trail and authentication; no FDA 21 CFR Part 11 or formal GMP compliance needed. |
 | 7 | **Complex data types** | OPC UA structs, arrays, and enumerations are supported via flatten-on-import (recommended) or compound tags. Flatten is the default as it keeps the widget binding model simple and consistent across all protocols. Compound tags are available for engineers who prefer to preserve the PLC's type structure. EtherNet/IP UDTs and Modbus do not support complex types — those protocols continue to use scalar tags only. For protocols without native struct support, **tag templates** provide a virtual struct mechanism: engineers define a template with named fields, then create instances where each field is independently mapped to any PLC address. This gives legacy PLCs the same logical grouping benefits as OPC UA structs without requiring PLC-side support. |
+| 8 | **Multi-platform** | The chosen technology stack (Python + SQLite backend, React frontend served as static assets) is inherently cross-platform. Python and all key dependencies (asyncua, pycomm3, pymodbus, SQLAlchemy) run on Windows, Linux x86_64, and ARM without platform-specific code. SQLite is embedded and works everywhere. The frontend is browser-based and platform-independent. Platform-specific concerns are limited to service management (systemd vs. Windows Service) and optional kiosk-mode configuration. |
