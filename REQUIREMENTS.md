@@ -164,6 +164,11 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 | FR-TAG-16 | **OPC UA arrays**: Array-typed OPC UA nodes can be imported as **(a)** individual tags per element (e.g., `ZoneTemps[0]` through `ZoneTemps[9]`), or **(b)** a single array tag. Widgets binding to an array tag reference elements by index using bracket notation (e.g., `ZoneTemps[3]`). |
 | FR-TAG-17 | **OPC UA enumerations**: Enumeration-typed OPC UA nodes are imported with their value-to-name mapping (e.g., 0 = "Stopped", 1 = "Running", 2 = "Faulted"). The mapping is stored as part of the tag configuration. Widgets display the enumeration name by default with the option to show the numeric value. Enum mappings can be edited locally if the PLC's definitions are unclear or need operator-friendly labels. |
 | FR-TAG-18 | **Complex type discovery**: During OPC UA server browse (FR-TAG-02a), the import dialog indicates each node's type category (scalar, struct, array, enum) with an icon or badge. Struct and array nodes show an expand/collapse control to preview their fields or element count before import. The engineer selects the import mode (flatten vs. compound/array) per node or applies a default for all. |
+| FR-TAG-19 | **Tag templates**: Engineers can define a tag template (virtual struct) consisting of a set of named fields, each with a data type, engineering unit, display format, and optional alarm/trend configuration. Templates are protocol-agnostic and do not encode PLC addresses or offsets. |
+| FR-TAG-20 | **Tag template instances**: Engineers can create an instance of a tag template by providing a short-name prefix (e.g., `motor1`) and independently mapping each field to any PLC address on any connection. For example, a `Motor` template with fields `speedCommand`, `speedFeedback`, `current`, `faultCode` could produce instance `motor1` with mappings `speedCommand` → `N7:0`, `speedFeedback` → `N7:1`, `current` → `F8:0`, `faultCode` → `B3:0/0` — each field's address, data type, and connection are independent. |
+| FR-TAG-21 | **Template instance tag generation**: When a template instance is saved, the system generates individual tags in the tag database using the pattern `{prefix}.{fieldName}` (e.g., `motor1.speedCommand`, `motor1.current`). Generated tags are fully functional scalar tags — they can be bound to widgets, trended, and alarmed identically to manually created tags. |
+| FR-TAG-22 | **Template instance management**: Editing a template (adding/removing/renaming fields) presents a diff view (similar to FR-TAG-10) showing the impact on all existing instances. Adding a field prompts the engineer to map addresses for each instance. Removing a field warns if the generated tags are referenced by widgets, alarms, or trends. Renaming a field updates all generated tag short names and widget bindings automatically. |
+| FR-TAG-23 | **Template-aware tag editor**: The tag editor displays template instances as collapsible groups. The instance header shows the template name and prefix; expanding reveals the individual field tags with their mapped addresses. Engineers can also view and edit template instances in a dedicated "Templates" section of the tag editor. |
 
 ### 3.9 User Management & Authentication
 
@@ -339,6 +344,28 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 8. Engineer assigns friendly short names (e.g., `N7:0` → `MachineCmd`, `F8:0` → `SpeedSetpoint`, `T4:0.ACC` → `CycleTimer`)
 9. Configures data types, units, and ranges for each tag
 10. Saves — tags are available for widget binding by short name
+
+---
+
+### UC-06b2: Engineer Creates Tag Templates for Identical Motors on a Legacy PLC
+
+**Actor**: Engineer
+**Precondition**: Logged in with Engineer role; MicroLogix 1400 connection configured (UC-06b); plant has 4 identical motors with tags spread across multiple data files
+**Flow**:
+1. Engineer navigates to Tag Editor → Templates and taps "New Template"
+2. Names the template `Motor` and defines fields: `speedCommand` (INT), `speedFeedback` (INT), `current` (FLOAT, units: Amps), `faultCode` (INT), `running` (BOOL)
+3. Configures template-level defaults: alarm on `current` > 15A, trend `speedFeedback` at 1s interval
+4. Taps "Create Instance", enters prefix `motor1`
+5. Maps each field to a PLC address independently:
+   - `speedCommand` → `N7:0`
+   - `speedFeedback` → `N7:1`
+   - `current` → `F8:0`
+   - `faultCode` → `N7:2`
+   - `running` → `B3:0/0`
+6. Repeats for `motor2` (addresses `N7:10`, `N7:11`, `F8:1`, `N7:12`, `B3:0/1`), `motor3`, `motor4`
+7. Saves — system generates 20 tags (5 fields × 4 instances): `motor1.speedCommand`, `motor1.speedFeedback`, `motor1.current`, etc.
+8. All generated tags appear in the tag editor grouped under their template instance and are immediately available for widget binding
+9. Later, engineer adds a `vibration` field (FLOAT, units: mm/s) to the `Motor` template; system prompts for the PLC address mapping on each of the 4 instances; new tags (`motor1.vibration`, `motor2.vibration`, etc.) are generated upon save
 
 ---
 
@@ -539,4 +566,4 @@ The simulation ships with pre-built example screens that demonstrate the system'
 | 4 | **Historian** | Built-in database only. The HMI logs trend data to its own DB. No external historian integration in v1. |
 | 5 | **Display** | Touch-first design for panel PC touchscreen. Designed for native panel resolution (default 1920x1080). Maintenance laptops can connect via browser on the local network. |
 | 6 | **Regulatory** | No special regulatory requirements. Standard audit trail and authentication; no FDA 21 CFR Part 11 or formal GMP compliance needed. |
-| 7 | **Complex data types** | OPC UA structs, arrays, and enumerations are supported via flatten-on-import (recommended) or compound tags. Flatten is the default as it keeps the widget binding model simple and consistent across all protocols. Compound tags are available for engineers who prefer to preserve the PLC's type structure. EtherNet/IP UDTs and Modbus do not support complex types — those protocols continue to use scalar tags only. |
+| 7 | **Complex data types** | OPC UA structs, arrays, and enumerations are supported via flatten-on-import (recommended) or compound tags. Flatten is the default as it keeps the widget binding model simple and consistent across all protocols. Compound tags are available for engineers who prefer to preserve the PLC's type structure. EtherNet/IP UDTs and Modbus do not support complex types — those protocols continue to use scalar tags only. For protocols without native struct support, **tag templates** provide a virtual struct mechanism: engineers define a template with named fields, then create instances where each field is independently mapped to any PLC address. This gives legacy PLCs the same logical grouping benefits as OPC UA structs without requiring PLC-side support. |
