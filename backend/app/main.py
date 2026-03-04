@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.api import alarms, audit, auth, datasources, jobs, production, screens, scripts, tags, trends
+from app.api import alarms, audit, auth, datasources, jobs, production, screens, scripts, tags, trends, users
 from app.api.websocket import router as ws_router
 from app.core.config import settings
 from app.core.database import async_session, init_db
