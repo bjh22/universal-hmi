@@ -13,7 +13,7 @@ A web-based Human-Machine Interface (HMI) for monitoring and controlling packagi
 | Real-time Comms | WebSocket (via FastAPI) | Low-latency live data push to browser |
 | Backend | Python 3.11+ / FastAPI | Async-native, excellent performance, easy OPC UA integration |
 | OPC UA Client | asyncua (opcua-asyncio) | Mature async Python OPC UA client/server library |
-| Database | SQLite (dev) / PostgreSQL (prod) | Alarm history, trend data, recipes, audit logs |
+| Database | SQLite | Embedded, zero-config, portable — ideal for a dedicated panel PC deployment |
 | ORM | SQLAlchemy + Alembic | Database access and migrations |
 | Auth | JWT tokens + bcrypt | Stateless auth with role-based access control |
 | Simulation | Built-in OPC UA sim server | Simulates a packaging machine for development/demo |
