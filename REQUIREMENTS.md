@@ -60,12 +60,13 @@ Control widgets allow operators to write values to PLC tags. Like visualization 
 | ID | Requirement |
 |----|-------------|
 | FR-CTRL-01 | **Command button widget** — writes a predefined value to a specified tag on press (e.g., "Start" writes 1 to `MachineCmd`). Label, tag, value, and appearance are configurable per instance. |
-| FR-CTRL-02 | **Parameter input widget** — numeric entry field, slider, or dropdown that writes to a tag, with optional min/max/step constraints and engineering units display |
+| FR-CTRL-02 | **Parameter input widget** — numeric entry field or slider that writes to a tag, with optional min/max/step constraints and engineering units display |
 | FR-CTRL-03 | Allow buttons and parameter inputs to be grouped into named control panels on screen |
 | FR-CTRL-04 | Optionally require confirmation dialogs on specific buttons (configurable per button) |
 | FR-CTRL-05 | Control actions require authenticated Operator role or above by default. Individual buttons/inputs can be configured to allow unauthenticated access (e.g., fault reset, resettable operator counter). |
 | FR-CTRL-06 | Log all control actions (button presses and parameter writes) to the audit trail with user (or "unauthenticated" if no login), timestamp, tag, and value |
 | FR-CTRL-07 | **Toggle button widget** — reflects the current tag value visually (e.g., ON/OFF with color state) and writes the opposite value on press |
+| FR-CTRL-08 | **Dropdown select widget** — presents a list of named options that each map to a tag value (e.g., "Auto" → 1, "Manual" → 2, "Service" → 3). Writes the mapped value to the bound tag on selection. The current tag value highlights the active option. For enum-typed tags (FR-TAG-17), the option list can be auto-populated from the enum mapping. |
 
 ### 3.3 Alarm Management
 
