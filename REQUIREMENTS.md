@@ -148,7 +148,7 @@ The system is designed to run **fully offline** with no internet dependency — 
 
 | ID | Requirement |
 |----|-------------|
-| FR-SCRN-01 | Provide a screen editor accessible to users with the Designer role for creating and editing HMI screens |
+| FR-SCRN-01 | Provide a screen editor accessible to users with the Designer role for creating and editing HMI screens. Designer can toggle between live (runtime) mode and edit mode on any screen via an edit button or keyboard shortcut (e.g., Ctrl+E). The edit button is only visible when logged in as Designer. |
 | FR-SCRN-02 | Support drag-and-drop placement of widgets onto a grid-based canvas with snap-to-grid alignment |
 | FR-SCRN-03 | Widget palette includes: value displays, gauges, bar charts, trend charts, status indicators, buttons, parameter inputs, alarm tables, images/shapes, and text labels |
 | FR-SCRN-04 | Each widget exposes a property panel for configuration: OPC UA tag binding, label, units, colors, thresholds, size, and position |
@@ -159,7 +159,7 @@ The system is designed to run **fully offline** with no internet dependency — 
 | FR-SCRN-09 | Provide reusable widget groups — group multiple widgets into a composite that can be placed as a single unit and reused across screens |
 | FR-SCRN-10 | Template and widget group instances inherit updates from the source unless explicitly overridden (linked instances) |
 | FR-SCRN-11 | Screen designs are saved to the database and versioned; previous versions can be viewed and restored |
-| FR-SCRN-12 | Support a live preview mode that shows real-time OPC UA data on the designed screen without leaving the editor |
+| FR-SCRN-12 | In edit mode, live OPC UA data continues to flow into widgets so the designer sees real values while editing. Toggling back to live mode exits the editor and returns to normal runtime operation. |
 | FR-SCRN-13 | Screen editor includes undo/redo (minimum 50 levels) |
 | FR-SCRN-14 | Import/export screen designs as JSON for backup or transfer between systems |
 | FR-SCRN-15 | All screen design changes are logged to the audit trail (who changed what screen, when) |
@@ -336,16 +336,17 @@ The system is designed to run **fully offline** with no internet dependency — 
 **Actor**: Designer
 **Precondition**: Logged in with Designer role; OPC UA tags are already configured
 **Flow**:
-1. Designer navigates to Screen Editor and taps "New Screen"
-2. Names the screen "Line 3 — Overview" and selects a grid resolution (1920x1080)
-3. Drags a status indicator widget onto the canvas; binds it to `ns=2;s=Machine.Status` and configures value-to-color mappings (1=Running/green, 2=Stopped/red, 3=Faulted/amber)
-4. Adds gauge widgets for speed, temperature, and pressure — binds each to its OPC UA tag and sets min/max/warning thresholds
-5. Adds production counter widgets (good count, reject count, total) in a horizontal row
-6. Adds a control panel group with Start, Stop, and Fault Reset buttons — configures each button's target tag and write value
-7. Uses alignment guides to arrange widgets neatly on the grid
-8. Taps "Live Preview" — real-time OPC UA values populate the widgets; verifies layout and data bindings
+1. Designer is viewing the Home screen in live mode; taps the edit button (or presses Ctrl+E) to enter edit mode
+2. Edit-mode toolbar appears with widget palette, alignment tools, and a "New Screen" option
+3. Taps "New Screen", names it "Line 3 — Overview", and selects a grid resolution (1920x1080)
+4. Drags a status indicator widget onto the canvas; binds it to `ns=2;s=Machine.Status` and configures value-to-color mappings (1=Running/green, 2=Stopped/red, 3=Faulted/amber)
+5. Adds gauge widgets for speed, temperature, and pressure — binds each to its OPC UA tag and sets min/max/warning thresholds; live OPC UA values flow into widgets as they are placed
+6. Adds production counter widgets (good count, reject count, total) in a horizontal row
+7. Adds a control panel group with Start, Stop, and Fault Reset buttons — configures each button's target tag and write value
+8. Uses alignment guides to arrange widgets neatly on the grid
 9. Saves the screen — it appears in the navigation menu and is versioned in the database
-10. Audit trail records the new screen creation
+10. Taps the edit button (or Ctrl+E) to return to live mode — the screen is now operational
+11. Audit trail records the new screen creation
 
 ---
 
@@ -354,7 +355,7 @@ The system is designed to run **fully offline** with no internet dependency — 
 **Actor**: Designer
 **Precondition**: Logged in with Designer role; at least one completed screen exists
 **Flow**:
-1. Designer opens an existing screen ("Line 3 — Overview") in the editor
+1. Designer navigates to "Line 3 — Overview" in live mode and taps the edit button (or Ctrl+E) to enter edit mode
 2. Taps "Save as Template" and names it "Standard Machine Overview"
 3. Template is saved with placeholder tag bindings (relative paths)
 4. Designer taps "New Screen from Template" and selects "Standard Machine Overview"
