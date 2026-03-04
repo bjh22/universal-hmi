@@ -20,7 +20,7 @@ The system is designed to run **fully offline** with no internet dependency — 
 | Database | SQLite | Embedded, zero-config, portable — ideal for a dedicated panel PC deployment |
 | ORM | SQLAlchemy + Alembic | Database access and migrations |
 | Auth | JWT tokens + bcrypt | Stateless auth with role-based access control |
-| Simulation | Built-in OPC UA sim server | Simulates a packaging machine for development/demo |
+| Simulation | Tag database simulation layer | Protocol-agnostic tag value simulation for development, demo, and screen design without a live PLC |
 
 ---
 
@@ -232,7 +232,7 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 | NFR-09 | **Offline**: Fully self-contained — no CDN, external fonts, or internet-dependent resources. All assets bundled locally. |
 | NFR-10 | **Configuration**: Server endpoint, database, and basic settings via environment variables or config file |
 | NFR-11 | **Logging**: Structured application logging (JSON) with configurable log levels |
-| NFR-12 | **Testability**: Backend API unit tests, protocol driver integration tests using the sim server, and frontend component tests |
+| NFR-12 | **Testability**: Backend API unit tests, protocol driver integration tests using the tag simulation layer, and frontend component tests |
 | NFR-13 | **Data retention**: Configurable retention policy for trend data and audit logs with automatic purge to prevent disk filling (default: trends 90 days, audit 1 year) |
 | NFR-14 | **Database**: SQLite in WAL mode for concurrent read performance; periodic backup to configurable location (USB, network share) |
 
@@ -512,40 +512,64 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 
 ---
 
-## 6. Packaging Machine Simulation Server
+## 6. Tag Database Simulation Layer
 
-The built-in simulation server provides a realistic OPC UA address space mimicking a packaging machine for development and demo purposes.
+The system includes a **protocol-agnostic tag simulation layer** that operates at the tag database level rather than emulating a specific PLC or protocol. This means simulation works identically regardless of whether tags were imported from OPC UA, RSLogix 500 CSV, CODESYS XML, EtherNet/IP, Modbus, or created manually. Engineers can design, test, and demo screens without a live PLC connection.
+
+### Simulation Modes
+
+| Mode | Description |
+|------|-------------|
+| **Per-tag simulation** | Any individual tag can be placed into simulation mode independently. The tag's value is driven by a configurable simulation behavior (see below) instead of the PLC connection. Other tags on the same connection continue to read/write live. |
+| **Per-connection simulation** | All tags on a given PLC connection are simulated. Useful when the PLC is offline or not yet commissioned. |
+| **Global simulation** | All tags across all connections are simulated. Used for full offline screen design and demo. |
+
+### Simulation Behaviors (per tag)
+
+Each simulated tag has a configurable behavior that determines how its value changes over time:
+
+| Behavior | Applies to | Description |
+|----------|-----------|-------------|
+| **Static** | All types | Holds a fixed value (default: 0 / false / empty). Engineer sets the value manually via the tag editor or a control widget. |
+| **Ramp** | Numeric | Ramps linearly between min and max, then resets or reverses. Configurable period and direction. |
+| **Sine wave** | Numeric | Oscillates sinusoidally between min and max. Configurable period, offset, and phase. |
+| **Random / noise** | Numeric | Random value within min/max range, or Gaussian noise around a center value. Configurable update rate. |
+| **Toggle** | Bool | Alternates true/false at a configurable interval. |
+| **Enum cycle** | Enum | Cycles through all defined enum values sequentially at a configurable interval. |
+| **Script** | All types | A simple expression or state machine (e.g., "if `Command` == 1 then set `MachineRunning` = true"). Allows tags to react to writes on other simulated tags. |
+
+### Writes in Simulation Mode
+
+When an operator or engineer writes to a simulated tag (e.g., pressing a Start button), the written value is applied to the tag database immediately. This allows control widgets, confirmation dialogs, and write-back logic to be tested without a PLC. Script-behavior tags can react to these writes to create realistic cause-and-effect chains (e.g., writing Command=1 causes MachineRunning to become true and counters to start incrementing).
 
 ### Example Screens (Simulation Only)
 
-The simulation ships with pre-built example screens that demonstrate the system's widget capabilities. These screens are **not** intended as a production layout — they serve as a starting point and reference for designers building machine-specific screens. Production deployments will have custom screens created via the screen designer (§3.11) tailored to the specific machine and customer requirements.
+The system ships with pre-built example screens that demonstrate the widget capabilities. These screens are **not** intended as a production layout — they serve as a starting point and reference for designers building machine-specific screens. Production deployments will have custom screens created via the screen designer (§3.11) tailored to the specific machine and customer requirements.
 
 | Screen | Contents | Demonstrates |
 |--------|----------|-------------|
 | **Dashboard** | Status indicator, speed gauge, counter widgets, OEE display, alarm summary, process value group (temperatures, pressures) | §3.1 visualization widgets with live simulation data |
 | **Control Panel** | Start/Stop/Reset command buttons, speed setpoint slider, fault reset (unauthenticated-allowed) | §3.2 control widgets, confirmation dialogs, auth levels |
 
-### Simulated Nodes
+### Example Simulated Tags
 
-| Category | Tags | Description |
+The example screens are backed by a pre-configured tag set with simulation behaviors already assigned. These tags are not tied to any protocol — they exist only in the tag database with simulation enabled.
+
+| Category | Tags | Simulation Behavior |
 |----------|------|-------------|
-| **Machine Status** | MachineRunning (Bool), FaultActive (Bool), Command (Int) | Simple running/faulted status with a command input tag |
-| **Counters** | GoodCount, RejectCount, TotalCount | Increment while running based on speed |
-| **Speed** | CurrentSpeed, SpeedSetpoint, MaxSpeed | Speed follows setpoint with ramp-up/ramp-down |
-| **Temperatures** | SealTemp1, SealTemp2, TunnelTemp | Simulated PID-like behavior with noise |
-| **Film Station** | FilmTension, FilmLength, SpliceDetect | Simulated film feed values |
-| **Pressures** | VacuumPressure, AirPressure | Simulated with noise |
-| **Digital I/O** | DoorClosed, EStopActive, FilmBreak, ProductDetect | Boolean signals |
-| **Production** | BatchID, RecipeName, ShiftNumber | String/integer metadata |
-| **Structured Types** | MotorStatus (Struct: Speed Float32, Current Float32, FaultCode UInt16, Running Bool), ZoneTemps (Array[6] of Float32), MachineState (Enum: 0=Stopped, 1=Running, 2=Faulted, 3=Maintenance) | Complex data types for testing struct/array/enum support |
+| **Machine Status** | MachineRunning (Bool), FaultActive (Bool), Command (Int) | Script: Command writes drive MachineRunning and FaultActive state |
+| **Counters** | GoodCount, RejectCount, TotalCount | Script: increment while MachineRunning=true, rate based on CurrentSpeed |
+| **Speed** | CurrentSpeed, SpeedSetpoint, MaxSpeed | Script: CurrentSpeed ramps toward SpeedSetpoint; MaxSpeed is static |
+| **Temperatures** | SealTemp1, SealTemp2, TunnelTemp | Sine wave + noise (PID-like behavior) |
+| **Film Station** | FilmTension, FilmLength, SpliceDetect | Random/noise for analogs, toggle for SpliceDetect |
+| **Pressures** | VacuumPressure, AirPressure | Sine wave + noise |
+| **Digital I/O** | DoorClosed, EStopActive, FilmBreak, ProductDetect | Static (manually togglable) with periodic random fault injection |
+| **Production** | BatchID, RecipeName, ShiftNumber | Static (set via recipe writes) |
+| **Structured Types** | MotorStatus (Struct: Speed Float32, Current Float32, FaultCode UInt16, Running Bool), ZoneTemps (Array[6] of Float32), MachineState (Enum: 0=Stopped, 1=Running, 2=Faulted, 3=Maintenance) | Struct fields use individual behaviors; enum cycles through values |
 
-### Simulation Behaviors
+### Simulation Indicator
 
-- **Command handling**: Writing to the Command tag starts/stops/resets the simulated machine (e.g., 1=Start, 2=Stop, 3=Reset)
-- **Random faults**: Periodically injects alarms (film break, temperature deviation, E-stop) to test alarm handling
-- **Counter progression**: Good count increments at current speed rate while running; rejects at ~0.3% rate
-- **Process noise**: Analog values include Gaussian noise to look realistic on trends
-- **Recipe support**: Accepts recipe parameter writes and adjusts simulation accordingly
+When any tag is in simulation mode, the HMI displays a clear visual indicator (e.g., a persistent banner or badge) so that operators and engineers are always aware that displayed values are not live PLC data. Individual widgets bound to simulated tags show a subtle "SIM" badge. The indicator cannot be suppressed in production mode — only disabling simulation removes it.
 
 ---
 
