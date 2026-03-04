@@ -2,7 +2,7 @@
 
 ## 1. Project Overview
 
-A web-based Human-Machine Interface (HMI) for monitoring and controlling packaging machines via OPC UA. The system follows the **PackML (ISA-TR88/ISA-S88)** state model and provides real-time visualization, alarm management, historical trending, recipe management, and production reporting.
+A web-based Human-Machine Interface (HMI) for monitoring and controlling packaging machines via OPC UA. The HMI is **state-model agnostic** — it does not impose PackML or any other state machine. Instead, it reads and displays whatever tags the PLC exposes and lets operators interact through configurable command buttons and parameter inputs. It provides real-time visualization, alarm management, historical trending, recipe management, and production reporting.
 
 ### 1.1 Technology Stack
 
@@ -37,7 +37,7 @@ A web-based Human-Machine Interface (HMI) for monitoring and controlling packagi
 
 | ID | Requirement |
 |----|-------------|
-| FR-DASH-01 | Display current PackML state (Idle, Starting, Execute, Completing, Complete, Resetting, Holding, Held, Unholding, Suspending, Suspended, Unsuspending, Stopping, Stopped, Aborting, Aborted, Clearing) with color-coded state indicator |
+| FR-DASH-01 | Display machine status using configurable indicator widgets that map OPC UA tag values to colors/labels (e.g., a tag value of 1 = "Running"/green, 2 = "Stopped"/red). No fixed state model assumed. |
 | FR-DASH-02 | Show machine speed (current, setpoint, max) with gauge or bar visualization |
 | FR-DASH-03 | Display production counters: good count, reject count, total count |
 | FR-DASH-04 | Show current recipe/product name and batch/lot ID |
@@ -51,12 +51,13 @@ A web-based Human-Machine Interface (HMI) for monitoring and controlling packagi
 
 | ID | Requirement |
 |----|-------------|
-| FR-CTRL-01 | Provide PackML command buttons: Start, Stop, Reset, Hold, Unhold, Suspend, Unsuspend, Abort, Clear |
-| FR-CTRL-02 | Only show commands valid for the current state (PackML state transition rules) |
-| FR-CTRL-03 | Require Operator role or above for all control actions |
-| FR-CTRL-04 | Confirm destructive commands (Abort, Stop) with a dialog before sending |
-| FR-CTRL-05 | Allow speed setpoint adjustment with min/max limits |
-| FR-CTRL-06 | Log all control actions to the audit trail with user, timestamp, and action |
+| FR-CTRL-01 | Support configurable command buttons — each button writes a predefined value to a specified OPC UA tag (e.g., "Start" writes 1 to `ns=2;s=Machine.Command`) |
+| FR-CTRL-02 | Support configurable parameter inputs — numeric entry fields, sliders, or dropdowns that write to OPC UA tags, with optional min/max/step constraints |
+| FR-CTRL-03 | Allow buttons and parameter inputs to be grouped into named control panels on the UI |
+| FR-CTRL-04 | Optionally require confirmation dialogs on specific buttons (configurable per button) |
+| FR-CTRL-05 | Require Operator role or above for all control actions |
+| FR-CTRL-06 | Log all control actions (button presses and parameter writes) to the audit trail with user, timestamp, tag, and value |
+| FR-CTRL-07 | Support toggle-style buttons that reflect the current tag value (e.g., ON/OFF with visual state) |
 
 ### 3.3 Alarm Management
 
@@ -94,7 +95,7 @@ A web-based Human-Machine Interface (HMI) for monitoring and controlling packagi
 | FR-RCP-05 | Compare two recipes side-by-side with differences highlighted |
 | FR-RCP-06 | Recipe versioning — track changes over time |
 | FR-RCP-07 | Require Supervisor role or above for recipe edits; Operator can select/download only |
-| FR-RCP-08 | Only allow recipe download when machine is in Idle or Stopped state |
+| FR-RCP-08 | Optionally restrict recipe download based on a configurable OPC UA tag condition (e.g., only when a "ReadyForRecipe" tag is true) |
 
 ### 3.6 Production Reporting
 
@@ -164,9 +165,9 @@ A web-based Human-Machine Interface (HMI) for monitoring and controlling packagi
 ### UC-01: Operator Monitors Machine During Production
 
 **Actor**: Operator
-**Precondition**: Operator is logged in; machine is in Execute state
+**Precondition**: Operator is logged in; machine is running
 **Flow**:
-1. Operator opens the dashboard and sees the machine running in "Execute" state (green indicator)
+1. Operator opens the dashboard and sees the machine status indicator showing "Running" (green)
 2. Dashboard shows current speed (120 packs/min), good count (4,523), reject count (12)
 3. OEE widget shows 87.3% (Availability 95%, Performance 92%, Quality 99.7%)
 4. A temperature reading trends upward — operator clicks it to open the trend view
@@ -182,25 +183,25 @@ A web-based Human-Machine Interface (HMI) for monitoring and controlling packagi
 **Flow**:
 1. Film break sensor triggers — a critical alarm appears in the alarm banner across the top of the screen
 2. Audible notification plays; alarm badge on dashboard turns red
-3. Machine auto-transitions to Held state (shown on dashboard)
+3. Machine status indicator changes (reflecting the PLC's response to the fault)
 4. Operator navigates to Alarm page, sees "Film Break – Station 2" with timestamp
 5. Operator addresses the physical issue on the machine
 6. Operator acknowledges the alarm in the HMI
-7. Operator presses "Unhold" to resume → machine transitions to Execute
+7. Operator presses the appropriate command button (e.g., "Reset" or "Resume") to restart
 
 ---
 
 ### UC-03: Operator Performs a Recipe Changeover
 
 **Actor**: Operator
-**Precondition**: Machine is in Idle or Stopped state
+**Precondition**: Machine is not running (or recipe download condition tag is satisfied)
 **Flow**:
 1. Operator navigates to the Recipe page
 2. Selects "Product-B 500ml" from the recipe list
 3. Reviews recipe parameters (speed, seal temp, film length, etc.)
 4. Presses "Download to Machine" — system confirms with a dialog
 5. Backend writes all recipe parameters to the OPC UA server
-6. Dashboard shows the new recipe name; operator presses "Start"
+6. Dashboard shows the new recipe name; operator presses the "Start" command button
 
 ---
 
@@ -276,14 +277,14 @@ A web-based Human-Machine Interface (HMI) for monitoring and controlling packagi
 
 ## 6. Packaging Machine Simulation Server
 
-The built-in simulation server provides a realistic PackML-compliant OPC UA address space for development and demo purposes.
+The built-in simulation server provides a realistic OPC UA address space mimicking a packaging machine for development and demo purposes.
 
 ### Simulated Nodes
 
 | Category | Tags | Description |
 |----------|------|-------------|
-| **PackML State** | StateCurrent, StateCommand, StateChangeTimestamp | ISA-TR88 state machine with valid transitions |
-| **Counters** | GoodCount, RejectCount, TotalCount | Increment during Execute state based on speed |
+| **Machine Status** | MachineRunning (Bool), FaultActive (Bool), Command (Int) | Simple running/faulted status with a command input tag |
+| **Counters** | GoodCount, RejectCount, TotalCount | Increment while running based on speed |
 | **Speed** | CurrentSpeed, SpeedSetpoint, MaxSpeed | Speed follows setpoint with ramp-up/ramp-down |
 | **Temperatures** | SealTemp1, SealTemp2, TunnelTemp | Simulated PID-like behavior with noise |
 | **Film Station** | FilmTension, FilmLength, SpliceDetect | Simulated film feed values |
@@ -293,9 +294,9 @@ The built-in simulation server provides a realistic PackML-compliant OPC UA addr
 
 ### Simulation Behaviors
 
-- **State machine**: Follows PackML state transitions with realistic timing (e.g., Starting takes 3s, Stopping takes 2s)
+- **Command handling**: Writing to the Command tag starts/stops/resets the simulated machine (e.g., 1=Start, 2=Stop, 3=Reset)
 - **Random faults**: Periodically injects alarms (film break, temperature deviation, E-stop) to test alarm handling
-- **Counter progression**: Good count increments at current speed rate; rejects at ~0.3% rate
+- **Counter progression**: Good count increments at current speed rate while running; rejects at ~0.3% rate
 - **Process noise**: Analog values include Gaussian noise to look realistic on trends
 - **Recipe support**: Accepts recipe parameter writes and adjusts simulation accordingly
 
