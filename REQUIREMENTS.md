@@ -65,7 +65,7 @@ Control widgets allow operators to write values to PLC tags. Like visualization 
 | ID | Requirement |
 |----|-------------|
 | FR-CTRL-01 | **Command button widget** — writes a predefined value to a specified tag on press (e.g., "Start" writes 1 to `MachineCmd`). Label, tag, value, and appearance are configurable per instance. |
-| FR-CTRL-02 | **Parameter input widget** — numeric entry field or slider that writes to a tag, with optional min/max/step constraints and engineering units display |
+| FR-CTRL-02 | **Parameter input widget** — numeric entry field or slider that writes to a tag. Supports configurable **input limits**: **(a)** min and max values — the widget rejects any entered value outside this range; **(b)** step size — constrains the value to increments (e.g., step 0.5 allows 10.0, 10.5, 11.0); **(c)** decimal places — limits input precision. When a tag has a range configured (FR-TAG-04), the parameter input widget **inherits the tag's min/max as default limits** — the designer can override with tighter (but not wider) limits per widget instance. **Enforcement behavior**: if the operator types a value outside the limits, the input field displays a validation error inline (e.g., "Must be between 0 and 100") and the write is blocked until a valid value is entered. Slider mode visually constrains the handle to the min/max range. The widget displays engineering units from the bound tag beside the input field. |
 | FR-CTRL-03 | Allow buttons and parameter inputs to be grouped into named control panels on screen |
 | FR-CTRL-04 | Optionally require confirmation dialogs on specific buttons (configurable per button) |
 | FR-CTRL-05 | Control actions require authenticated Operator role or above by default. Individual buttons/inputs can be configured to allow unauthenticated access (e.g., fault reset, resettable operator counter). |
@@ -214,16 +214,20 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 | FR-SCRN-03 | Widget palette includes: value displays, gauges, bar charts, trend charts, status indicators, buttons, parameter inputs, alarm tables, images/shapes, and text labels |
 | FR-SCRN-04 | Each widget exposes a property panel for configuration: tag binding, label, units, colors, thresholds, size, position, visibility, and enabled state (FR-CTRL-09/10). Tag binding uses a **dropdown selector** populated from the tag database, with **autocomplete** filtering as the engineer types (matching against short name, group, and template). The dropdown displays tags organized by group and template instance, and indicates each tag's data type. The engineer can also filter by data-type compatibility (e.g., a numeric input widget only shows numeric tags). |
 | FR-SCRN-05 | Support widget resize and move with visual guides (alignment lines, equal spacing indicators) |
-| FR-SCRN-06 | Define the navigation structure: pages, tabs, and menu hierarchy; each page is a separate screen |
-| FR-SCRN-07 | Support navigation links between screens (e.g., tap a machine area to drill into its detail screen) |
-| FR-SCRN-08 | Provide reusable screen templates — save a screen layout as a template that can be instantiated for new machines or areas |
-| FR-SCRN-09 | Provide reusable widget groups — group multiple widgets into a composite that can be placed as a single unit and reused across screens |
-| FR-SCRN-10 | Template and widget group instances inherit updates from the source unless explicitly overridden (linked instances) |
-| FR-SCRN-11 | Screen designs are saved to the database and versioned; previous versions can be viewed and restored |
-| FR-SCRN-12 | In edit mode, live PLC data continues to flow into widgets so the designer sees real values while editing. Toggling back to live mode exits the editor and returns to normal runtime operation. |
-| FR-SCRN-13 | Screen editor includes undo/redo (minimum 50 levels) |
-| FR-SCRN-14 | Import/export screen designs as JSON for backup or transfer between systems |
-| FR-SCRN-15 | All screen design changes are logged to the audit trail (who changed what screen, when) |
+| FR-SCRN-06 | **Navigation shell** — the application uses a persistent navigation shell visible on all screens at runtime. The shell consists of: **(a)** a **top bar** containing the application title/logo, active alarm summary badge (tappable → alarm page), data source connection status indicators, the current user name with role, and a user menu (profile, logout); **(b)** a **side navigation rail** (collapsible to icons on small screens) listing the top-level pages (Dashboard, Trends, Alarms, Recipes, Reports, Settings, Profile). The active page is highlighted. Settings is visible only to Engineer/Designer roles. The navigation rail can be collapsed or expanded by the user; collapsed state is persisted per user. |
+| FR-SCRN-07 | **Page hierarchy and sub-navigation** — top-level pages that contain sub-pages (e.g., Alarms → Active Alarms / Alarm History; Recipes → Recipe List / Recipe Editor) use a **tab bar** or **segmented control** below the top bar to switch between sub-pages. The URL updates to reflect the current page and sub-page (e.g., `/alarms/active`, `/recipes/editor/3`), enabling direct linking and browser back/forward navigation. |
+| FR-SCRN-08 | **Designer-created screen navigation** — the Dashboard top-level page hosts one or more designer-created screens. When multiple screens exist, the navigation rail shows them as nested entries under Dashboard (e.g., "Overview", "Sealing Station", "Film Feed"). The designer defines the screen order and display names. Each screen has a unique URL path (e.g., `/screens/sealing-station`). |
+| FR-SCRN-09 | **In-screen navigation links** — widgets can be configured as navigation links that navigate to another screen on tap (e.g., tapping a machine area graphic opens its detail screen). Navigation links can target: **(a)** another designer-created screen by name, **(b)** a built-in page (e.g., Trends pre-filtered to specific tags), or **(c)** an external URL (opens in new tab). Navigation links show a visual affordance (e.g., subtle arrow icon or underline on hover). |
+| FR-SCRN-10 | **Breadcrumb trail** — when navigating from one screen to another via an in-screen link, a breadcrumb trail appears below the top bar showing the navigation path (e.g., "Overview → Sealing Station → Heater Detail"). Tapping any breadcrumb navigates back to that screen. The breadcrumb clears when navigating via the side rail. |
+| FR-SCRN-11 | **Keyboard navigation** — all navigation elements are keyboard-accessible. The side rail supports arrow-key navigation. Screens support Tab to move between interactive widgets. Ctrl+G (or a configurable shortcut) opens a quick "Go to screen" search dialog that filters all screens and pages by name. |
+| FR-SCRN-12 | Provide reusable screen templates — save a screen layout as a template that can be instantiated for new machines or areas |
+| FR-SCRN-13 | Provide reusable widget groups — group multiple widgets into a composite that can be placed as a single unit and reused across screens |
+| FR-SCRN-14 | Template and widget group instances inherit updates from the source unless explicitly overridden (linked instances) |
+| FR-SCRN-15 | Screen designs are saved to the database and versioned; previous versions can be viewed and restored |
+| FR-SCRN-16 | In edit mode, live PLC data continues to flow into widgets so the designer sees real values while editing. Toggling back to live mode exits the editor and returns to normal runtime operation. |
+| FR-SCRN-17 | Screen editor includes undo/redo (minimum 50 levels) |
+| FR-SCRN-18 | Import/export screen designs as JSON for backup or transfer between systems |
+| FR-SCRN-19 | All screen design changes are logged to the audit trail (who changed what screen, when) |
 
 ---
 
@@ -589,26 +593,60 @@ When any tag is in simulation mode, the HMI displays a clear visual indicator (e
 
 ## 7. Pages / Navigation Structure
 
+The application shell provides a **side navigation rail** (left) and a **top bar** (see FR-SCRN-06). The side rail lists top-level pages; sub-pages appear as tabs within each page. Designer-created screens are nested under Dashboard.
+
 ```
-├── Dashboard (home)          — Machine overview with live status
-├── Trends                    — Historical trend charts
-├── Alarms
-│   ├── Active Alarms         — Current alarms with acknowledge
-│   └── Alarm History         — Past alarms with filtering
-├── Recipes
-│   ├── Recipe List           — Browse/select/download recipes
-│   └── Recipe Editor         — Create/edit recipe parameters
-├── Reports
-│   ├── Production Runs       — Run history and details
-│   └── OEE / Shift Report    — OEE breakdown and shift summary
-├── Settings (Engineer only)
-│   ├── Data Sources           — PLC and MQTT broker data sources, protocols, endpoints, and credentials
-│   ├── Tag Configuration     — Import/configure/group tags
-│   ├── User Management       — Add/edit/remove users and roles
-│   ├── System Settings       — Shift schedules, retention, etc.
-│   └── Audit Trail           — Searchable event log
-└── Profile                   — Change password, preferences
+┌─────────────────────────────────────────────────────────────┐
+│  TOP BAR: [Logo/Title]  [Alarm Badge 🔔2]  [Connection ●●○]  [User ▾] │
+├──────────┬──────────────────────────────────────────────────┤
+│ SIDE NAV │                                                  │
+│          │  ┌─ Breadcrumb: Overview → Sealing Station ──┐   │
+│ Dashboard│  │                                           │   │
+│  Overview│  │          PAGE CONTENT AREA                 │   │
+│  Sealing │  │                                           │   │
+│  Film Fd │  │   (designer screens, built-in pages,      │   │
+│ Trends   │  │    or settings panels rendered here)      │   │
+│ Alarms   │  │                                           │   │
+│ Recipes  │  │                                           │   │
+│ Reports  │  │                                           │   │
+│ Settings*│  └───────────────────────────────────────────┘   │
+│ Profile  │          [Tab: Active | History]  ← sub-pages    │
+└──────────┴──────────────────────────────────────────────────┘
+  * Settings visible to Engineer/Designer only
 ```
+
+**Page hierarchy:**
+
+```
+├── Dashboard (home)              /screens/:slug
+│   ├── Overview (default)        /screens/overview
+│   ├── <designer screen 1>      /screens/sealing-station
+│   └── <designer screen N>      /screens/...
+├── Trends                        /trends
+├── Alarms                        /alarms
+│   ├── Active Alarms             /alarms/active        (tab)
+│   └── Alarm History             /alarms/history       (tab)
+├── Recipes                       /recipes
+│   ├── Recipe List               /recipes/list         (tab)
+│   └── Recipe Editor             /recipes/editor/:id   (tab)
+├── Reports                       /reports
+│   ├── Production Runs           /reports/runs         (tab)
+│   └── OEE / Shift Report        /reports/oee          (tab)
+├── Settings (Engineer only)      /settings
+│   ├── Data Sources              /settings/data-sources
+│   ├── Tag Configuration         /settings/tags
+│   ├── User Management           /settings/users
+│   ├── System Settings           /settings/system
+│   └── Audit Trail               /settings/audit
+└── Profile                       /profile
+```
+
+**Navigation behaviors:**
+- Side rail click → navigates to the page's default sub-page/screen; clears breadcrumb
+- Tab click → switches sub-page within the current top-level page; URL updates
+- In-screen link → pushes onto the breadcrumb trail; back button and breadcrumb taps return to previous screen
+- Browser back/forward → standard history navigation across all page and screen transitions
+- Ctrl+G → "Go to screen" quick-search dialog (FR-SCRN-11)
 
 ---
 
