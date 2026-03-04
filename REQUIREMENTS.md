@@ -1,8 +1,10 @@
-# Industrial HMI for Packaging Machines — Requirements & Use Cases
+# Industrial HMI — Requirements & Use Cases
 
 ## 1. Project Overview
 
-A web-based Human-Machine Interface (HMI) for monitoring and controlling packaging machines. The HMI communicates with data sources via a **pluggable protocol driver** architecture supporting OPC UA, EtherNet/IP (CIP), Modbus TCP, and MQTT — allowing connection to a wide range of industrial controllers from CODESYS-based PLCs to Allen-Bradley MicroLogix/CompactLogix, as well as MQTT brokers for IIoT sensors, edge gateways, and other publish/subscribe data sources. The HMI is **state-model agnostic** — it does not impose PackML or any other state machine. Instead, it reads and displays whatever tags the data sources expose and lets operators interact through configurable command buttons and parameter inputs. It provides real-time visualization, alarm management, historical trending, recipe management, and production reporting.
+A general-purpose, web-based Human-Machine Interface (HMI) for monitoring and controlling industrial machines and processes. While the examples and simulation in this document use a packaging machine scenario, the system is **application-agnostic** — it can be deployed for any industrial control context including packaging, food & beverage, material handling, water/wastewater, HVAC, building automation, discrete manufacturing, and process control.
+
+The HMI communicates with data sources via a **pluggable protocol driver** architecture supporting OPC UA, EtherNet/IP (CIP), Modbus TCP, and MQTT — allowing connection to a wide range of industrial controllers from CODESYS-based PLCs to Allen-Bradley MicroLogix/CompactLogix, as well as MQTT brokers for IIoT sensors, edge gateways, and other publish/subscribe data sources. The HMI is **state-model agnostic** — it does not impose PackML or any other state machine. Instead, it reads and displays whatever tags the data sources expose and lets operators interact through configurable command buttons and parameter inputs. It provides real-time visualization, alarm management, historical trending, recipe management, and production reporting.
 
 The system is **multi-platform** — it runs on **Windows, Linux (x86_64), and ARM platforms** (including Raspberry Pi and ARM-based industrial panel PCs). Typical deployments include dedicated industrial panel PCs with touchscreen, Raspberry Pi units for cost-sensitive installations, and standard Windows or Linux PCs for development and auxiliary HMI stations.
 
@@ -245,6 +247,8 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 ---
 
 ## 5. Use Cases
+
+> The use cases below are illustrated with a packaging machine scenario, but the workflows apply to any industrial application. Replace "film break" with "pump cavitation", "seal temperature" with "zone pressure", etc. — the HMI's behavior is the same regardless of the machine or process type.
 
 ### UC-01: Operator Monitors Machine During Production
 
@@ -557,9 +561,9 @@ The system ships with pre-built example screens that demonstrate the widget capa
 | **Dashboard** | Status indicator, speed gauge, counter widgets, OEE display, alarm summary, process value group (temperatures, pressures) | §3.1 visualization widgets with live simulation data |
 | **Control Panel** | Start/Stop/Reset command buttons, speed setpoint slider, fault reset (unauthenticated-allowed) | §3.2 control widgets, confirmation dialogs, auth levels |
 
-### Example Simulated Tags
+### Example Simulated Tags (Packaging Machine Scenario)
 
-The example screens are backed by a pre-configured tag set with simulation behaviors already assigned. These tags are not tied to any protocol — they exist only in the tag database with simulation enabled.
+The example screens are backed by a pre-configured tag set using a packaging machine scenario. These tags are not tied to any protocol — they exist only in the tag database with simulation enabled. The packaging-specific names (film tension, seal temperature, etc.) are illustrative; real deployments would have tags matching the actual machine or process.
 
 | Category | Tags | Simulation Behavior |
 |----------|------|-------------|
