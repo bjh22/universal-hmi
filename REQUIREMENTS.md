@@ -75,6 +75,24 @@ Control widgets allow operators to write values to PLC tags. Like visualization 
 | FR-CTRL-09 | **Visibility property** — every control widget has a `visible` property that determines whether the widget is rendered. Can be set to: **(a)** always visible (default), **(b)** bound to a boolean tag (widget visible when tag is true, hidden when false), or **(c)** restricted to one or more security roles (widget visible only when the current user has a matching role; hidden for others). When hidden, the widget is removed from the layout — it does not occupy space. |
 | FR-CTRL-10 | **Enabled property** — every control widget has an `enabled` property that determines whether the widget accepts user interaction. Can be set to: **(a)** always enabled (default), **(b)** bound to a boolean tag (widget enabled when tag is true, disabled when false), or **(c)** restricted to one or more security roles (widget enabled only when the current user has a matching role; disabled for others). When disabled, the widget is visually grayed out and ignores touch/click input, but remains visible. |
 | FR-CTRL-11 | Visibility and enabled properties can be combined — e.g., a button visible to Operators and above but enabled only when a boolean `ReadyToRun` tag is true. Tag-based and role-based conditions on the same property are AND-ed (all conditions must be met). |
+| FR-CTRL-12 | **Script action** — any button widget (command button, toggle button) can be configured to execute a Python script on press, either instead of or in addition to writing a tag value. The script is a short Python function stored in the database as part of the button's configuration. Scripts execute on the backend in a **sandboxed environment** (see FR-SCRIPT-01 through FR-SCRIPT-08). |
+| FR-CTRL-13 | **Script editor** — the button property panel includes an inline script editor with syntax highlighting and basic autocompletion for the scripting API (tag read/write, system tags, logging). The editor shows validation errors before saving (syntax check, prohibited import check). |
+| FR-CTRL-14 | **Script trigger modes** — a button's script can be configured to run: **(a)** on press (default), **(b)** on release, **(c)** on press with a confirmation dialog (combines with FR-CTRL-04), or **(d)** periodically while held (configurable interval, minimum 100ms). |
+
+### 3.2.1 Scripting Engine
+
+The system provides a lightweight Python scripting engine that allows engineers to attach short scripts to button actions. Scripts run on the backend and interact with the tag database via a controlled API. Scripts are intended for simple automation logic (value transformations, multi-tag writes, conditional actions) — not as a replacement for PLC programs.
+
+| ID | Requirement |
+|----|-------------|
+| FR-SCRIPT-01 | Scripts execute in a **restricted Python sandbox** on the backend. The sandbox provides: **(a)** the `tags` API for reading and writing tag values, **(b)** the `system` API for reading system tags (FR-TAG-26), **(c)** the `log` API for writing to the audit trail, **(d)** standard Python builtins (math, string operations, conditionals, loops), and **(e)** the `time` module (for `time.time()`, `time.sleep()` with a maximum of 2 seconds). No file system access, no network access, no `import` of arbitrary modules, no `exec`/`eval`, no subprocess spawning. |
+| FR-SCRIPT-02 | **Tag API**: `tags.read("TagName")` returns the current value; `tags.write("TagName", value)` writes a value (respects the tag's read/write mode and the user's role permissions). `tags.read_multiple(["Tag1", "Tag2"])` returns a dict. `tags.write_multiple({"Tag1": val1, "Tag2": val2})` writes atomically. |
+| FR-SCRIPT-03 | **Execution timeout**: Scripts are terminated if they exceed a configurable maximum execution time (default: 5 seconds). A timed-out script logs a warning to the audit trail and does not apply any partial tag writes (writes are committed only on successful completion). |
+| FR-SCRIPT-04 | **Error handling**: If a script raises an exception, the error is logged to the audit trail (with script name, button, user, and traceback) and an error toast is shown to the operator. No partial tag writes are applied. |
+| FR-SCRIPT-05 | **Audit logging**: All script executions are logged to the audit trail: user, button, script name, success/failure, execution time, and any tags written. The `log.info("message")` / `log.warn("message")` API allows scripts to write custom entries to the audit trail. |
+| FR-SCRIPT-06 | **Script management**: Scripts are stored in the database as part of the button widget configuration. The tag editor's export/import (FR-TAG-09) and screen export/import (FR-SCRN-18) include associated scripts. Engineers can also manage a **script library** — named, reusable scripts that can be attached to multiple buttons. Changes to a library script propagate to all buttons using it. |
+| FR-SCRIPT-07 | **Context variables**: When a script executes, it receives a `context` object containing: `context.user` (logged-in username), `context.role` (user's role), `context.button` (button short name), `context.screen` (current screen name), and `context.timestamp` (execution time as ISO 8601). |
+| FR-SCRIPT-08 | **Permitted modules**: In addition to builtins, scripts may use: `math`, `datetime`, `json`, `re`, and `collections`. No other imports are allowed. The allowed module list is fixed and not user-configurable. |
 
 ### 3.3 Alarm Management
 
@@ -181,6 +199,34 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 | FR-TAG-23 | **Template-aware tag editor**: The tag editor displays template instances as collapsible groups. The instance header shows the template name and prefix; expanding reveals the individual field tags with their mapped addresses. Engineers can also view and edit template instances in a dedicated "Templates" section of the tag editor. |
 | FR-TAG-24 | **CODESYS type schema import**: The CODESYS symbol configuration XML export includes type definitions — enumerations (with value-to-name mappings), structs (with field names and data types), and custom types (aliases, subranges). When importing a CODESYS XML file, the system parses these type definitions and applies them to the imported tags: **(a)** enum-typed variables receive their value-to-name mappings automatically (populating FR-TAG-17 enum configuration), **(b)** struct-typed variables can be flattened or imported as compound tags with correct field names and data types (consistent with FR-TAG-14), **(c)** array types are handled per FR-TAG-16. Type definitions are stored in the tag database so that tags added manually or via CSV/JSON can also reference CODESYS-defined types. The engineer can import a CODESYS XML file purely for its type definitions (without importing tags) to pre-populate the type library for later use. **Implementation note: require example CODESYS symbol configuration XML files before implementing the parser to ensure all type variants are handled correctly.** |
 | FR-TAG-25 | **RSLogix 500 CSV import**: Import tag databases exported from Rockwell RSLogix 500 as CSV files. The parser extracts tag names, addresses (e.g., `N7:0`, `F8:0`, `B3:0/0`, `T4:0`, `C5:0`), data types (integer, float, timer, counter, bit), and descriptions. RSLogix 500 data file types are mapped to HMI tag types: **(a)** integer files (N) → integer tags, **(b)** float files (F) → float tags, **(c)** bit files (B) → boolean tags, **(d)** timer (T) and counter (C) files → struct tags with standard sub-elements (e.g., `T4:0.ACC`, `T4:0.PRE`, `T4:0.DN`), **(e)** string files (ST) → string tags. Imported tags use the RSLogix symbol/description as the short name where available, falling back to the raw address. The diff view (FR-TAG-10) applies to RSLogix imports identically to other sources. **Implementation note: require example RSLogix 500 CSV export files before implementing the parser to ensure all data file types and address formats are handled correctly.** |
+
+### 3.8.1 System Tags
+
+The system provides a set of **built-in system tags** that are always available regardless of data source configuration. System tags use a `$` prefix to distinguish them from user-defined tags. They are read-only, require no data source, and can be bound to widgets, used in scripts (FR-SCRIPT-01), and referenced in visibility/enabled expressions identically to regular tags.
+
+| System Tag | Data Type | Description |
+|------------|-----------|-------------|
+| `$CURRENT_TIME` | String | Current time in the configured display format (e.g., "14:32:05"), updated every second |
+| `$CURRENT_DATE` | String | Current date in the configured display format (e.g., "2025-03-04") |
+| `$CURRENT_DATETIME` | String | Combined date and time (e.g., "2025-03-04 14:32:05") |
+| `$CURRENT_TIMESTAMP` | Float64 | Current time as Unix epoch seconds (for calculations and scripting) |
+| `$LOGGED_IN_USER` | String | Username of the currently logged-in user, or "Unauthenticated" if no user is logged in |
+| `$LOGGED_IN_ROLE` | String | Role of the currently logged-in user (e.g., "Operator", "Engineer"), or "Unauthenticated" |
+| `$SESSION_DURATION` | Int32 | Seconds since the current user logged in (resets on login/logout) |
+| `$ACTIVE_ALARM_COUNT` | Int32 | Total number of currently active (uncleared) alarms |
+| `$CRITICAL_ALARM_COUNT` | Int32 | Number of currently active critical-severity alarms |
+| `$UNACKED_ALARM_COUNT` | Int32 | Number of active alarms not yet acknowledged |
+| `$CURRENT_SCREEN` | String | Short name of the currently displayed screen |
+| `$APP_VERSION` | String | Installed HMI application version (from VERSION file) |
+| `$APP_UPTIME` | Int32 | Seconds since the HMI backend process started |
+| `$COMM_STATUS` | String | Aggregate data source status: "OK" if all connected, "DEGRADED" if any disconnected, "OFFLINE" if all disconnected |
+| `$CURRENT_SHIFT` | String | Name of the currently active shift (from shift schedule configuration), or empty if no shift is active |
+
+| ID | Requirement |
+|----|-------------|
+| FR-TAG-26 | **System tag availability** — system tags are always present in the tag database and cannot be deleted, renamed, or modified by the user. They appear in the tag selector under a dedicated "$System" group. The `$` prefix is reserved — user-defined tags cannot start with `$`. |
+| FR-TAG-27 | **System tag binding** — system tags can be bound to any read-capable widget (text value, status indicator, etc.) and referenced in visibility/enabled expressions. For example, a widget can be configured as visible only when `$LOGGED_IN_ROLE` equals "Engineer". System tags are accessible in scripts via `tags.read("$CURRENT_TIME")`. |
+| FR-TAG-28 | **Time/date format** — the display format for `$CURRENT_TIME`, `$CURRENT_DATE`, and `$CURRENT_DATETIME` is configurable in System Settings (e.g., 12h vs. 24h, MM/DD/YYYY vs. YYYY-MM-DD). The format applies globally and also affects timestamps in the alarm table, audit trail, and trend chart axes. |
 
 ### 3.9 User Management & Authentication
 
