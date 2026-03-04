@@ -30,6 +30,7 @@ The system is designed to run **fully offline** with no internet dependency — 
 | **Operator** | Can start/stop/reset machine, acknowledge alarms, select recipes. Logs in via numeric PIN. |
 | **Supervisor** | Operator permissions + recipe editing, production reports, user management (can manage Operator accounts only). Logs in via numeric PIN. |
 | **Engineer** | Full access including OPC UA tag configuration, system settings, audit logs, and full user management (all roles). Logs in via username/password. |
+| **Designer** | All Engineer permissions plus screen design capabilities: create and edit screen layouts, configure widgets, define navigation structure, and manage reusable screen templates. Logs in via username/password. |
 
 ---
 
@@ -126,8 +127,8 @@ The system is designed to run **fully offline** with no internet dependency — 
 |----|-------------|
 | FR-AUTH-01 | Dashboard accessible without login. Unauthenticated users can view all pages and use controls explicitly marked as unauthenticated-allowed. All other control actions prompt for login via numeric PIN (Operator/Supervisor) or username/password (Engineer). |
 | FR-AUTH-02 | JWT-based session management with configurable token expiration |
-| FR-AUTH-03 | Role-based access control (Unauthenticated, Operator, Supervisor, Engineer) |
-| FR-AUTH-04 | User CRUD operations — Supervisors can manage Operator accounts; Engineers can manage all roles including Supervisors |
+| FR-AUTH-03 | Role-based access control (Unauthenticated, Operator, Supervisor, Engineer, Designer) |
+| FR-AUTH-04 | User CRUD operations — Supervisors can manage Operator accounts; Engineers can manage all roles except Designer; Designers can manage all roles |
 | FR-AUTH-05 | Password/PIN complexity requirements and change functionality |
 | FR-AUTH-06 | Auto-logout after configurable inactivity timeout (important for shared panel PC) |
 | FR-AUTH-07 | Quick user switching — lock screen returns to PIN entry without full app reload |
@@ -142,6 +143,26 @@ The system is designed to run **fully offline** with no internet dependency — 
 | FR-AUDIT-03 | Searchable/filterable audit log page (Engineer role only) |
 | FR-AUDIT-04 | Audit log retention policy (see NFR-13) |
 | FR-AUDIT-05 | Export audit log to CSV |
+
+### 3.10 Screen Design
+
+| ID | Requirement |
+|----|-------------|
+| FR-SCRN-01 | Provide a screen editor accessible to users with the Designer role for creating and editing HMI screens |
+| FR-SCRN-02 | Support drag-and-drop placement of widgets onto a grid-based canvas with snap-to-grid alignment |
+| FR-SCRN-03 | Widget palette includes: value displays, gauges, bar charts, trend charts, status indicators, buttons, parameter inputs, alarm tables, images/shapes, and text labels |
+| FR-SCRN-04 | Each widget exposes a property panel for configuration: OPC UA tag binding, label, units, colors, thresholds, size, and position |
+| FR-SCRN-05 | Support widget resize and move with visual guides (alignment lines, equal spacing indicators) |
+| FR-SCRN-06 | Define the navigation structure: pages, tabs, and menu hierarchy; each page is a separate screen |
+| FR-SCRN-07 | Support navigation links between screens (e.g., tap a machine area to drill into its detail screen) |
+| FR-SCRN-08 | Provide reusable screen templates — save a screen layout as a template that can be instantiated for new machines or areas |
+| FR-SCRN-09 | Provide reusable widget groups — group multiple widgets into a composite that can be placed as a single unit and reused across screens |
+| FR-SCRN-10 | Template and widget group instances inherit updates from the source unless explicitly overridden (linked instances) |
+| FR-SCRN-11 | Screen designs are saved to the database and versioned; previous versions can be viewed and restored |
+| FR-SCRN-12 | Support a live preview mode that shows real-time OPC UA data on the designed screen without leaving the editor |
+| FR-SCRN-13 | Screen editor includes undo/redo (minimum 50 levels) |
+| FR-SCRN-14 | Import/export screen designs as JSON for backup or transfer between systems |
+| FR-SCRN-15 | All screen design changes are logged to the audit trail (who changed what screen, when) |
 
 ---
 
@@ -307,6 +328,56 @@ The system is designed to run **fully offline** with no internet dependency — 
 3. Taps "Compare" — system displays both recipes side-by-side with differences highlighted
 4. Supervisor reviews the parameter differences (e.g., film length, seal temperature, speed setpoint)
 5. Satisfied with the changes, supervisor selects the new recipe and taps "Download to Machine"
+
+---
+
+### UC-11: Designer Builds a New Machine Overview Screen
+
+**Actor**: Designer
+**Precondition**: Logged in with Designer role; OPC UA tags are already configured
+**Flow**:
+1. Designer navigates to Screen Editor and taps "New Screen"
+2. Names the screen "Line 3 — Overview" and selects a grid resolution (1920x1080)
+3. Drags a status indicator widget onto the canvas; binds it to `ns=2;s=Machine.Status` and configures value-to-color mappings (1=Running/green, 2=Stopped/red, 3=Faulted/amber)
+4. Adds gauge widgets for speed, temperature, and pressure — binds each to its OPC UA tag and sets min/max/warning thresholds
+5. Adds production counter widgets (good count, reject count, total) in a horizontal row
+6. Adds a control panel group with Start, Stop, and Fault Reset buttons — configures each button's target tag and write value
+7. Uses alignment guides to arrange widgets neatly on the grid
+8. Taps "Live Preview" — real-time OPC UA values populate the widgets; verifies layout and data bindings
+9. Saves the screen — it appears in the navigation menu and is versioned in the database
+10. Audit trail records the new screen creation
+
+---
+
+### UC-12: Designer Creates and Reuses a Screen Template
+
+**Actor**: Designer
+**Precondition**: Logged in with Designer role; at least one completed screen exists
+**Flow**:
+1. Designer opens an existing screen ("Line 3 — Overview") in the editor
+2. Taps "Save as Template" and names it "Standard Machine Overview"
+3. Template is saved with placeholder tag bindings (relative paths)
+4. Designer taps "New Screen from Template" and selects "Standard Machine Overview"
+5. Names the new screen "Line 4 — Overview"
+6. Remaps the tag bindings from Line 3's namespace to Line 4's namespace (e.g., `Machine3.Speed` → `Machine4.Speed`)
+7. Adjusts a threshold on one widget — this widget is marked as overridden from the template
+8. Saves the screen — it appears as a linked instance of the template
+9. Later, the designer updates the template (adds an OEE widget) — the update propagates to Line 4's screen, except for the overridden widget
+
+---
+
+### UC-13: Designer Configures Navigation Structure
+
+**Actor**: Designer
+**Precondition**: Logged in with Designer role; multiple screens exist
+**Flow**:
+1. Designer navigates to Screen Editor and taps "Navigation"
+2. Sees the current page tree: Home → Line 3 Overview, Line 4 Overview, Alarms, Recipes
+3. Creates a new group "Production Lines" and drags Line 3 and Line 4 screens under it
+4. Adds a drill-down link: tapping the Line 3 status indicator on the Home screen navigates to the Line 3 Overview
+5. Reorders the menu items and sets "Home" as the default landing page
+6. Taps "Preview Navigation" to verify the menu structure and drill-down links
+7. Saves — the navigation changes take effect immediately for all users
 
 ---
 
