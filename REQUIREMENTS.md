@@ -176,7 +176,7 @@ The system is designed to run **fully offline** with no internet dependency — 
 1. Operator opens the dashboard and sees the machine status indicator showing "Running" (green)
 2. Dashboard shows current speed (120 packs/min), good count (4,523), reject count (12)
 3. OEE widget shows 87.3% (Availability 95%, Performance 92%, Quality 99.7%)
-4. A temperature reading trends upward — operator clicks it to open the trend view
+4. A temperature reading trends upward — operator taps it to open the trend view
 5. Trend chart shows the temperature rising over the last 30 minutes
 6. Operator decides to continue monitoring; no action needed yet
 
@@ -217,7 +217,7 @@ The system is designed to run **fully offline** with no internet dependency — 
 **Precondition**: Logged in with Supervisor role
 **Flow**:
 1. Supervisor navigates to Recipe Management
-2. Clicks "New Recipe" or "Clone from existing"
+2. Taps "New Recipe" or "Clone from existing"
 3. Enters recipe name, fills in parameters (speed setpoint, temperatures, film settings)
 4. Saves the recipe — system validates parameter ranges
 5. Optionally compares the new recipe against an existing one side-by-side
@@ -244,7 +244,7 @@ The system is designed to run **fully offline** with no internet dependency — 
 **Precondition**: Logged in with Engineer role
 **Flow**:
 1. Engineer navigates to Settings → OPC UA Connections
-2. Clicks "Add Connection" and enters: endpoint URL (`opc.tcp://192.168.1.10:4840`), security policy (Basic256Sha256), and credentials
+2. Taps "Add Connection" and enters: endpoint URL (`opc.tcp://192.168.1.10:4840`), security policy (Basic256Sha256), and credentials
 3. System tests the connection and browses the server address space
 4. Engineer selects relevant nodes and assigns display names, units, and ranges
 5. Groups tags into categories (e.g., "Sealing Station", "Film Feed", "Counters")
@@ -278,6 +278,35 @@ The system is designed to run **fully offline** with no internet dependency — 
 5. Backend retries connection with exponential backoff (1s, 2s, 4s, 8s, max 30s)
 6. On reconnection, backend re-subscribes to all tags and pushes fresh values
 7. "Connection Lost" banner clears; audit log records the reconnection
+
+---
+
+### UC-09: Unauthenticated Operator Controls Machine
+
+**Actor**: Unauthenticated user (at panel PC)
+**Precondition**: Machine is faulted; Start, Stop, and Fault Reset buttons are configured as unauthenticated-allowed
+**Flow**:
+1. Operator approaches the panel PC (no login required)
+2. Dashboard shows machine status indicating a fault condition
+3. Operator taps the "Fault Reset" button — confirmation dialog appears (if configured)
+4. Operator confirms — backend writes the reset command to the OPC UA tag; audit log records the action as "unauthenticated"
+5. Machine clears the fault; status indicator updates
+6. Operator taps "Start" — machine begins running
+7. Later, operator taps "Stop" to halt the machine for a changeover
+8. All actions are logged to the audit trail with "unauthenticated" as the user
+
+---
+
+### UC-10: Supervisor Compares Recipes Before Changeover
+
+**Actor**: Supervisor
+**Precondition**: Logged in with Supervisor role; multiple recipes exist
+**Flow**:
+1. Supervisor navigates to Recipe Management
+2. Selects the current recipe ("Product-A 250ml") and a candidate recipe ("Product-A 500ml")
+3. Taps "Compare" — system displays both recipes side-by-side with differences highlighted
+4. Supervisor reviews the parameter differences (e.g., film length, seal temperature, speed setpoint)
+5. Satisfied with the changes, supervisor selects the new recipe and taps "Download to Machine"
 
 ---
 
