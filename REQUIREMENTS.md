@@ -46,7 +46,7 @@ The system is designed to run **fully offline** with no internet dependency — 
 | FR-DASH-05 | Display active alarms count with severity badge (critical/warning/info) |
 | FR-DASH-06 | Show OEE (Overall Equipment Effectiveness) — availability, performance, quality |
 | FR-DASH-07 | Display key process values (temperatures, pressures, sensor states) as configurable widgets |
-| FR-DASH-08 | Auto-refresh all values via WebSocket push (target: <500ms update latency) |
+| FR-DASH-08 | Auto-refresh all values via WebSocket push (see NFR-01 for latency target) |
 
 ### 3.2 Machine Control
 
@@ -154,13 +154,13 @@ The system is designed to run **fully offline** with no internet dependency — 
 | NFR-03 | **Uptime**: Backend should auto-reconnect to OPC UA server on connection loss |
 | NFR-04 | **Browser**: Chromium-based (panel PC runs Chromium in kiosk mode); also support Chrome and Edge for maintenance laptops |
 | NFR-05 | **Display**: Designed for the panel PC's native resolution (configurable, default 1920x1080); touch-first with minimum 44px touch targets |
-| NFR-06 | **Security**: All OPC UA credentials and passwords/PINs stored encrypted at rest |
+| NFR-06 | **Security**: All OPC UA credentials and passwords/PINs stored encrypted at rest. HTTPS/TLS for browser-to-backend communication is supported but optional — HTTP is acceptable on isolated factory networks. |
 | NFR-07 | **Deployment**: Runs as a systemd service (or equivalent); auto-starts on boot; watchdog restarts on crash. No Docker required. |
 | NFR-08 | **Kiosk mode**: Browser launches fullscreen on boot with no browser chrome; on-screen keyboard available for text input |
 | NFR-09 | **Offline**: Fully self-contained — no CDN, external fonts, or internet-dependent resources. All assets bundled locally. |
 | NFR-10 | **Configuration**: Server endpoint, database, and basic settings via environment variables or config file |
 | NFR-11 | **Logging**: Structured application logging (JSON) with configurable log levels |
-| NFR-12 | **Testability**: Backend API unit tests, OPC UA integration tests using the sim server |
+| NFR-12 | **Testability**: Backend API unit tests, OPC UA integration tests using the sim server, and frontend component tests |
 | NFR-13 | **Data retention**: Configurable retention policy for trend data and audit logs with automatic purge to prevent disk filling (default: trends 90 days, audit 1 year) |
 | NFR-14 | **Database**: SQLite in WAL mode for concurrent read performance; periodic backup to configurable location (USB, network share) |
 
