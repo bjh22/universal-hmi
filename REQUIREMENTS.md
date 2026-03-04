@@ -125,16 +125,18 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 | ID | Requirement |
 |----|-------------|
 | FR-TAG-01 | Configure OPC UA server connections (endpoint URL, security policy, credentials) |
-| FR-TAG-02 | Browse the OPC UA server address space to discover nodes; select nodes to add as tags with their OPC UA address auto-populated |
+| FR-TAG-02 | Import tags from external sources. Supported import sources: **(a)** browse a live OPC UA server address space and select nodes, **(b)** import a CODESYS symbol configuration XML file. In both cases, the OPC UA address is auto-populated from the source. |
 | FR-TAG-03 | Each tag must have a unique short name (friendly identifier) and an OPC UA address. Short names are used in widget bindings, recipes, alarms, and audit logs — the raw OPC UA node ID is not exposed to operators. |
 | FR-TAG-04 | Each tag has configurable options: engineering units (e.g., "°C", "mm/s"), display format (decimal places, number format), range (min/max for validation and gauge scaling), deadband (minimum change before a value update is pushed), and read/write mode (read-only, read-write, write-only) |
 | FR-TAG-05 | Tags can be flagged as trended (logged to history) with a configurable sample rate per tag |
 | FR-TAG-06 | Tags can be flagged as alarm sources. Two alarm modes are supported: **threshold** — for analog tags, with high, high-high, low, low-low limits and severity per limit; **boolean** — for discrete tags, where a true value raises an alarm (e.g., `conveyorMotorFault` = true → Critical alarm "Conveyor Motor Fault"). Each alarm source has a configurable severity, message text, and active-on state (true or false, to handle both fault flags and healthy-state flags). |
 | FR-TAG-07 | Group tags into logical categories; groups are displayed in the tag editor as a tree or filtered list |
 | FR-TAG-08 | Tag editor provides a searchable, sortable table view of all tags with inline editing of short name, group, and options |
-| FR-TAG-09 | Tag import/export via JSON or CSV — import validates for duplicate short names and missing OPC UA addresses |
-| FR-TAG-10 | Deleting a tag warns if it is referenced by any widget, alarm, recipe, or trend configuration; optionally cascade-remove or block deletion |
-| FR-TAG-11 | All tag database changes are logged to the audit trail |
+| FR-TAG-09 | Tag import/export via JSON or CSV for backup and transfer between systems |
+| FR-TAG-10 | When importing from any source (live OPC UA browse, CODESYS XML, JSON, or CSV), the system compares the incoming tags against the existing tag database and presents a **diff view** showing: **(a)** new tags (exist in source but not in database), **(b)** deleted tags (exist in database but not in source), **(c)** changed tags (same short name or OPC UA address but different options/address). Each difference is individually selectable — the user can accept or reject each add, delete, and change before committing the import. |
+| FR-TAG-11 | The import diff view displays a summary count (e.g., "12 new, 3 changed, 2 removed") and supports select-all/deselect-all per category. Changed tags show a side-by-side comparison of old vs. new values for each modified field. |
+| FR-TAG-12 | Deleting a tag (manually or via import) warns if it is referenced by any widget, alarm, recipe, or trend configuration; optionally cascade-remove or block deletion |
+| FR-TAG-13 | All tag database changes are logged to the audit trail, including import operations (source, number of adds/changes/deletes applied) |
 
 ### 3.8 User Management & Authentication
 
@@ -282,12 +284,31 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 1. Engineer navigates to Settings → OPC UA Connections
 2. Taps "Add Connection" and enters: endpoint URL (`opc.tcp://192.168.1.10:4840`), security policy (Basic256Sha256), and credentials
 3. System tests the connection and confirms it can browse the server address space
-4. Engineer navigates to the Tag Editor, selects the new connection, and taps "Browse Server"
-5. Browses the OPC UA address space tree; selects nodes to add — each becomes a tag with the OPC UA address auto-populated
-6. Assigns each tag a short name (e.g., `FilmTemp`, `SealPressure`, `GoodCount`), engineering units, display format, and min/max range
-7. Groups tags into categories (e.g., "Sealing Station", "Film Feed", "Counters")
-8. Marks selected tags for trending at 1-second intervals; configures alarm thresholds on temperature tags
-9. Saves — tags appear in the tag database; widgets can now bind to them by short name; dashboard begins showing live data
+4. Engineer navigates to the Tag Editor and taps "Import from → Browse Live Server"
+5. Browses the OPC UA address space tree and selects the nodes to import
+6. System presents a diff view: "47 new tags, 0 changed, 0 removed" (first import, so all are new)
+7. Engineer reviews the list, deselects a few diagnostic nodes not needed, and taps "Apply"
+8. Tags are created in the database with OPC UA addresses auto-populated; engineer assigns short names, engineering units, display format, and min/max ranges
+9. Groups tags into categories (e.g., "Sealing Station", "Film Feed", "Counters")
+10. Marks selected tags for trending at 1-second intervals; configures alarm thresholds on temperature tags and boolean alarm sources on fault flags
+11. Saves — widgets can now bind to tags by short name; dashboard begins showing live data
+
+---
+
+### UC-06b: Engineer Re-imports Tags After PLC Program Change
+
+**Actor**: Engineer
+**Precondition**: Logged in with Engineer role; tags were previously imported; PLC program has been updated with new and renamed variables
+**Flow**:
+1. Engineer navigates to the Tag Editor and taps "Import from → CODESYS Symbol XML"
+2. Uploads the updated symbol configuration XML exported from the CODESYS IDE
+3. System parses the XML and compares against the existing tag database
+4. Diff view shows: "5 new, 2 changed, 1 removed" — each category is expandable
+5. Engineer expands "Changed" — sees that `SealTemp1` OPC UA address changed from `ns=2;s=GVL.SealTemp` to `ns=2;s=GVL.Sealing.Temp1`; side-by-side comparison highlights the difference
+6. Engineer expands "Removed" — sees `OldDiagCounter` is no longer in the PLC; system warns it is bound to a widget on the Line 3 screen
+7. Engineer accepts all new and changed tags, but deselects the deletion to investigate the widget binding first
+8. Taps "Apply" — 5 tags added, 2 updated; the removed tag is left unchanged for now
+9. Audit trail records the import: source (CODESYS XML), filename, and the specific adds/changes applied
 
 ---
 
