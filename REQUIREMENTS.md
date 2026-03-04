@@ -26,7 +26,7 @@ The system is designed to run **fully offline** with no internet dependency — 
 
 | Role | Description |
 |------|-------------|
-| **Unauthenticated** | Default state — can view dashboards, trends, and alarms. No control or configuration. No login required. |
+| **Unauthenticated** | Default state — can view dashboards, trends, and alarms. No login required. Can use specific controls explicitly configured for unauthenticated access (e.g., fault reset, resettable counters). |
 | **Operator** | Can start/stop/reset machine, acknowledge alarms, select recipes. Logs in via numeric PIN. |
 | **Supervisor** | Operator permissions + recipe editing, production reports, user management (can manage Operator accounts only). Logs in via numeric PIN. |
 | **Engineer** | Full access including OPC UA tag configuration, system settings, audit logs, and full user management (all roles). Logs in via username/password. |
@@ -57,7 +57,7 @@ The system is designed to run **fully offline** with no internet dependency — 
 | FR-CTRL-02 | Support configurable parameter inputs — numeric entry fields, sliders, or dropdowns that write to OPC UA tags, with optional min/max/step constraints |
 | FR-CTRL-03 | Allow buttons and parameter inputs to be grouped into named control panels on the UI |
 | FR-CTRL-04 | Optionally require confirmation dialogs on specific buttons (configurable per button) |
-| FR-CTRL-05 | Require authenticated Operator role or above for all control actions (unauthenticated users are view-only) |
+| FR-CTRL-05 | Control actions require authenticated Operator role or above by default. Individual buttons/inputs can be configured to allow unauthenticated access (e.g., fault reset, resettable operator counter). |
 | FR-CTRL-06 | Log all control actions (button presses and parameter writes) to the audit trail with user, timestamp, tag, and value |
 | FR-CTRL-07 | Support toggle-style buttons that reflect the current tag value (e.g., ON/OFF with visual state) |
 
@@ -125,7 +125,7 @@ The system is designed to run **fully offline** with no internet dependency — 
 
 | ID | Requirement |
 |----|-------------|
-| FR-AUTH-01 | Dashboard accessible without login (unauthenticated = view-only). Control actions prompt for login via numeric PIN (Operator/Supervisor) or username/password (Engineer). |
+| FR-AUTH-01 | Dashboard accessible without login. Unauthenticated users can view all pages and use controls explicitly marked as unauthenticated-allowed. All other control actions prompt for login via numeric PIN (Operator/Supervisor) or username/password (Engineer). |
 | FR-AUTH-02 | JWT-based session management with configurable token expiration |
 | FR-AUTH-03 | Role-based access control (Viewer, Operator, Supervisor, Engineer) |
 | FR-AUTH-04 | User CRUD operations — Supervisors can manage Operator accounts; Engineers can manage all roles including Supervisors |
