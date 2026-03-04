@@ -2,7 +2,7 @@
 
 ## 1. Project Overview
 
-A web-based Human-Machine Interface (HMI) for monitoring and controlling packaging machines. The HMI communicates with PLCs via a **pluggable protocol driver** architecture supporting OPC UA, EtherNet/IP (CIP), and Modbus TCP — allowing connection to a wide range of industrial controllers from CODESYS-based PLCs to Allen-Bradley MicroLogix/CompactLogix. The HMI is **state-model agnostic** — it does not impose PackML or any other state machine. Instead, it reads and displays whatever tags the PLC exposes and lets operators interact through configurable command buttons and parameter inputs. It provides real-time visualization, alarm management, historical trending, recipe management, and production reporting.
+A web-based Human-Machine Interface (HMI) for monitoring and controlling packaging machines. The HMI communicates with data sources via a **pluggable protocol driver** architecture supporting OPC UA, EtherNet/IP (CIP), Modbus TCP, and MQTT — allowing connection to a wide range of industrial controllers from CODESYS-based PLCs to Allen-Bradley MicroLogix/CompactLogix, as well as MQTT brokers for IIoT sensors, edge gateways, and other publish/subscribe data sources. The HMI is **state-model agnostic** — it does not impose PackML or any other state machine. Instead, it reads and displays whatever tags the data sources expose and lets operators interact through configurable command buttons and parameter inputs. It provides real-time visualization, alarm management, historical trending, recipe management, and production reporting.
 
 The system is **multi-platform** — it runs on **Windows, Linux (x86_64), and ARM platforms** (including Raspberry Pi and ARM-based industrial panel PCs). Typical deployments include dedicated industrial panel PCs with touchscreen, Raspberry Pi units for cost-sensitive installations, and standard Windows or Linux PCs for development and auxiliary HMI stations.
 
@@ -19,6 +19,7 @@ The system is designed to run **fully offline** with no internet dependency — 
 | OPC UA Driver | asyncua (opcua-asyncio) | Mature async Python OPC UA client/server library |
 | EtherNet/IP Driver | pycomm3 | Python library for Allen-Bradley EtherNet/IP (CIP) communication — supports MicroLogix, CompactLogix, ControlLogix |
 | Modbus TCP Driver | pymodbus | Async Python Modbus TCP client for generic PLC/device communication |
+| MQTT Driver | aiomqtt (paho-mqtt) | Async Python MQTT 3.1.1/5.0 client for subscribing to and publishing tag values via an MQTT broker |
 | Database | SQLite | Embedded, zero-config, portable — ideal for a dedicated panel PC deployment |
 | ORM | SQLAlchemy + Alembic | Database access and migrations |
 | Auth | JWT tokens + bcrypt | Stateless auth with role-based access control |
@@ -119,9 +120,9 @@ Control widgets allow operators to write values to PLC tags. Like visualization 
 | FR-RPT-05 | Summary tables and charts for production over time |
 | FR-RPT-06 | Export reports to CSV or PDF |
 
-### 3.7 PLC Connections & Protocol Drivers
+### 3.7 Data Source Connections & Protocol Drivers
 
-The backend uses a **pluggable protocol driver** architecture. Each PLC connection specifies a protocol, and the corresponding driver handles communication. The HMI application code (widgets, recipes, alarms, trends) interacts only with the tag database by short name — it is completely protocol-agnostic.
+The backend uses a **pluggable protocol driver** architecture. Each data source connection specifies a protocol, and the corresponding driver handles communication. Data sources include PLCs (via OPC UA, EtherNet/IP, Modbus) and MQTT brokers (for IIoT sensors, edge gateways, and other pub/sub sources). The HMI application code (widgets, recipes, alarms, trends) interacts only with the tag database by short name — it is completely protocol-agnostic.
 
 | ID | Requirement |
 |----|-------------|
@@ -129,7 +130,8 @@ The backend uses a **pluggable protocol driver** architecture. Each PLC connecti
 | FR-PROTO-02 | **OPC UA driver** — connects via endpoint URL with configurable security policy (None, Basic256Sha256) and authentication (anonymous, username/password, certificate). Supports browsing the server address space. Reads and decodes complex data types including structures (ExtensionObjects), arrays, and enumerations using the server's type dictionary or DataType definitions. |
 | FR-PROTO-03 | **EtherNet/IP (CIP) driver** — connects to Allen-Bradley PLCs (MicroLogix, CompactLogix, ControlLogix) via IP address and slot number. Tags addressed by CIP tag path (e.g., `N7:0`, `F8:0`, `T4:0.ACC`) or symbolic name (e.g., `Program:MainProgram.Speed`). |
 | FR-PROTO-04 | **Modbus TCP driver** — connects via IP address and port (default 502) with configurable unit ID. Tags addressed by register type and address (e.g., Holding Register 40001, Input Register 30001, Coil 00001, Discrete Input 10001). Supports configurable data types (INT16, UINT16, INT32, FLOAT32, BOOL) and byte order (big/little endian, word swap). |
-| FR-PROTO-05 | Each driver provides a common interface: read tag, write tag, subscribe to value changes, test connection, and (where supported) browse available tags |
+| FR-PROTO-05 | Each driver provides a common interface: read tag, write tag, subscribe to value changes, test connection, and (where supported) browse available tags. For pub/sub protocols like MQTT, "read" means the last received value and "subscribe" is the native delivery model. |
+| FR-PROTO-08 | **MQTT driver** — connects to an MQTT broker via hostname/IP, port (default 1883), and optional TLS (port 8883). Authentication via anonymous, username/password, or client certificate. Supports MQTT 3.1.1 and 5.0. Each tag maps to a topic and an optional JSON path for extracting a value from a JSON payload (e.g., topic `machine/temps`, JSON path `$.sealTemp1`). Supports subscribing (read) and publishing (write). Configurable QoS level (0, 1, 2) per tag. Raw payload parsing supports JSON (default), plain-text numeric, and binary (with configurable byte offset/type, similar to Modbus). |
 | FR-PROTO-06 | Auto-reconnect on connection loss with exponential backoff (1s, 2s, 4s, 8s, max 30s), per connection |
 | FR-PROTO-07 | Connection status (connected, disconnected, error) displayed per connection in the UI; "Connection Lost" banner shows which connection(s) are affected |
 
@@ -140,24 +142,24 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 | Field | Description |
 |-------|-------------|
 | **Short name** | Unique, friendly identifier used throughout the UI (e.g., `FilmTemp`, `MachineSpeed`, `GoodCount`) |
-| **PLC address** | Protocol-specific address — OPC UA node ID (e.g., `ns=2;s=Machine.Temperatures.FilmSeal`), CIP tag path (e.g., `N7:0`), or Modbus register (e.g., `HR:40001:FLOAT32`) |
+| **Source address** | Protocol-specific address — OPC UA node ID (e.g., `ns=2;s=Machine.Temperatures.FilmSeal`), CIP tag path (e.g., `N7:0`), Modbus register (e.g., `HR:40001:FLOAT32`), or MQTT topic + optional JSON path (e.g., `machine/temps → $.sealTemp1`) |
 | **Connection** | Which PLC connection this tag belongs to (determines the protocol) |
-| **Data type** | Tag data type. **Scalar types**: Bool, Int16, Int32, UInt16, UInt32, Float32, Float64, String. **Complex types** (OPC UA only): Struct, Array, Enum. For Modbus, the scalar data type also determines how many registers to read. See FR-TAG-14 through FR-TAG-18 for complex type handling. |
+| **Data type** | Tag data type. **Scalar types**: Bool, Int16, Int32, UInt16, UInt32, Float32, Float64, String. **Complex types** (OPC UA only): Struct, Array, Enum. For Modbus, the scalar data type also determines how many registers to read. For MQTT, the data type determines how the extracted value (from JSON path or raw payload) is parsed and stored. See FR-TAG-14 through FR-TAG-18 for complex type handling. |
 | **Group** | Logical category for organizing tags (e.g., "Temperatures", "Counters", "Film Station") |
 | **Options** | Per-tag configuration (see FR-TAG-04 below) |
 
 | ID | Requirement |
 |----|-------------|
-| FR-TAG-01 | Configure PLC connections: protocol type, endpoint/IP address, and protocol-specific settings (see FR-PROTO-02 through FR-PROTO-04) |
-| FR-TAG-02 | Import tags from external sources. Supported import sources: **(a)** browse a live OPC UA server address space and select nodes, **(b)** browse an EtherNet/IP controller's tag list, **(c)** import a CODESYS symbol configuration XML file (see FR-TAG-24), **(d)** import an RSLogix 500 CSV export file (see FR-TAG-25). In all cases, the PLC address is auto-populated from the source. For Modbus (no browsing), tags are added manually or via CSV/JSON import. |
-| FR-TAG-03 | Each tag must have a unique short name (friendly identifier) and a PLC address. Short names are used in widget bindings, recipes, alarms, and audit logs — the raw PLC address is not exposed to operators. The tag editor shows the appropriate address format based on the connection's protocol. |
+| FR-TAG-01 | Configure data source connections: protocol type, endpoint/IP address (or broker hostname for MQTT), and protocol-specific settings (see FR-PROTO-02 through FR-PROTO-04, FR-PROTO-08) |
+| FR-TAG-02 | Import tags from external sources. Supported import sources: **(a)** browse a live OPC UA server address space and select nodes, **(b)** browse an EtherNet/IP controller's tag list, **(c)** import a CODESYS symbol configuration XML file (see FR-TAG-24), **(d)** import an RSLogix 500 CSV export file (see FR-TAG-25), **(e)** subscribe to an MQTT broker and discover topics with recent activity (see FR-PROTO-08). In all cases, the source address is auto-populated from the source. For Modbus (no browsing), tags are added manually or via CSV/JSON import. |
+| FR-TAG-03 | Each tag must have a unique short name (friendly identifier) and a source address. Short names are used in widget bindings, recipes, alarms, and audit logs — the raw source address is not exposed to operators. The tag editor shows the appropriate address format based on the connection's protocol. |
 | FR-TAG-04 | Each tag has configurable options: engineering units (e.g., "°C", "mm/s"), display format (decimal places, number format), range (min/max for validation and gauge scaling), deadband (minimum change before a value update is pushed), and read/write mode (read-only, read-write, write-only) |
 | FR-TAG-05 | Tags can be flagged as trended (logged to history) with a configurable sample rate per tag |
 | FR-TAG-06 | Tags can be flagged as alarm sources. Two alarm modes are supported: **threshold** — for analog tags, with high, high-high, low, low-low limits and severity per limit; **boolean** — for discrete tags, where a true value raises an alarm (e.g., `conveyorMotorFault` = true → Critical alarm "Conveyor Motor Fault"). Each alarm source has a configurable severity, message text, and active-on state (true or false, to handle both fault flags and healthy-state flags). |
 | FR-TAG-07 | Group tags into logical categories; groups are displayed in the tag editor as a tree or filtered list |
 | FR-TAG-08 | Tag editor provides a searchable, sortable table view of all tags with inline editing of short name, group, and options |
 | FR-TAG-09 | Tag import/export via JSON or CSV for backup and transfer between systems |
-| FR-TAG-10 | When importing from any source (live OPC UA/EtherNet/IP browse, CODESYS XML, JSON, or CSV), the system compares the incoming tags against the existing tag database and presents a **diff view** showing: **(a)** new tags (exist in source but not in database), **(b)** deleted tags (exist in database but not in source), **(c)** changed tags (same short name or PLC address but different options/address). Each difference is individually selectable — the user can accept or reject each add, delete, and change before committing the import. |
+| FR-TAG-10 | When importing from any source (live OPC UA/EtherNet/IP browse, CODESYS XML, JSON, or CSV), the system compares the incoming tags against the existing tag database and presents a **diff view** showing: **(a)** new tags (exist in source but not in database), **(b)** deleted tags (exist in database but not in source), **(c)** changed tags (same short name or source address but different options/address). Each difference is individually selectable — the user can accept or reject each add, delete, and change before committing the import. |
 | FR-TAG-11 | The import diff view displays a summary count (e.g., "12 new, 3 changed, 2 removed") and supports select-all/deselect-all per category. Changed tags show a side-by-side comparison of old vs. new values for each modified field. |
 | FR-TAG-12 | Deleting a tag (manually or via import) warns if it is referenced by any widget, alarm, recipe, or trend configuration; optionally cascade-remove or block deletion |
 | FR-TAG-13 | All tag database changes are logged to the audit trail, including import operations (source, number of adds/changes/deletes applied) |
@@ -166,8 +168,8 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 | FR-TAG-16 | **OPC UA arrays**: Array-typed OPC UA nodes can be imported as **(a)** individual tags per element (e.g., `ZoneTemps[0]` through `ZoneTemps[9]`), or **(b)** a single array tag. Widgets binding to an array tag reference elements by index using bracket notation (e.g., `ZoneTemps[3]`). |
 | FR-TAG-17 | **Enumerations**: Enumeration-typed tags are imported with their value-to-name mapping (e.g., 0 = "Stopped", 1 = "Running", 2 = "Faulted"). Enum mappings are populated from the source — OPC UA enum data types, CODESYS XML type definitions (FR-TAG-24), or manually defined. The mapping is stored as part of the tag configuration. Widgets display the enumeration name by default with the option to show the numeric value. Enum mappings can be edited locally if the PLC's definitions are unclear or need operator-friendly labels. |
 | FR-TAG-18 | **Complex type discovery**: During OPC UA server browse (FR-TAG-02a), the import dialog indicates each node's type category (scalar, struct, array, enum) with an icon or badge. Struct and array nodes show an expand/collapse control to preview their fields or element count before import. The engineer selects the import mode (flatten vs. compound/array) per node or applies a default for all. |
-| FR-TAG-19 | **Tag templates**: Engineers can define a tag template (virtual struct) consisting of a set of named fields, each with a data type, engineering unit, display format, and optional alarm/trend configuration. Templates are protocol-agnostic and do not encode PLC addresses or offsets. |
-| FR-TAG-20 | **Tag template instances**: Engineers can create an instance of a tag template by providing a short-name prefix (e.g., `motor1`) and independently mapping each field to any PLC address on any connection. For example, a `Motor` template with fields `speedCommand`, `speedFeedback`, `current`, `faultCode` could produce instance `motor1` with mappings `speedCommand` → `N7:0`, `speedFeedback` → `N7:1`, `current` → `F8:0`, `faultCode` → `B3:0/0` — each field's address, data type, and connection are independent. |
+| FR-TAG-19 | **Tag templates**: Engineers can define a tag template (virtual struct) consisting of a set of named fields, each with a data type, engineering unit, display format, and optional alarm/trend configuration. Templates are protocol-agnostic and do not encode source addresses or offsets. |
+| FR-TAG-20 | **Tag template instances**: Engineers can create an instance of a tag template by providing a short-name prefix (e.g., `motor1`) and independently mapping each field to any source address on any connection. For example, a `Motor` template with fields `speedCommand`, `speedFeedback`, `current`, `faultCode` could produce instance `motor1` with mappings `speedCommand` → `N7:0`, `speedFeedback` → `N7:1`, `current` → `F8:0`, `faultCode` → `B3:0/0` — each field's address, data type, and connection are independent. Fields can even mix protocols (e.g., speed from a PLC via Modbus, vibration from an MQTT sensor). |
 | FR-TAG-21 | **Template instance tag generation**: When a template instance is saved, the system generates individual tags in the tag database using the pattern `{prefix}.{fieldName}` (e.g., `motor1.speedCommand`, `motor1.current`). Generated tags are fully functional scalar tags — they can be bound to widgets, trended, and alarmed identically to manually created tags. |
 | FR-TAG-22 | **Template instance management**: Editing a template (adding/removing/renaming fields) presents a diff view (similar to FR-TAG-10) showing the impact on all existing instances. Adding a field prompts the engineer to map addresses for each instance. Removing a field warns if the generated tags are referenced by widgets, alarms, or trends. Renaming a field updates all generated tag short names and widget bindings automatically. |
 | FR-TAG-23 | **Template-aware tag editor**: The tag editor displays template instances as collapsible groups. The instance header shows the template name and prefix; expanding reveals the individual field tags with their mapped addresses. Engineers can also view and edit template instances in a dedicated "Templates" section of the tag editor. |
@@ -378,7 +380,7 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 2. Names the template `Motor` and defines fields: `speedCommand` (INT), `speedFeedback` (INT), `current` (FLOAT, units: Amps), `faultCode` (INT), `running` (BOOL)
 3. Configures template-level defaults: alarm on `current` > 15A, trend `speedFeedback` at 1s interval
 4. Taps "Create Instance", enters prefix `motor1`
-5. Maps each field to a PLC address independently:
+5. Maps each field to a source address independently:
    - `speedCommand` → `N7:0`
    - `speedFeedback` → `N7:1`
    - `current` → `F8:0`
@@ -387,7 +389,7 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 6. Repeats for `motor2` (addresses `N7:10`, `N7:11`, `F8:1`, `N7:12`, `B3:0/1`), `motor3`, `motor4`
 7. Saves — system generates 20 tags (5 fields × 4 instances): `motor1.speedCommand`, `motor1.speedFeedback`, `motor1.current`, etc.
 8. All generated tags appear in the tag editor grouped under their template instance and are immediately available for widget binding
-9. Later, engineer adds a `vibration` field (FLOAT, units: mm/s) to the `Motor` template; system prompts for the PLC address mapping on each of the 4 instances; new tags (`motor1.vibration`, `motor2.vibration`, etc.) are generated upon save
+9. Later, engineer adds a `vibration` field (FLOAT, units: mm/s) to the `Motor` template; system prompts for the source address mapping on each of the 4 instances; new tags (`motor1.vibration`, `motor2.vibration`, etc.) are generated upon save
 
 ---
 
@@ -400,7 +402,7 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 2. Uploads the updated symbol configuration XML exported from the CODESYS IDE
 3. System parses the XML — including type definitions (enums, structs) — and compares against the existing tag database
 4. Diff view shows: "5 new, 2 changed, 1 removed, 1 type updated" — each category is expandable. The type update shows that enum `MachineState` gained a new value (3 = "Maintenance"); the diff shows old vs. new enum mappings
-5. Engineer expands "Changed" — sees that `SealTemp1` PLC address changed from `ns=2;s=GVL.SealTemp` to `ns=2;s=GVL.Sealing.Temp1`; side-by-side comparison highlights the difference
+5. Engineer expands "Changed" — sees that `SealTemp1` source address changed from `ns=2;s=GVL.SealTemp` to `ns=2;s=GVL.Sealing.Temp1`; side-by-side comparison highlights the difference
 6. Engineer expands "Removed" — sees `OldDiagCounter` is no longer in the PLC; system warns it is bound to a widget on the Line 3 screen
 7. Engineer accepts all new and changed tags, but deselects the deletion to investigate the widget binding first
 8. Taps "Apply" — 5 tags added, 2 updated; the removed tag is left unchanged for now
@@ -592,7 +594,7 @@ When any tag is in simulation mode, the HMI displays a clear visual indicator (e
 │   ├── Production Runs       — Run history and details
 │   └── OEE / Shift Report    — OEE breakdown and shift summary
 ├── Settings (Engineer only)
-│   ├── PLC Connections       — Protocol, endpoints, and credentials
+│   ├── Data Connections      — PLC and MQTT broker connections, protocols, endpoints, and credentials
 │   ├── Tag Configuration     — Import/configure/group tags
 │   ├── User Management       — Add/edit/remove users and roles
 │   ├── System Settings       — Shift schedules, retention, etc.
@@ -612,7 +614,7 @@ When any tag is in simulation mode, the HMI displays a clear visual indicator (e
 | 4 | **Historian** | Built-in database only. The HMI logs trend data to its own DB. No external historian integration in v1. |
 | 5 | **Display** | Touch-first design for panel PC touchscreen. Designed for native panel resolution (default 1920x1080). Maintenance laptops can connect via browser on the local network. |
 | 6 | **Regulatory** | No special regulatory requirements. Standard audit trail and authentication; no FDA 21 CFR Part 11 or formal GMP compliance needed. |
-| 7 | **Complex data types** | OPC UA structs, arrays, and enumerations are supported via flatten-on-import (recommended) or compound tags. Flatten is the default as it keeps the widget binding model simple and consistent across all protocols. Compound tags are available for engineers who prefer to preserve the PLC's type structure. EtherNet/IP UDTs and Modbus do not support complex types — those protocols continue to use scalar tags only. For protocols without native struct support, **tag templates** provide a virtual struct mechanism: engineers define a template with named fields, then create instances where each field is independently mapped to any PLC address. This gives legacy PLCs the same logical grouping benefits as OPC UA structs without requiring PLC-side support. |
+| 7 | **Complex data types** | OPC UA structs, arrays, and enumerations are supported via flatten-on-import (recommended) or compound tags. Flatten is the default as it keeps the widget binding model simple and consistent across all protocols. Compound tags are available for engineers who prefer to preserve the PLC's type structure. EtherNet/IP, Modbus, and MQTT do not support complex types natively — those protocols use scalar tags only. MQTT tags with JSON payloads use JSON path expressions to extract individual scalar values from nested objects. For protocols without native struct support, **tag templates** provide a virtual struct mechanism: engineers define a template with named fields, then create instances where each field is independently mapped to any source address. This gives legacy PLCs and MQTT topics the same logical grouping benefits as OPC UA structs without requiring source-side support. |
 | 8 | **Multi-platform** | The chosen technology stack (Python + SQLite backend, React frontend served as static assets) is inherently cross-platform. Python and all key dependencies (asyncua, pycomm3, pymodbus, SQLAlchemy) run on Windows, Linux x86_64, and ARM without platform-specific code. SQLite is embedded and works everywhere. The frontend is browser-based and platform-independent. Platform-specific concerns are limited to service management (systemd vs. Windows Service) and optional kiosk-mode configuration. |
 | 9 | **Deployment** | Target machines have no internet access, so deployment must be fully offline. The build system produces self-contained archives on a developer machine (with internet); these are transferred to targets via USB, network share, or similar. PyInstaller or similar bundling tool is used to include the Python runtime so the target does not need Python pre-installed. |
 
