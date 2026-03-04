@@ -229,16 +229,16 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 | NFR-04 | **Browser**: Chromium-based (panel PC runs Chromium in kiosk mode); also support Chrome and Edge for maintenance laptops |
 | NFR-05 | **Display**: Designed for the panel PC's native resolution (configurable, default 1920x1080); touch-first with minimum 44px touch targets |
 | NFR-06 | **Security**: All PLC credentials and passwords/PINs stored encrypted at rest. HTTPS/TLS for browser-to-backend communication is supported but optional — HTTP is acceptable on isolated factory networks. |
-| NFR-07 | **Deployment**: Platform-native service management — systemd on Linux/Raspberry Pi, Windows Service (or NSSM wrapper) on Windows. Auto-starts on boot with watchdog restart on crash. No Docker required. |
+| NFR-07 | **Deployment**: Deployed as a self-contained offline package (see §9). Platform-native service management — systemd on Linux/Raspberry Pi, Windows Service (or NSSM wrapper) on Windows. Auto-starts on boot with watchdog restart on crash. No Docker required. Target machines have **no internet access**. |
 | NFR-08 | **Kiosk mode**: Browser launches fullscreen on boot with no browser chrome; on-screen keyboard available for text input. Kiosk configuration is platform-specific (e.g., Chromium autostart on Linux/Raspberry Pi, Chrome in kiosk mode on Windows). |
-| NFR-09 | **Offline**: Fully self-contained — no CDN, external fonts, or internet-dependent resources. All assets bundled locally. |
+| NFR-09 | **Offline**: Fully self-contained — no CDN, external fonts, or internet-dependent resources. All assets bundled locally. Installation itself must also work offline (no `pip install` from PyPI on the target). |
 | NFR-10 | **Configuration**: Server endpoint, database, and basic settings via environment variables or config file |
 | NFR-11 | **Logging**: Structured application logging (JSON) with configurable log levels |
 | NFR-12 | **Testability**: Backend API unit tests, protocol driver integration tests using the tag simulation layer, and frontend component tests |
 | NFR-13 | **Data retention**: Configurable retention policy for trend data and audit logs with automatic purge to prevent disk filling (default: trends 90 days, audit 1 year) |
 | NFR-14 | **Database**: SQLite in WAL mode for concurrent read performance; periodic backup to configurable location (USB, network share) |
 | NFR-15 | **Multi-platform**: Runs on Windows (10/11, x86_64), Linux (x86_64), and ARM (armv7l / aarch64, including Raspberry Pi 3/4/5). All Python dependencies must have pure-Python fallbacks or provide pre-built wheels for all target platforms. Frontend assets are platform-independent. |
-| NFR-16 | **Packaging**: Provide a single-command install method per platform — e.g., a pip-installable package, a self-contained archive, or platform-specific installers. Avoid requiring users to compile native extensions. |
+| NFR-16 | **Packaging**: The build system (running on a developer machine with internet) produces a self-contained deployment archive per target platform. The archive includes the Python runtime, all Python dependencies, pre-built frontend assets, install/upgrade scripts, and service configuration. Deployment to the target machine is copy-and-run — no internet, no compilation, no package manager required on the target (see §9). |
 
 ---
 
@@ -614,3 +614,85 @@ When any tag is in simulation mode, the HMI displays a clear visual indicator (e
 | 6 | **Regulatory** | No special regulatory requirements. Standard audit trail and authentication; no FDA 21 CFR Part 11 or formal GMP compliance needed. |
 | 7 | **Complex data types** | OPC UA structs, arrays, and enumerations are supported via flatten-on-import (recommended) or compound tags. Flatten is the default as it keeps the widget binding model simple and consistent across all protocols. Compound tags are available for engineers who prefer to preserve the PLC's type structure. EtherNet/IP UDTs and Modbus do not support complex types — those protocols continue to use scalar tags only. For protocols without native struct support, **tag templates** provide a virtual struct mechanism: engineers define a template with named fields, then create instances where each field is independently mapped to any PLC address. This gives legacy PLCs the same logical grouping benefits as OPC UA structs without requiring PLC-side support. |
 | 8 | **Multi-platform** | The chosen technology stack (Python + SQLite backend, React frontend served as static assets) is inherently cross-platform. Python and all key dependencies (asyncua, pycomm3, pymodbus, SQLAlchemy) run on Windows, Linux x86_64, and ARM without platform-specific code. SQLite is embedded and works everywhere. The frontend is browser-based and platform-independent. Platform-specific concerns are limited to service management (systemd vs. Windows Service) and optional kiosk-mode configuration. |
+| 9 | **Deployment** | Target machines have no internet access, so deployment must be fully offline. The build system produces self-contained archives on a developer machine (with internet); these are transferred to targets via USB, network share, or similar. PyInstaller or similar bundling tool is used to include the Python runtime so the target does not need Python pre-installed. |
+
+---
+
+## 9. Deployment & Installation
+
+Target machines are air-gapped or have no reliable internet access. All build and dependency resolution happens on a **developer/build machine** with internet. The output is a self-contained deployment artifact that is transferred to the target machine (via USB drive, local network share, or similar) and installed with a single script.
+
+### 9.1 Build Pipeline (Developer Machine — has internet)
+
+The build pipeline runs on a developer machine and produces one deployment archive per target platform:
+
+1. **Frontend build**: `npm run build` produces static assets (HTML, JS, CSS) — platform-independent.
+2. **Python bundling**: Use [PyInstaller](https://pyinstaller.org/) (or equivalent: cx_Freeze, Nuitka) to package the Python backend, all dependencies, and the Python runtime itself into a single self-contained directory or executable. Cross-compilation or platform-specific build VMs/containers are used to produce bundles for each target architecture (Windows x86_64, Linux x86_64, Linux ARM).
+3. **Asset inclusion**: The bundled frontend assets, default configuration, example screens, and example simulated tag set are embedded in the archive.
+4. **Install scripts**: Platform-specific install/upgrade scripts are included in the archive (see §9.2).
+5. **Archive**: Everything is packaged into a single archive file per platform:
+   - Linux/ARM: `.tar.gz` (e.g., `hmi-1.0.0-linux-x86_64.tar.gz`, `hmi-1.0.0-linux-aarch64.tar.gz`)
+   - Windows: `.zip` (e.g., `hmi-1.0.0-windows-x86_64.zip`)
+
+### 9.2 Installation on Target Machine (no internet)
+
+Installation is a copy-and-run process:
+
+| Step | Linux / Raspberry Pi | Windows |
+|------|---------------------|---------|
+| **1. Transfer** | Copy `.tar.gz` to target (USB, scp, network share) | Copy `.zip` to target (USB, network share) |
+| **2. Extract** | `tar xzf hmi-*.tar.gz -C /opt/hmi` | Extract zip to `C:\hmi` (or chosen directory) |
+| **3. Install** | `sudo /opt/hmi/install.sh` | Run `install.bat` as Administrator |
+| **4. Verify** | `systemctl status hmi` | Check Windows Services or `sc query hmi` |
+
+The install script handles:
+- Creating the application directory and setting permissions
+- Installing the systemd service unit (Linux) or Windows Service (Windows)
+- Creating a default configuration file if one does not already exist
+- Setting up the SQLite database (running Alembic migrations)
+- Optionally configuring Chromium/Chrome kiosk mode autostart
+- Starting the service
+
+No Python installation, no `pip`, no `npm`, no compiler, no internet required on the target.
+
+### 9.3 Upgrades
+
+Upgrades follow the same copy-and-run pattern:
+
+1. Transfer the new archive to the target machine.
+2. Run the install script again — it detects an existing installation and performs an upgrade:
+   - Stops the running service
+   - Backs up the current database and configuration
+   - Replaces application files with the new version
+   - Runs database migrations (Alembic) to update the schema
+   - Preserves all user configuration, screens, tags, trend history, and audit logs
+   - Restarts the service
+3. If the upgrade fails, the script rolls back to the previous version from the backup.
+
+### 9.4 Configuration Preservation
+
+The install/upgrade scripts distinguish between **application files** (replaced on upgrade) and **user data** (preserved):
+
+| Preserved across upgrades | Replaced on upgrade |
+|--------------------------|-------------------|
+| SQLite database (tags, screens, trends, alarms, audit, users) | Python application bundle |
+| Configuration file (`config.yaml` or equivalent) | Frontend static assets |
+| TLS certificates (if configured) | Install/upgrade scripts |
+| Custom screen exports / backups | Default/example screens (re-imported only if no screens exist) |
+
+### 9.5 Directory Layout (Linux example)
+
+```
+/opt/hmi/
+├── bin/                  # PyInstaller-bundled executable(s)
+│   └── hmi-server        # Single entry point — starts backend + serves frontend
+├── web/                  # Pre-built frontend static assets
+├── config/
+│   └── config.yaml       # User configuration (preserved on upgrade)
+├── data/
+│   ├── hmi.db            # SQLite database (preserved on upgrade)
+│   └── backups/          # Automatic pre-upgrade backups
+├── logs/                 # Application log files
+├── install.sh            # Install/upgrade script
+└── VERSION               # Installed version identifier
+```
