@@ -38,30 +38,34 @@ The system is designed to run **fully offline** with no internet dependency — 
 
 ## 3. Functional Requirements
 
-### 3.1 Machine Overview Dashboard
+### 3.1 Dashboard & Visualization Widgets
+
+The system provides a library of configurable widgets that can be placed on designer-created screens (see §3.11 Screen Design). The requirements below define the **widget capabilities** available in the widget palette — they do not prescribe a fixed screen layout. The built-in simulation ships with an example dashboard screen demonstrating these widgets (see §6).
 
 | ID | Requirement |
 |----|-------------|
-| FR-DASH-01 | Display machine status using configurable indicator widgets that map tag values to colors/labels (e.g., a tag value of 1 = "Running"/green, 2 = "Stopped"/red). No fixed state model assumed. |
-| FR-DASH-02 | Show machine speed (current, setpoint, max) with gauge or bar visualization |
-| FR-DASH-03 | Display production counters: good count, reject count, total count |
-| FR-DASH-04 | Show current recipe/product name and batch/lot ID |
-| FR-DASH-05 | Display active alarms count with severity badge (critical/warning/info) |
-| FR-DASH-06 | Show OEE (Overall Equipment Effectiveness) — availability, performance, quality |
-| FR-DASH-07 | Display key process values (temperatures, pressures, sensor states) as configurable widgets |
-| FR-DASH-08 | Auto-refresh all values via WebSocket push (see NFR-01 for latency target) |
+| FR-DASH-01 | **Status indicator widget** — maps tag values to colors and labels (e.g., a tag value of 1 = "Running"/green, 2 = "Stopped"/red). No fixed state model assumed; mappings are fully configurable per widget instance. |
+| FR-DASH-02 | **Gauge / bar widget** — displays a numeric tag value as a gauge, progress bar, or vertical bar with configurable min/max/warning/critical zones |
+| FR-DASH-03 | **Counter widget** — displays an integer tag value with optional label, units, and reset button (if configured as unauthenticated-allowed or with appropriate role) |
+| FR-DASH-04 | **Text value widget** — displays a tag's current value as formatted text (string, numeric with units, or enum name) |
+| FR-DASH-05 | **Alarm summary widget** — shows active alarm count with severity badges (critical/warning/info); tappable to navigate to the alarm page |
+| FR-DASH-06 | **OEE widget** — computes and displays OEE (availability × performance × quality) from configured source tags; supports dial, bar, or numeric display modes |
+| FR-DASH-07 | **Multi-value group widget** — displays a configurable set of tag values in a compact table or card layout (e.g., a group of temperatures or pressures) |
+| FR-DASH-08 | All widgets auto-refresh via WebSocket push (see NFR-01 for latency target) |
 
-### 3.2 Machine Control
+### 3.2 Control Widgets
+
+Control widgets allow operators to write values to PLC tags. Like visualization widgets, these are placed on screens via the screen designer and are not tied to a fixed layout. The simulation ships with an example control panel demonstrating these widgets.
 
 | ID | Requirement |
 |----|-------------|
-| FR-CTRL-01 | Support configurable command buttons — each button writes a predefined value to a specified tag (e.g., "Start" writes 1 to the tag bound to `MachineCmd`) |
-| FR-CTRL-02 | Support configurable parameter inputs — numeric entry fields, sliders, or dropdowns that write to tags, with optional min/max/step constraints |
-| FR-CTRL-03 | Allow buttons and parameter inputs to be grouped into named control panels on the UI |
+| FR-CTRL-01 | **Command button widget** — writes a predefined value to a specified tag on press (e.g., "Start" writes 1 to `MachineCmd`). Label, tag, value, and appearance are configurable per instance. |
+| FR-CTRL-02 | **Parameter input widget** — numeric entry field, slider, or dropdown that writes to a tag, with optional min/max/step constraints and engineering units display |
+| FR-CTRL-03 | Allow buttons and parameter inputs to be grouped into named control panels on screen |
 | FR-CTRL-04 | Optionally require confirmation dialogs on specific buttons (configurable per button) |
 | FR-CTRL-05 | Control actions require authenticated Operator role or above by default. Individual buttons/inputs can be configured to allow unauthenticated access (e.g., fault reset, resettable operator counter). |
 | FR-CTRL-06 | Log all control actions (button presses and parameter writes) to the audit trail with user (or "unauthenticated" if no login), timestamp, tag, and value |
-| FR-CTRL-07 | Support toggle-style buttons that reflect the current tag value (e.g., ON/OFF with visual state) |
+| FR-CTRL-07 | **Toggle button widget** — reflects the current tag value visually (e.g., ON/OFF with color state) and writes the opposite value on press |
 
 ### 3.3 Alarm Management
 
@@ -465,6 +469,15 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 ## 6. Packaging Machine Simulation Server
 
 The built-in simulation server provides a realistic OPC UA address space mimicking a packaging machine for development and demo purposes.
+
+### Example Screens (Simulation Only)
+
+The simulation ships with pre-built example screens that demonstrate the system's widget capabilities. These screens are **not** intended as a production layout — they serve as a starting point and reference for designers building machine-specific screens. Production deployments will have custom screens created via the screen designer (§3.11) tailored to the specific machine and customer requirements.
+
+| Screen | Contents | Demonstrates |
+|--------|----------|-------------|
+| **Dashboard** | Status indicator, speed gauge, counter widgets, OEE display, alarm summary, process value group (temperatures, pressures) | §3.1 visualization widgets with live simulation data |
+| **Control Panel** | Start/Stop/Reset command buttons, speed setpoint slider, fault reset (unauthenticated-allowed) | §3.2 control widgets, confirmation dialogs, auth levels |
 
 ### Simulated Nodes
 
