@@ -240,9 +240,9 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 | NFR-03 | **Uptime**: Backend should auto-reconnect to PLC on connection loss (see FR-PROTO-06) |
 | NFR-04 | **Browser**: Chromium-based (panel PC runs Chromium in kiosk mode); also support Chrome and Edge for maintenance laptops |
 | NFR-05 | **Display**: Designed for the panel PC's native resolution (configurable, default 1920x1080); touch-first with minimum 44px touch targets |
-| NFR-06 | **Security**: All PLC credentials and passwords/PINs stored encrypted at rest. HTTPS/TLS for browser-to-backend communication is supported but optional — HTTP is acceptable on isolated factory networks. |
-| NFR-07 | **Deployment**: Deployed as a self-contained offline package (see §9). Platform-native service management — systemd on Linux/Raspberry Pi, Windows Service (or NSSM wrapper) on Windows. Auto-starts on boot with watchdog restart on crash. No Docker required. Target machines have **no internet access**. |
-| NFR-08 | **Kiosk mode**: Browser launches fullscreen on boot with no browser chrome; on-screen keyboard available for text input. Kiosk configuration is platform-specific (e.g., Chromium autostart on Linux/Raspberry Pi, Chrome in kiosk mode on Windows). |
+| NFR-06 | **Security**: All PLC credentials and passwords/PINs stored encrypted at rest. HTTPS/TLS for browser-to-backend communication is supported but optional — HTTP is acceptable on isolated factory networks. When TLS is enabled, the server listens on a non-privileged port (e.g., 8443) to avoid requiring root for port binding. |
+| NFR-07 | **Deployment**: Deployed as a self-contained offline package (see §9). **No root or administrator privileges required** — the application installs into a user-writable directory and runs as an unprivileged user process. On Linux, an optional systemd user service or shell launcher is provided for auto-start; on Windows, an optional scheduled task or shell shortcut is provided. No Docker required. Target machines have **no internet access**. |
+| NFR-08 | **Kiosk mode**: Browser launches fullscreen on boot with no browser chrome; on-screen keyboard available for text input. Kiosk configuration is platform-specific (e.g., Chromium autostart via user session on Linux/Raspberry Pi, Chrome in kiosk mode via shortcut on Windows). Kiosk setup does not require root/admin — it configures the current user's desktop session or autostart. |
 | NFR-09 | **Offline**: Fully self-contained — no CDN, external fonts, or internet-dependent resources. All assets bundled locally. Installation itself must also work offline (no `pip install` from PyPI on the target). |
 | NFR-10 | **Configuration**: Server endpoint, database, and basic settings via environment variables or config file |
 | NFR-11 | **Logging**: Structured application logging (JSON) with configurable log levels |
@@ -250,7 +250,8 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 | NFR-13 | **Data retention**: Configurable retention policy for trend data and audit logs with automatic purge to prevent disk filling (default: trends 90 days, audit 1 year) |
 | NFR-14 | **Database**: SQLite in WAL mode for concurrent read performance; periodic backup to configurable location (USB, network share) |
 | NFR-15 | **Multi-platform**: Runs on Windows (10/11, x86_64), Linux (x86_64), and ARM (armv7l / aarch64, including Raspberry Pi 3/4/5). All Python dependencies must have pure-Python fallbacks or provide pre-built wheels for all target platforms. Frontend assets are platform-independent. |
-| NFR-16 | **Packaging**: The build system (running on a developer machine with internet) produces a self-contained deployment archive per target platform. The archive includes the Python runtime, all Python dependencies, pre-built frontend assets, install/upgrade scripts, and service configuration. Deployment to the target machine is copy-and-run — no internet, no compilation, no package manager required on the target (see §9). |
+| NFR-16 | **Packaging**: The build system (running on a developer machine with internet) produces a self-contained deployment archive per target platform. The archive includes the Python runtime, all Python dependencies, pre-built frontend assets, install/upgrade scripts, and service configuration. Deployment to the target machine is copy-and-run — no internet, no compilation, no package manager, and **no root/admin privileges** required on the target (see §9). |
+| NFR-17 | **No elevated privileges**: The entire application lifecycle — install, run, upgrade, uninstall — operates without root (Linux) or Administrator (Windows) access. The application binds to a **non-privileged port** (default: 8080, configurable) to avoid requiring port-binding privileges. All files are stored under a user-writable directory (e.g., `~/hmi` or `%LOCALAPPDATA%\hmi`). If an organization later wants system-level service management (systemd system service, Windows Service), that is an optional post-install step that does require admin — but it is not needed for basic operation. |
 
 ---
 
@@ -661,14 +662,15 @@ The application shell provides a **side navigation rail** (left) and a **top bar
 | 5 | **Display** | Touch-first design for panel PC touchscreen. Designed for native panel resolution (default 1920x1080). Maintenance laptops can connect via browser on the local network. |
 | 6 | **Regulatory** | No special regulatory requirements. Standard audit trail and authentication; no FDA 21 CFR Part 11 or formal GMP compliance needed. |
 | 7 | **Complex data types** | OPC UA structs, arrays, and enumerations are supported via flatten-on-import (recommended) or compound tags. Flatten is the default as it keeps the widget binding model simple and consistent across all protocols. Compound tags are available for engineers who prefer to preserve the PLC's type structure. EtherNet/IP, Modbus, and MQTT do not support complex types natively — those protocols use scalar tags only. MQTT tags with JSON payloads use JSON path expressions to extract individual scalar values from nested objects. For protocols without native struct support, **tag templates** provide a virtual struct mechanism: engineers define a template with named fields, then create instances where each field is independently mapped to any source address. This gives legacy PLCs and MQTT topics the same logical grouping benefits as OPC UA structs without requiring source-side support. |
-| 8 | **Multi-platform** | The chosen technology stack (Python + SQLite backend, React frontend served as static assets) is inherently cross-platform. Python and all key dependencies (asyncua, pycomm3, pymodbus, SQLAlchemy) run on Windows, Linux x86_64, and ARM without platform-specific code. SQLite is embedded and works everywhere. The frontend is browser-based and platform-independent. Platform-specific concerns are limited to service management (systemd vs. Windows Service) and optional kiosk-mode configuration. |
+| 8 | **Multi-platform** | The chosen technology stack (Python + SQLite backend, React frontend served as static assets) is inherently cross-platform. Python and all key dependencies (asyncua, pycomm3, pymodbus, SQLAlchemy) run on Windows, Linux x86_64, and ARM without platform-specific code. SQLite is embedded and works everywhere. The frontend is browser-based and platform-independent. Platform-specific concerns are limited to optional auto-start configuration (systemd user service vs. Windows scheduled task) and optional kiosk-mode setup. |
 | 9 | **Deployment** | Target machines have no internet access, so deployment must be fully offline. The build system produces self-contained archives on a developer machine (with internet); these are transferred to targets via USB, network share, or similar. PyInstaller or similar bundling tool is used to include the Python runtime so the target does not need Python pre-installed. |
+| 10 | **No root/admin** | Installation and operation must not require elevated privileges. The application installs into a user-writable directory, binds to a non-privileged port (default 8080), and uses user-level auto-start mechanisms. This accommodates locked-down industrial PCs where operators and engineers do not have admin rights, shared IT-managed machines, and Raspberry Pi deployments where `sudo` may be restricted. System-level service installation is available as an optional step for admins who want it. |
 
 ---
 
 ## 9. Deployment & Installation
 
-Target machines are air-gapped or have no reliable internet access. All build and dependency resolution happens on a **developer/build machine** with internet. The output is a self-contained deployment artifact that is transferred to the target machine (via USB drive, local network share, or similar) and installed with a single script.
+Target machines are air-gapped or have no reliable internet access. All build and dependency resolution happens on a **developer/build machine** with internet. The output is a self-contained deployment artifact that is transferred to the target machine (via USB drive, local network share, or similar) and installed with a single script. **No root or administrator privileges are required on the target** — the application runs entirely within user space.
 
 ### 9.1 Build Pipeline (Developer Machine — has internet)
 
@@ -682,26 +684,28 @@ The build pipeline runs on a developer machine and produces one deployment archi
    - Linux/ARM: `.tar.gz` (e.g., `hmi-1.0.0-linux-x86_64.tar.gz`, `hmi-1.0.0-linux-aarch64.tar.gz`)
    - Windows: `.zip` (e.g., `hmi-1.0.0-windows-x86_64.zip`)
 
-### 9.2 Installation on Target Machine (no internet)
+### 9.2 Installation on Target Machine (no internet, no root/admin)
 
-Installation is a copy-and-run process:
+Installation is a copy-and-run process that requires **no elevated privileges**:
 
 | Step | Linux / Raspberry Pi | Windows |
 |------|---------------------|---------|
 | **1. Transfer** | Copy `.tar.gz` to target (USB, scp, network share) | Copy `.zip` to target (USB, network share) |
-| **2. Extract** | `tar xzf hmi-*.tar.gz -C /opt/hmi` | Extract zip to `C:\hmi` (or chosen directory) |
-| **3. Install** | `sudo /opt/hmi/install.sh` | Run `install.bat` as Administrator |
-| **4. Verify** | `systemctl status hmi` | Check Windows Services or `sc query hmi` |
+| **2. Extract** | `tar xzf hmi-*.tar.gz -C ~/hmi` | Extract zip to `%LOCALAPPDATA%\hmi` (or chosen directory) |
+| **3. Install** | `~/hmi/install.sh` | Run `install.bat` (no "Run as Administrator" needed) |
+| **4. Verify** | `~/hmi/bin/hmi-server --status` or check browser at `http://localhost:8080` | Same — check browser at `http://localhost:8080` |
 
 The install script handles:
-- Creating the application directory and setting permissions
-- Installing the systemd service unit (Linux) or Windows Service (Windows)
+- Creating the application directory structure under the user's home (no system directories)
+- Optionally setting up a **systemd user service** (`systemctl --user`) on Linux or a **scheduled task** on Windows for auto-start on login — neither requires root/admin
 - Creating a default configuration file if one does not already exist
 - Setting up the SQLite database (running Alembic migrations)
-- Optionally configuring Chromium/Chrome kiosk mode autostart
-- Starting the service
+- Optionally configuring Chromium/Chrome kiosk mode autostart (user session, no root/admin)
+- Starting the application
 
-No Python installation, no `pip`, no `npm`, no compiler, no internet required on the target.
+No Python installation, no `pip`, no `npm`, no compiler, no internet, and **no root/admin** required on the target.
+
+> **Optional system-level service**: If an administrator later wants to run the HMI as a system-wide service (systemd system unit, Windows Service via NSSM), the archive includes an optional `install-system-service.sh` / `install-system-service.bat` script that does require elevated privileges. This is not needed for normal operation.
 
 ### 9.3 Upgrades
 
@@ -731,16 +735,17 @@ The install/upgrade scripts distinguish between **application files** (replaced 
 ### 9.5 Directory Layout (Linux example)
 
 ```
-/opt/hmi/
-├── bin/                  # PyInstaller-bundled executable(s)
-│   └── hmi-server        # Single entry point — starts backend + serves frontend
-├── web/                  # Pre-built frontend static assets
+~/hmi/                            # User-writable, no root needed
+├── bin/                          # PyInstaller-bundled executable(s)
+│   └── hmi-server                # Single entry point — starts backend + serves frontend
+├── web/                          # Pre-built frontend static assets
 ├── config/
-│   └── config.yaml       # User configuration (preserved on upgrade)
+│   └── config.yaml               # User configuration (preserved on upgrade)
 ├── data/
-│   ├── hmi.db            # SQLite database (preserved on upgrade)
-│   └── backups/          # Automatic pre-upgrade backups
-├── logs/                 # Application log files
-├── install.sh            # Install/upgrade script
-└── VERSION               # Installed version identifier
+│   ├── hmi.db                    # SQLite database (preserved on upgrade)
+│   └── backups/                  # Automatic pre-upgrade backups
+├── logs/                         # Application log files
+├── install.sh                    # Install/upgrade script (no root)
+├── install-system-service.sh     # Optional: system-level service (requires root)
+└── VERSION                       # Installed version identifier
 ```
