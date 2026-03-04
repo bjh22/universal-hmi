@@ -129,7 +129,7 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 | FR-TAG-03 | Each tag must have a unique short name (friendly identifier) and an OPC UA address. Short names are used in widget bindings, recipes, alarms, and audit logs — the raw OPC UA node ID is not exposed to operators. |
 | FR-TAG-04 | Each tag has configurable options: engineering units (e.g., "°C", "mm/s"), display format (decimal places, number format), range (min/max for validation and gauge scaling), deadband (minimum change before a value update is pushed), and read/write mode (read-only, read-write, write-only) |
 | FR-TAG-05 | Tags can be flagged as trended (logged to history) with a configurable sample rate per tag |
-| FR-TAG-06 | Tags can be flagged as alarm sources with per-tag alarm thresholds (high, high-high, low, low-low) and severity mappings |
+| FR-TAG-06 | Tags can be flagged as alarm sources. Two alarm modes are supported: **threshold** — for analog tags, with high, high-high, low, low-low limits and severity per limit; **boolean** — for discrete tags, where a true value raises an alarm (e.g., `conveyorMotorFault` = true → Critical alarm "Conveyor Motor Fault"). Each alarm source has a configurable severity, message text, and active-on state (true or false, to handle both fault flags and healthy-state flags). |
 | FR-TAG-07 | Group tags into logical categories; groups are displayed in the tag editor as a tree or filtered list |
 | FR-TAG-08 | Tag editor provides a searchable, sortable table view of all tags with inline editing of short name, group, and options |
 | FR-TAG-09 | Tag import/export via JSON or CSV — import validates for duplicate short names and missing OPC UA addresses |
