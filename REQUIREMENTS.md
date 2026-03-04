@@ -112,14 +112,29 @@ The system is designed to run **fully offline** with no internet dependency — 
 
 ### 3.7 OPC UA Tag Configuration
 
+The system maintains a **tag database** stored in SQLite. Each tag record contains:
+
+| Field | Description |
+|-------|-------------|
+| **Short name** | Unique, friendly identifier used throughout the UI (e.g., `FilmTemp`, `MachineSpeed`, `GoodCount`) |
+| **OPC UA address** | Full OPC UA node ID (e.g., `ns=2;s=Machine.Temperatures.FilmSeal`) |
+| **Connection** | Which OPC UA server connection this tag belongs to |
+| **Group** | Logical category for organizing tags (e.g., "Temperatures", "Counters", "Film Station") |
+| **Options** | Per-tag configuration (see FR-TAG-04 below) |
+
 | ID | Requirement |
 |----|-------------|
 | FR-TAG-01 | Configure OPC UA server connections (endpoint URL, security policy, credentials) |
-| FR-TAG-02 | Browse the OPC UA server address space and select tags |
-| FR-TAG-03 | Define tag metadata: display name, engineering units, range (min/max), format (decimal places) |
-| FR-TAG-04 | Group tags into logical categories (e.g., "Temperatures", "Counters", "Film Station") |
-| FR-TAG-05 | Configure which tags are trended (logged to history) and at what sample rate |
-| FR-TAG-06 | Tag import/export via JSON or CSV |
+| FR-TAG-02 | Browse the OPC UA server address space to discover nodes; select nodes to add as tags with their OPC UA address auto-populated |
+| FR-TAG-03 | Each tag must have a unique short name (friendly identifier) and an OPC UA address. Short names are used in widget bindings, recipes, alarms, and audit logs — the raw OPC UA node ID is not exposed to operators. |
+| FR-TAG-04 | Each tag has configurable options: engineering units (e.g., "°C", "mm/s"), display format (decimal places, number format), range (min/max for validation and gauge scaling), deadband (minimum change before a value update is pushed), and read/write mode (read-only, read-write, write-only) |
+| FR-TAG-05 | Tags can be flagged as trended (logged to history) with a configurable sample rate per tag |
+| FR-TAG-06 | Tags can be flagged as alarm sources with per-tag alarm thresholds (high, high-high, low, low-low) and severity mappings |
+| FR-TAG-07 | Group tags into logical categories; groups are displayed in the tag editor as a tree or filtered list |
+| FR-TAG-08 | Tag editor provides a searchable, sortable table view of all tags with inline editing of short name, group, and options |
+| FR-TAG-09 | Tag import/export via JSON or CSV — import validates for duplicate short names and missing OPC UA addresses |
+| FR-TAG-10 | Deleting a tag warns if it is referenced by any widget, alarm, recipe, or trend configuration; optionally cascade-remove or block deletion |
+| FR-TAG-11 | All tag database changes are logged to the audit trail |
 
 ### 3.8 User Management & Authentication
 
@@ -151,7 +166,7 @@ The system is designed to run **fully offline** with no internet dependency — 
 | FR-SCRN-01 | Provide a screen editor accessible to users with the Designer role for creating and editing HMI screens. Designer can toggle between live (runtime) mode and edit mode on any screen via an edit button or keyboard shortcut (e.g., Ctrl+E). The edit button is only visible when logged in as Designer. |
 | FR-SCRN-02 | Support drag-and-drop placement of widgets onto a grid-based canvas with snap-to-grid alignment |
 | FR-SCRN-03 | Widget palette includes: value displays, gauges, bar charts, trend charts, status indicators, buttons, parameter inputs, alarm tables, images/shapes, and text labels |
-| FR-SCRN-04 | Each widget exposes a property panel for configuration: OPC UA tag binding, label, units, colors, thresholds, size, and position |
+| FR-SCRN-04 | Each widget exposes a property panel for configuration: tag binding (by short name from the tag database), label, units, colors, thresholds, size, and position |
 | FR-SCRN-05 | Support widget resize and move with visual guides (alignment lines, equal spacing indicators) |
 | FR-SCRN-06 | Define the navigation structure: pages, tabs, and menu hierarchy; each page is a separate screen |
 | FR-SCRN-07 | Support navigation links between screens (e.g., tap a machine area to drill into its detail screen) |
@@ -266,11 +281,13 @@ The system is designed to run **fully offline** with no internet dependency — 
 **Flow**:
 1. Engineer navigates to Settings → OPC UA Connections
 2. Taps "Add Connection" and enters: endpoint URL (`opc.tcp://192.168.1.10:4840`), security policy (Basic256Sha256), and credentials
-3. System tests the connection and browses the server address space
-4. Engineer selects relevant nodes and assigns display names, units, and ranges
-5. Groups tags into categories (e.g., "Sealing Station", "Film Feed", "Counters")
-6. Marks selected tags for trending at 1-second intervals
-7. Saves — dashboard begins showing live data from the new machine
+3. System tests the connection and confirms it can browse the server address space
+4. Engineer navigates to the Tag Editor, selects the new connection, and taps "Browse Server"
+5. Browses the OPC UA address space tree; selects nodes to add — each becomes a tag with the OPC UA address auto-populated
+6. Assigns each tag a short name (e.g., `FilmTemp`, `SealPressure`, `GoodCount`), engineering units, display format, and min/max range
+7. Groups tags into categories (e.g., "Sealing Station", "Film Feed", "Counters")
+8. Marks selected tags for trending at 1-second intervals; configures alarm thresholds on temperature tags
+9. Saves — tags appear in the tag database; widgets can now bind to them by short name; dashboard begins showing live data
 
 ---
 
