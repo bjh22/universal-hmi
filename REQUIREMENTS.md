@@ -147,7 +147,7 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 | ID | Requirement |
 |----|-------------|
 | FR-TAG-01 | Configure PLC connections: protocol type, endpoint/IP address, and protocol-specific settings (see FR-PROTO-02 through FR-PROTO-04) |
-| FR-TAG-02 | Import tags from external sources. Supported import sources: **(a)** browse a live OPC UA server address space and select nodes, **(b)** browse an EtherNet/IP controller's tag list, **(c)** import a CODESYS symbol configuration XML file (see FR-TAG-24). In all cases, the PLC address is auto-populated from the source. For Modbus (no browsing), tags are added manually or via CSV/JSON import. |
+| FR-TAG-02 | Import tags from external sources. Supported import sources: **(a)** browse a live OPC UA server address space and select nodes, **(b)** browse an EtherNet/IP controller's tag list, **(c)** import a CODESYS symbol configuration XML file (see FR-TAG-24), **(d)** import an RSLogix 500 CSV export file (see FR-TAG-25). In all cases, the PLC address is auto-populated from the source. For Modbus (no browsing), tags are added manually or via CSV/JSON import. |
 | FR-TAG-03 | Each tag must have a unique short name (friendly identifier) and a PLC address. Short names are used in widget bindings, recipes, alarms, and audit logs — the raw PLC address is not exposed to operators. The tag editor shows the appropriate address format based on the connection's protocol. |
 | FR-TAG-04 | Each tag has configurable options: engineering units (e.g., "°C", "mm/s"), display format (decimal places, number format), range (min/max for validation and gauge scaling), deadband (minimum change before a value update is pushed), and read/write mode (read-only, read-write, write-only) |
 | FR-TAG-05 | Tags can be flagged as trended (logged to history) with a configurable sample rate per tag |
@@ -169,7 +169,8 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 | FR-TAG-21 | **Template instance tag generation**: When a template instance is saved, the system generates individual tags in the tag database using the pattern `{prefix}.{fieldName}` (e.g., `motor1.speedCommand`, `motor1.current`). Generated tags are fully functional scalar tags — they can be bound to widgets, trended, and alarmed identically to manually created tags. |
 | FR-TAG-22 | **Template instance management**: Editing a template (adding/removing/renaming fields) presents a diff view (similar to FR-TAG-10) showing the impact on all existing instances. Adding a field prompts the engineer to map addresses for each instance. Removing a field warns if the generated tags are referenced by widgets, alarms, or trends. Renaming a field updates all generated tag short names and widget bindings automatically. |
 | FR-TAG-23 | **Template-aware tag editor**: The tag editor displays template instances as collapsible groups. The instance header shows the template name and prefix; expanding reveals the individual field tags with their mapped addresses. Engineers can also view and edit template instances in a dedicated "Templates" section of the tag editor. |
-| FR-TAG-24 | **CODESYS type schema import**: The CODESYS symbol configuration XML export includes type definitions — enumerations (with value-to-name mappings), structs (with field names and data types), and custom types (aliases, subranges). When importing a CODESYS XML file, the system parses these type definitions and applies them to the imported tags: **(a)** enum-typed variables receive their value-to-name mappings automatically (populating FR-TAG-17 enum configuration), **(b)** struct-typed variables can be flattened or imported as compound tags with correct field names and data types (consistent with FR-TAG-14), **(c)** array types are handled per FR-TAG-16. Type definitions are stored in the tag database so that tags added manually or via CSV/JSON can also reference CODESYS-defined types. The engineer can import a CODESYS XML file purely for its type definitions (without importing tags) to pre-populate the type library for later use. |
+| FR-TAG-24 | **CODESYS type schema import**: The CODESYS symbol configuration XML export includes type definitions — enumerations (with value-to-name mappings), structs (with field names and data types), and custom types (aliases, subranges). When importing a CODESYS XML file, the system parses these type definitions and applies them to the imported tags: **(a)** enum-typed variables receive their value-to-name mappings automatically (populating FR-TAG-17 enum configuration), **(b)** struct-typed variables can be flattened or imported as compound tags with correct field names and data types (consistent with FR-TAG-14), **(c)** array types are handled per FR-TAG-16. Type definitions are stored in the tag database so that tags added manually or via CSV/JSON can also reference CODESYS-defined types. The engineer can import a CODESYS XML file purely for its type definitions (without importing tags) to pre-populate the type library for later use. **Implementation note: require example CODESYS symbol configuration XML files before implementing the parser to ensure all type variants are handled correctly.** |
+| FR-TAG-25 | **RSLogix 500 CSV import**: Import tag databases exported from Rockwell RSLogix 500 as CSV files. The parser extracts tag names, addresses (e.g., `N7:0`, `F8:0`, `B3:0/0`, `T4:0`, `C5:0`), data types (integer, float, timer, counter, bit), and descriptions. RSLogix 500 data file types are mapped to HMI tag types: **(a)** integer files (N) → integer tags, **(b)** float files (F) → float tags, **(c)** bit files (B) → boolean tags, **(d)** timer (T) and counter (C) files → struct tags with standard sub-elements (e.g., `T4:0.ACC`, `T4:0.PRE`, `T4:0.DN`), **(e)** string files (ST) → string tags. Imported tags use the RSLogix symbol/description as the short name where available, falling back to the raw address. The diff view (FR-TAG-10) applies to RSLogix imports identically to other sources. **Implementation note: require example RSLogix 500 CSV export files before implementing the parser to ensure all data file types and address formats are handled correctly.** |
 
 ### 3.9 User Management & Authentication
 
@@ -345,6 +346,22 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 8. Engineer assigns friendly short names (e.g., `N7:0` → `MachineCmd`, `F8:0` → `SpeedSetpoint`, `T4:0.ACC` → `CycleTimer`)
 9. Configures data types, units, and ranges for each tag
 10. Saves — tags are available for widget binding by short name
+
+---
+
+### UC-06b-alt: Engineer Imports Tags Offline from RSLogix 500 CSV Export
+
+**Actor**: Engineer
+**Precondition**: Logged in with Engineer role; MicroLogix 1400 connection already configured (UC-06b); PLC is not currently accessible on the network (e.g., commissioning preparation at the office)
+**Flow**:
+1. Engineer navigates to the Tag Editor and taps "Import from → RSLogix 500 CSV"
+2. Uploads the CSV file exported from RSLogix 500 (containing data file symbols, addresses, and descriptions)
+3. System parses the CSV and maps data file types: integer files → INT tags, float files → FLOAT tags, timer/counter files → struct tags with sub-elements (ACC, PRE, DN, etc.)
+4. Diff view shows: "48 new tags, 0 changed, 0 removed"
+5. Engineer reviews the imported tags — RSLogix descriptions are used as short names where available (e.g., `MACHINE_SPEED` for `N7:5`)
+6. Engineer edits short names for clarity (e.g., `MACHINE_SPEED` → `MachineSpeed`), assigns engineering units and display formats
+7. Taps "Apply" — 48 tags imported and associated with the MicroLogix connection
+8. When the PLC is later connected on-site, tags are already configured and ready for live data
 
 ---
 
