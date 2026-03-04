@@ -327,11 +327,13 @@ The built-in simulation server provides a realistic OPC UA address space mimicki
 
 ---
 
-## 8. Open Questions / Decisions Needed
+## 8. Design Decisions
 
-1. **Multi-machine**: Should the initial version support multiple packaging machines, or start with a single machine and add multi-machine later?
-2. **Notifications**: Should alarms trigger push notifications (email, SMS, or browser push) beyond the in-app alerts?
-3. **Localization**: Is multi-language support needed (i18n)?
-4. **Historian integration**: Should trend data rely solely on the built-in database, or also support reading from an existing OPC UA historian?
-5. **Mobile**: Is a dedicated mobile-optimized view needed beyond basic responsive design?
-6. **Regulatory**: Are there specific regulatory requirements (FDA 21 CFR Part 11, GMP) that affect audit trail and e-signatures?
+| # | Topic | Decision |
+|---|-------|----------|
+| 1 | **Multi-machine** | Single machine for v1. Data model should not preclude adding multi-machine later, but UI and backend target one OPC UA connection initially. |
+| 2 | **Notifications** | In-app only (alarm banner, alarm page, optional audible alert in browser). No email, SMS, or push notifications in v1. |
+| 3 | **Localization** | i18n-ready — use a localization framework (e.g., react-i18next) from the start so all user-facing strings are externalizable, but ship with English only. |
+| 4 | **Historian** | Built-in database only. The HMI logs trend data to its own DB. No OPC UA historian integration in v1. |
+| 5 | **Mobile** | Responsive design only. Optimize for 1920x1080 desktop; ensure usability on tablets (1024x768+). No dedicated mobile views. |
+| 6 | **Regulatory** | No special regulatory requirements. Standard audit trail and authentication; no FDA 21 CFR Part 11 or formal GMP compliance needed. |
