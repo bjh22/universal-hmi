@@ -47,7 +47,6 @@ The system is designed to run **fully offline** with no internet dependency — 
 | FR-DASH-06 | Show OEE (Overall Equipment Effectiveness) — availability, performance, quality |
 | FR-DASH-07 | Display key process values (temperatures, pressures, sensor states) as configurable widgets |
 | FR-DASH-08 | Auto-refresh all values via WebSocket push (target: <500ms update latency) |
-| FR-DASH-09 | All touch targets minimum 44px; UI designed for touch-first interaction (no hover-dependent controls) |
 
 ### 3.2 Machine Control
 
@@ -58,7 +57,7 @@ The system is designed to run **fully offline** with no internet dependency — 
 | FR-CTRL-03 | Allow buttons and parameter inputs to be grouped into named control panels on the UI |
 | FR-CTRL-04 | Optionally require confirmation dialogs on specific buttons (configurable per button) |
 | FR-CTRL-05 | Control actions require authenticated Operator role or above by default. Individual buttons/inputs can be configured to allow unauthenticated access (e.g., fault reset, resettable operator counter). |
-| FR-CTRL-06 | Log all control actions (button presses and parameter writes) to the audit trail with user, timestamp, tag, and value |
+| FR-CTRL-06 | Log all control actions (button presses and parameter writes) to the audit trail with user (or "unauthenticated" if no login), timestamp, tag, and value |
 | FR-CTRL-07 | Support toggle-style buttons that reflect the current tag value (e.g., ON/OFF with visual state) |
 
 ### 3.3 Alarm Management
@@ -68,7 +67,7 @@ The system is designed to run **fully offline** with no internet dependency — 
 | FR-ALM-01 | Display active alarms in a sortable, filterable table (severity, time, source, message) |
 | FR-ALM-02 | Support alarm severities: Critical, Warning, Info |
 | FR-ALM-03 | Alarm states: Active/Unacknowledged, Active/Acknowledged, Inactive/Unacknowledged, Inactive (cleared) |
-| FR-ALM-04 | Allow operators to acknowledge individual alarms or acknowledge all |
+| FR-ALM-04 | Allow operators to acknowledge individual alarms or acknowledge all. Alarm acknowledgment can be configured to allow unauthenticated access (same per-item configuration as controls). |
 | FR-ALM-05 | Persist alarm history to database with timestamps for raised, acknowledged, and cleared |
 | FR-ALM-06 | Alarm history page with date range filtering and export (CSV) |
 | FR-ALM-07 | Visual and optional audible notification on new critical alarms |
@@ -79,7 +78,7 @@ The system is designed to run **fully offline** with no internet dependency — 
 | ID | Requirement |
 |----|-------------|
 | FR-TREND-01 | Log configurable OPC UA tags to the database at a configurable sample rate |
-| FR-TREND-02 | Interactive time-series chart with zoom, pan, and crosshair |
+| FR-TREND-02 | Interactive time-series chart with zoom, pan, and crosshair (touch: pinch-to-zoom, swipe-to-pan) |
 | FR-TREND-03 | Support multiple tags on one chart (up to 8, each with its own Y-axis scaling) |
 | FR-TREND-04 | Preset time ranges (1h, 8h, 24h, 7d, 30d) and custom date range picker |
 | FR-TREND-05 | Save and recall named trend views (tag selections + time range) |
@@ -127,7 +126,7 @@ The system is designed to run **fully offline** with no internet dependency — 
 |----|-------------|
 | FR-AUTH-01 | Dashboard accessible without login. Unauthenticated users can view all pages and use controls explicitly marked as unauthenticated-allowed. All other control actions prompt for login via numeric PIN (Operator/Supervisor) or username/password (Engineer). |
 | FR-AUTH-02 | JWT-based session management with configurable token expiration |
-| FR-AUTH-03 | Role-based access control (Viewer, Operator, Supervisor, Engineer) |
+| FR-AUTH-03 | Role-based access control (Unauthenticated, Operator, Supervisor, Engineer) |
 | FR-AUTH-04 | User CRUD operations — Supervisors can manage Operator accounts; Engineers can manage all roles including Supervisors |
 | FR-AUTH-05 | Password/PIN complexity requirements and change functionality |
 | FR-AUTH-06 | Auto-logout after configurable inactivity timeout (important for shared panel PC) |
