@@ -119,7 +119,7 @@ The backend uses a **pluggable protocol driver** architecture. Each PLC connecti
 | ID | Requirement |
 |----|-------------|
 | FR-PROTO-01 | Support multiple concurrent PLC connections, each using its own protocol driver |
-| FR-PROTO-02 | **OPC UA driver** — connects via endpoint URL with configurable security policy (None, Basic256Sha256) and authentication (anonymous, username/password, certificate). Supports browsing the server address space. |
+| FR-PROTO-02 | **OPC UA driver** — connects via endpoint URL with configurable security policy (None, Basic256Sha256) and authentication (anonymous, username/password, certificate). Supports browsing the server address space. Reads and decodes complex data types including structures (ExtensionObjects), arrays, and enumerations using the server's type dictionary or DataType definitions. |
 | FR-PROTO-03 | **EtherNet/IP (CIP) driver** — connects to Allen-Bradley PLCs (MicroLogix, CompactLogix, ControlLogix) via IP address and slot number. Tags addressed by CIP tag path (e.g., `N7:0`, `F8:0`, `T4:0.ACC`) or symbolic name (e.g., `Program:MainProgram.Speed`). |
 | FR-PROTO-04 | **Modbus TCP driver** — connects via IP address and port (default 502) with configurable unit ID. Tags addressed by register type and address (e.g., Holding Register 40001, Input Register 30001, Coil 00001, Discrete Input 10001). Supports configurable data types (INT16, UINT16, INT32, FLOAT32, BOOL) and byte order (big/little endian, word swap). |
 | FR-PROTO-05 | Each driver provides a common interface: read tag, write tag, subscribe to value changes, test connection, and (where supported) browse available tags |
@@ -135,7 +135,7 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 | **Short name** | Unique, friendly identifier used throughout the UI (e.g., `FilmTemp`, `MachineSpeed`, `GoodCount`) |
 | **PLC address** | Protocol-specific address — OPC UA node ID (e.g., `ns=2;s=Machine.Temperatures.FilmSeal`), CIP tag path (e.g., `N7:0`), or Modbus register (e.g., `HR:40001:FLOAT32`) |
 | **Connection** | Which PLC connection this tag belongs to (determines the protocol) |
-| **Data type** | Tag data type (Bool, Int16, Int32, Float32, Float64, String). For Modbus, this also determines how many registers to read. |
+| **Data type** | Tag data type. **Scalar types**: Bool, Int16, Int32, UInt16, UInt32, Float32, Float64, String. **Complex types** (OPC UA only): Struct, Array, Enum. For Modbus, the scalar data type also determines how many registers to read. See FR-TAG-14 through FR-TAG-18 for complex type handling. |
 | **Group** | Logical category for organizing tags (e.g., "Temperatures", "Counters", "Film Station") |
 | **Options** | Per-tag configuration (see FR-TAG-04 below) |
 
@@ -154,6 +154,11 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 | FR-TAG-11 | The import diff view displays a summary count (e.g., "12 new, 3 changed, 2 removed") and supports select-all/deselect-all per category. Changed tags show a side-by-side comparison of old vs. new values for each modified field. |
 | FR-TAG-12 | Deleting a tag (manually or via import) warns if it is referenced by any widget, alarm, recipe, or trend configuration; optionally cascade-remove or block deletion |
 | FR-TAG-13 | All tag database changes are logged to the audit trail, including import operations (source, number of adds/changes/deletes applied) |
+| FR-TAG-14 | **OPC UA structured types (Structs)**: When browsing an OPC UA server, the system detects nodes whose data type is a structured type (ExtensionObject). The engineer can choose to **(a)** auto-flatten the struct into individual scalar tags — one tag per field, with short names derived from the struct path (e.g., `Motor1.Speed`, `Motor1.Current`, `Motor1.FaultCode`), or **(b)** import the struct as a single compound tag. Flattened tags behave identically to manually created scalar tags. |
+| FR-TAG-15 | **Compound tag display**: A compound (non-flattened struct) tag stores the full struct value. Widgets that bind to a compound tag can reference individual fields using dot notation (e.g., binding to `Motor1Status.Speed` accesses the Speed field of the `Motor1Status` struct). The tag editor shows the struct's field list with data types. |
+| FR-TAG-16 | **OPC UA arrays**: Array-typed OPC UA nodes can be imported as **(a)** individual tags per element (e.g., `ZoneTemps[0]` through `ZoneTemps[9]`), or **(b)** a single array tag. Widgets binding to an array tag reference elements by index using bracket notation (e.g., `ZoneTemps[3]`). |
+| FR-TAG-17 | **OPC UA enumerations**: Enumeration-typed OPC UA nodes are imported with their value-to-name mapping (e.g., 0 = "Stopped", 1 = "Running", 2 = "Faulted"). The mapping is stored as part of the tag configuration. Widgets display the enumeration name by default with the option to show the numeric value. Enum mappings can be edited locally if the PLC's definitions are unclear or need operator-friendly labels. |
+| FR-TAG-18 | **Complex type discovery**: During OPC UA server browse (FR-TAG-02a), the import dialog indicates each node's type category (scalar, struct, array, enum) with an icon or badge. Struct and array nodes show an expand/collapse control to preview their fields or element count before import. The engineer selects the import mode (flatten vs. compound/array) per node or applies a default for all. |
 
 ### 3.9 User Management & Authentication
 
@@ -303,13 +308,14 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 3. Enters: endpoint URL (`opc.tcp://192.168.1.10:4840`), security policy (Basic256Sha256), and credentials
 4. System tests the connection and confirms it can browse the server address space
 5. Engineer navigates to the Tag Editor and taps "Import from → Browse Live Server"
-6. Browses the OPC UA address space tree and selects the nodes to import
-7. System presents a diff view: "47 new tags, 0 changed, 0 removed" (first import, so all are new)
-8. Engineer reviews the list, deselects a few diagnostic nodes not needed, and taps "Apply"
-9. Tags are created in the database with OPC UA node IDs auto-populated; engineer assigns short names, engineering units, display format, and min/max ranges
-10. Groups tags into categories (e.g., "Sealing Station", "Film Feed", "Counters")
-11. Marks selected tags for trending at 1-second intervals; configures alarm thresholds on temperature tags and boolean alarm sources on fault flags
-12. Saves — widgets can now bind to tags by short name; dashboard begins showing live data
+6. Browses the OPC UA address space tree and selects the nodes to import; struct nodes show an expand control revealing their fields, array nodes show element count, and enum nodes show their value mappings
+7. For a `MotorStatus` struct node, engineer chooses "Flatten" — system will create individual tags (`Motor1.Speed`, `Motor1.Current`, `Motor1.FaultCode`, `Motor1.Running`). For a `MachineState` enum node, the value-to-name mapping (0=Stopped, 1=Running, etc.) is auto-populated.
+8. System presents a diff view: "51 new tags, 0 changed, 0 removed" (first import, so all are new)
+9. Engineer reviews the list, deselects a few diagnostic nodes not needed, and taps "Apply"
+10. Tags are created in the database with OPC UA node IDs auto-populated; engineer assigns short names, engineering units, display format, and min/max ranges
+11. Groups tags into categories (e.g., "Sealing Station", "Film Feed", "Counters")
+12. Marks selected tags for trending at 1-second intervals; configures alarm thresholds on temperature tags and boolean alarm sources on fault flags
+13. Saves — widgets can now bind to tags by short name; dashboard begins showing live data
 
 ---
 
@@ -472,6 +478,7 @@ The built-in simulation server provides a realistic OPC UA address space mimicki
 | **Pressures** | VacuumPressure, AirPressure | Simulated with noise |
 | **Digital I/O** | DoorClosed, EStopActive, FilmBreak, ProductDetect | Boolean signals |
 | **Production** | BatchID, RecipeName, ShiftNumber | String/integer metadata |
+| **Structured Types** | MotorStatus (Struct: Speed Float32, Current Float32, FaultCode UInt16, Running Bool), ZoneTemps (Array[6] of Float32), MachineState (Enum: 0=Stopped, 1=Running, 2=Faulted, 3=Maintenance) | Complex data types for testing struct/array/enum support |
 
 ### Simulation Behaviors
 
@@ -518,3 +525,4 @@ The built-in simulation server provides a realistic OPC UA address space mimicki
 | 4 | **Historian** | Built-in database only. The HMI logs trend data to its own DB. No external historian integration in v1. |
 | 5 | **Display** | Touch-first design for panel PC touchscreen. Designed for native panel resolution (default 1920x1080). Maintenance laptops can connect via browser on the local network. |
 | 6 | **Regulatory** | No special regulatory requirements. Standard audit trail and authentication; no FDA 21 CFR Part 11 or formal GMP compliance needed. |
+| 7 | **Complex data types** | OPC UA structs, arrays, and enumerations are supported via flatten-on-import (recommended) or compound tags. Flatten is the default as it keeps the widget binding model simple and consistent across all protocols. Compound tags are available for engineers who prefer to preserve the PLC's type structure. EtherNet/IP UDTs and Modbus do not support complex types — those protocols continue to use scalar tags only. |
