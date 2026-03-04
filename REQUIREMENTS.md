@@ -2,7 +2,9 @@
 
 ## 1. Project Overview
 
-A web-based Human-Machine Interface (HMI) for monitoring and controlling packaging machines via OPC UA. The HMI is **state-model agnostic** — it does not impose PackML or any other state machine. Instead, it reads and displays whatever tags the PLC exposes and lets operators interact through configurable command buttons and parameter inputs. It provides real-time visualization, alarm management, historical trending, recipe management, and production reporting.
+A web-based Human-Machine Interface (HMI) for monitoring and controlling packaging machines via OPC UA, deployed on a **dedicated industrial panel PC** with touchscreen. The HMI is **state-model agnostic** — it does not impose PackML or any other state machine. Instead, it reads and displays whatever tags the PLC exposes and lets operators interact through configurable command buttons and parameter inputs. It provides real-time visualization, alarm management, historical trending, recipe management, and production reporting.
+
+The system is designed to run **fully offline** with no internet dependency — all assets are bundled locally.
 
 ### 1.1 Technology Stack
 
@@ -45,7 +47,7 @@ A web-based Human-Machine Interface (HMI) for monitoring and controlling packagi
 | FR-DASH-06 | Show OEE (Overall Equipment Effectiveness) — availability, performance, quality |
 | FR-DASH-07 | Display key process values (temperatures, pressures, sensor states) as configurable widgets |
 | FR-DASH-08 | Auto-refresh all values via WebSocket push (target: <500ms update latency) |
-| FR-DASH-09 | Support multiple machine connections on one dashboard (multi-machine view) |
+| FR-DASH-09 | All touch targets minimum 44px; UI designed for touch-first interaction (no hover-dependent controls) |
 
 ### 3.2 Machine Control
 
@@ -123,13 +125,14 @@ A web-based Human-Machine Interface (HMI) for monitoring and controlling packagi
 
 | ID | Requirement |
 |----|-------------|
-| FR-AUTH-01 | Login page with username/password authentication |
+| FR-AUTH-01 | Login screen with numeric PIN entry (touch-friendly) as default; optional username/password for Engineer role |
 | FR-AUTH-02 | JWT-based session management with configurable token expiration |
 | FR-AUTH-03 | Role-based access control (Viewer, Operator, Supervisor, Engineer) |
 | FR-AUTH-04 | User CRUD operations (Engineer role only) |
-| FR-AUTH-05 | Password complexity requirements and password change functionality |
-| FR-AUTH-06 | Auto-logout after configurable inactivity timeout |
-| FR-AUTH-07 | Audit log of login/logout events |
+| FR-AUTH-05 | Password/PIN complexity requirements and change functionality |
+| FR-AUTH-06 | Auto-logout after configurable inactivity timeout (important for shared panel PC) |
+| FR-AUTH-07 | Quick user switching — lock screen returns to PIN entry without full app reload |
+| FR-AUTH-08 | Audit log of login/logout events |
 
 ### 3.9 Audit Trail
 
@@ -138,7 +141,7 @@ A web-based Human-Machine Interface (HMI) for monitoring and controlling packagi
 | FR-AUDIT-01 | Log all control actions, recipe changes, alarm acknowledgments, and login events |
 | FR-AUDIT-02 | Each entry: timestamp, user, action type, details, source IP |
 | FR-AUDIT-03 | Searchable/filterable audit log page (Engineer role only) |
-| FR-AUDIT-04 | Audit log retention policy (configurable, default 1 year) |
+| FR-AUDIT-04 | Audit log retention policy (see NFR-13) |
 | FR-AUDIT-05 | Export audit log to CSV |
 
 ---
@@ -148,15 +151,19 @@ A web-based Human-Machine Interface (HMI) for monitoring and controlling packagi
 | ID | Requirement |
 |----|-------------|
 | NFR-01 | **Latency**: Dashboard values update within 500ms of OPC UA value change |
-| NFR-02 | **Concurrency**: Support at least 10 simultaneous browser clients |
+| NFR-02 | **Concurrency**: Support at least 5 simultaneous browser clients (panel PC primary + maintenance laptops) |
 | NFR-03 | **Uptime**: Backend should auto-reconnect to OPC UA server on connection loss |
-| NFR-04 | **Browser**: Support Chrome, Edge, Firefox (latest 2 versions) |
-| NFR-05 | **Responsive**: UI usable on 1920x1080 (primary) and tablets (1024x768 minimum) |
-| NFR-06 | **Security**: All OPC UA credentials and passwords stored encrypted at rest |
-| NFR-07 | **Deployment**: Dockerized with docker-compose for easy deployment |
-| NFR-08 | **Configuration**: Server endpoint, database, and basic settings via environment variables or config file |
-| NFR-09 | **Logging**: Structured application logging (JSON) with configurable log levels |
-| NFR-10 | **Testability**: Backend API unit tests, OPC UA integration tests using the sim server |
+| NFR-04 | **Browser**: Chromium-based (panel PC runs Chromium in kiosk mode); also support Chrome and Edge for maintenance laptops |
+| NFR-05 | **Display**: Designed for the panel PC's native resolution (configurable, default 1920x1080); touch-first with minimum 44px touch targets |
+| NFR-06 | **Security**: All OPC UA credentials and passwords/PINs stored encrypted at rest |
+| NFR-07 | **Deployment**: Runs as a systemd service (or equivalent); auto-starts on boot; watchdog restarts on crash. No Docker required. |
+| NFR-08 | **Kiosk mode**: Browser launches fullscreen on boot with no browser chrome; on-screen keyboard available for text input |
+| NFR-09 | **Offline**: Fully self-contained — no CDN, external fonts, or internet-dependent resources. All assets bundled locally. |
+| NFR-10 | **Configuration**: Server endpoint, database, and basic settings via environment variables or config file |
+| NFR-11 | **Logging**: Structured application logging (JSON) with configurable log levels |
+| NFR-12 | **Testability**: Backend API unit tests, OPC UA integration tests using the sim server |
+| NFR-13 | **Data retention**: Configurable retention policy for trend data and audit logs with automatic purge to prevent disk filling (default: trends 90 days, audit 1 year) |
+| NFR-14 | **Database**: SQLite in WAL mode for concurrent read performance; periodic backup to configurable location (USB, network share) |
 
 ---
 
@@ -335,5 +342,5 @@ The built-in simulation server provides a realistic OPC UA address space mimicki
 | 2 | **Notifications** | In-app only (alarm banner, alarm page, optional audible alert in browser). No email, SMS, or push notifications in v1. |
 | 3 | **Localization** | i18n-ready — use a localization framework (e.g., react-i18next) from the start so all user-facing strings are externalizable, but ship with English only. |
 | 4 | **Historian** | Built-in database only. The HMI logs trend data to its own DB. No OPC UA historian integration in v1. |
-| 5 | **Mobile** | Responsive design only. Optimize for 1920x1080 desktop; ensure usability on tablets (1024x768+). No dedicated mobile views. |
+| 5 | **Display** | Touch-first design for panel PC touchscreen. Designed for native panel resolution (default 1920x1080). Maintenance laptops can connect via browser on the local network. |
 | 6 | **Regulatory** | No special regulatory requirements. Standard audit trail and authentication; no FDA 21 CFR Part 11 or formal GMP compliance needed. |
