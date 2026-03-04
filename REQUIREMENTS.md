@@ -200,7 +200,7 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 | FR-SCRN-01 | Provide a screen editor accessible to users with the Designer role for creating and editing HMI screens. Designer can toggle between live (runtime) mode and edit mode on any screen via an edit button or keyboard shortcut (e.g., Ctrl+E). The edit button is only visible when logged in as Designer. |
 | FR-SCRN-02 | Support drag-and-drop placement of widgets onto a grid-based canvas with snap-to-grid alignment |
 | FR-SCRN-03 | Widget palette includes: value displays, gauges, bar charts, trend charts, status indicators, buttons, parameter inputs, alarm tables, images/shapes, and text labels |
-| FR-SCRN-04 | Each widget exposes a property panel for configuration: tag binding (by short name from the tag database), label, units, colors, thresholds, size, and position |
+| FR-SCRN-04 | Each widget exposes a property panel for configuration: tag binding, label, units, colors, thresholds, size, and position. Tag binding uses a **dropdown selector** populated from the tag database, with **autocomplete** filtering as the engineer types (matching against short name, group, and template). The dropdown displays tags organized by group and template instance, and indicates each tag's data type. The engineer can also filter by data-type compatibility (e.g., a numeric input widget only shows numeric tags). |
 | FR-SCRN-05 | Support widget resize and move with visual guides (alignment lines, equal spacing indicators) |
 | FR-SCRN-06 | Define the navigation structure: pages, tabs, and menu hierarchy; each page is a separate screen |
 | FR-SCRN-07 | Support navigation links between screens (e.g., tap a machine area to drill into its detail screen) |
