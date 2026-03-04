@@ -9,7 +9,8 @@ interface Props {
 
 export function CounterWidget({ title, tag, tagValues }: Props) {
   const tv = tagValues[tag];
-  const value = tv?.value ?? 0;
+  const raw = tv?.value ?? 0;
+  const value = typeof raw === 'number' ? Math.round(raw) : raw;
 
   return (
     <div className="bg-slate-800 rounded-xl p-4 h-full flex flex-col justify-center items-center border border-slate-700">
