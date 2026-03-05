@@ -38,6 +38,23 @@ frontend/              React SPA (Vite + TypeScript)
 
 **Frontend:** React 19, TypeScript 5.9, Vite 7, Shadcn/ui, Tailwind CSS 4, React Router 7, Recharts, Lucide icons, clsx
 
+## Prerequisites
+
+| Tool | Minimum | Install |
+|------|---------|---------|
+| **Python** | 3.10+ | [python.org](https://www.python.org/downloads/) or `winget install Python.Python.3.12` / `brew install python@3.12` |
+| **Node.js** | 18+ LTS | [nodejs.org](https://nodejs.org/) or `winget install OpenJS.NodeJS.LTS` / `brew install node@22` |
+
+`pip` and `npm` come bundled with Python and Node.js respectively. No C compiler or native build tools are needed — all Python dependencies ship prebuilt wheels. Run `doctor` to verify your setup:
+
+```bash
+./dev.sh doctor        # Linux / macOS
+dev.bat doctor         # Windows CMD
+.\dev.ps1 doctor       # Windows PowerShell
+```
+
+> **Windows note:** If PowerShell blocks script execution, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` first.
+
 ## Commands
 
 **Linux / macOS:**
@@ -48,6 +65,7 @@ frontend/              React SPA (Vite + TypeScript)
 ./dev.sh lint       # ESLint
 ./dev.sh check      # Build + lint
 ./dev.sh seed       # Seed database with default users/tags
+./dev.sh doctor     # Check prerequisites
 ```
 
 **Windows (CMD):**
@@ -58,6 +76,7 @@ dev.bat build       # TypeScript check + Vite build
 dev.bat lint        # ESLint
 dev.bat check       # Build + lint
 dev.bat seed        # Seed database with default users/tags
+dev.bat doctor      # Check prerequisites
 ```
 
 **Windows (PowerShell):**
@@ -68,6 +87,7 @@ dev.bat seed        # Seed database with default users/tags
 .\dev.ps1 lint      # ESLint
 .\dev.ps1 check     # Build + lint
 .\dev.ps1 seed      # Seed database with default users/tags
+.\dev.ps1 doctor    # Check prerequisites
 ```
 
 **Frontend only:**
