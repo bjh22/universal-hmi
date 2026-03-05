@@ -31,8 +31,8 @@ export default function App() {
               onLogout={auth.logout}
             >
               <Routes>
-                <Route path="/" element={<DashboardPage tagValues={tagValues} />} />
-                <Route path="/screen/:slug" element={<DashboardPage tagValues={tagValues} />} />
+                <Route path="/" element={<DashboardPage tagValues={tagValues} userRole={auth.user?.role} />} />
+                <Route path="/screen/:slug" element={<DashboardPage tagValues={tagValues} userRole={auth.user?.role} />} />
                 <Route path="/alarms" element={<AlarmsPage realtimeAlarms={alarms} />} />
                 <Route path="/trends" element={<TrendsPage />} />
                 <Route path="/jobs" element={<JobsPage />} />
