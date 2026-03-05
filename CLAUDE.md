@@ -40,6 +40,7 @@ frontend/              React SPA (Vite + TypeScript)
 
 ## Commands
 
+**Linux / macOS:**
 ```bash
 ./dev.sh install    # Install all dependencies (pip + npm)
 ./dev.sh dev        # Start backend (:8080) + frontend (:5173) dev servers
@@ -47,6 +48,26 @@ frontend/              React SPA (Vite + TypeScript)
 ./dev.sh lint       # ESLint
 ./dev.sh check      # Build + lint
 ./dev.sh seed       # Seed database with default users/tags
+```
+
+**Windows (CMD):**
+```cmd
+dev.bat install     # Install all dependencies (pip + npm)
+dev.bat dev         # Start backend (:8080) + frontend (:5173) dev servers
+dev.bat build       # TypeScript check + Vite build
+dev.bat lint        # ESLint
+dev.bat check       # Build + lint
+dev.bat seed        # Seed database with default users/tags
+```
+
+**Windows (PowerShell):**
+```powershell
+.\dev.ps1 install   # Install all dependencies (pip + npm)
+.\dev.ps1 dev       # Start backend (:8080) + frontend (:5173) dev servers
+.\dev.ps1 build     # TypeScript check + Vite build
+.\dev.ps1 lint      # ESLint
+.\dev.ps1 check     # Build + lint
+.\dev.ps1 seed      # Seed database with default users/tags
 ```
 
 **Frontend only:**
