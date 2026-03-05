@@ -4,9 +4,11 @@ Industrial HMI — FastAPI Application
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api import alarms, audit, auth, datasources, jobs, production, screens, scripts, tags, trends, users
@@ -86,3 +88,17 @@ async def health():
         "app": settings.app_name,
         "version": settings.app_version,
     }
+
+
+# Serve frontend static files in production
+_static_dir = Path(__file__).resolve().parent.parent / "static"
+if _static_dir.is_dir():
+    app.mount("/assets", StaticFiles(directory=_static_dir / "assets"), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        """Serve the React SPA for all non-API routes."""
+        file_path = _static_dir / full_path
+        if file_path.is_file():
+            return FileResponse(file_path)
+        return FileResponse(_static_dir / "index.html")
