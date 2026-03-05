@@ -1,4 +1,5 @@
-import type { TagValue } from '../../types';
+import type { TagValue, TextStyle } from '../../types';
+import { textStyleToCSS } from '../../lib/textStyle';
 
 interface Props {
   title: string;
@@ -9,9 +10,11 @@ interface Props {
   units?: string;
   warning?: number;
   critical?: number;
+  titleStyle?: TextStyle;
+  valueStyle?: TextStyle;
 }
 
-export function GaugeWidget({ title, tag, tagValues, min = 0, max = 100, units = '', warning, critical }: Props) {
+export function GaugeWidget({ title, tag, tagValues, min = 0, max = 100, units = '', warning, critical, titleStyle, valueStyle }: Props) {
   const tv = tagValues[tag];
   const value = Number(tv?.value ?? 0);
   const pct = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
@@ -22,9 +25,9 @@ export function GaugeWidget({ title, tag, tagValues, min = 0, max = 100, units =
 
   return (
     <div className="bg-slate-800 rounded-xl p-4 h-full flex flex-col border border-slate-700">
-      <div className="text-xs text-slate-400 mb-2 font-medium uppercase tracking-wider">{title}</div>
+      <div className="text-xs text-slate-400 mb-2 font-medium uppercase tracking-wider" style={textStyleToCSS(titleStyle)}>{title}</div>
       <div className="flex-1 flex flex-col justify-center">
-        <div className="text-3xl font-bold mb-1" style={{ color }}>
+        <div className="text-3xl font-bold mb-1" style={{ color, ...textStyleToCSS(valueStyle) }}>
           {value.toFixed(1)}
           <span className="text-sm font-normal text-slate-400 ml-1">{units}</span>
         </div>

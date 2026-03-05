@@ -1,13 +1,16 @@
 import { api } from '../../lib/api';
-import type { TagValue } from '../../types';
+import type { TagValue, TextStyle } from '../../types';
+import { textStyleToCSS } from '../../lib/textStyle';
 
 interface Props {
   title: string;
   tag: string;
   tagValues: Record<string, TagValue>;
+  titleStyle?: TextStyle;
+  valueStyle?: TextStyle;
 }
 
-export function ToggleWidget({ title, tag, tagValues }: Props) {
+export function ToggleWidget({ title, tag, tagValues, titleStyle, valueStyle }: Props) {
   const tv = tagValues[tag];
   const value = Boolean(tv?.value);
 
@@ -17,7 +20,7 @@ export function ToggleWidget({ title, tag, tagValues }: Props) {
 
   return (
     <div className="bg-slate-800 rounded-xl p-4 h-full flex flex-col justify-center items-center border border-slate-700">
-      <div className="text-xs text-slate-400 mb-3 font-medium uppercase tracking-wider">{title}</div>
+      <div className="text-xs text-slate-400 mb-3 font-medium uppercase tracking-wider" style={textStyleToCSS(titleStyle)}>{title}</div>
       <button
         onClick={handleToggle}
         className={`w-16 h-8 rounded-full transition-colors relative ${
@@ -30,7 +33,7 @@ export function ToggleWidget({ title, tag, tagValues }: Props) {
           }`}
         />
       </button>
-      <div className={`text-sm mt-2 font-medium ${value ? 'text-green-400' : 'text-slate-400'}`}>
+      <div className={`text-sm mt-2 font-medium ${value ? 'text-green-400' : 'text-slate-400'}`} style={textStyleToCSS(valueStyle)}>
         {value ? 'ON' : 'OFF'}
       </div>
     </div>

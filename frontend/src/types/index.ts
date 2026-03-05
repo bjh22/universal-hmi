@@ -47,6 +47,14 @@ export interface ScreenData {
   sort_order: number;
 }
 
+export interface TextStyle {
+  fontFamily?: string;
+  fontSize?: number;
+  fontWeight?: 'normal' | 'bold';
+  color?: string;
+  italic?: boolean;
+}
+
 export interface Widget {
   id: string;
   type: string;

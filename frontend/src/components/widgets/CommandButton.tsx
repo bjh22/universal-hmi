@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { api } from '../../lib/api';
+import type { TextStyle } from '../../types';
+import { textStyleToCSS } from '../../lib/textStyle';
 
 interface Props {
   title: string;
@@ -8,6 +10,7 @@ interface Props {
   script?: string;
   color?: string;
   confirm?: boolean;
+  titleStyle?: TextStyle;
 }
 
 const COLORS: Record<string, string> = {
@@ -17,7 +20,7 @@ const COLORS: Record<string, string> = {
   yellow: 'bg-yellow-600 hover:bg-yellow-700 text-white',
 };
 
-export function CommandButton({ title, tag, value, script, color = 'blue', confirm: needsConfirm }: Props) {
+export function CommandButton({ title, tag, value, script, color = 'blue', confirm: needsConfirm, titleStyle }: Props) {
   const [pending, setPending] = useState(false);
 
   const handleClick = async () => {
@@ -43,7 +46,7 @@ export function CommandButton({ title, tag, value, script, color = 'blue', confi
           COLORS[color] || COLORS.blue
         } ${pending ? 'opacity-50 cursor-wait' : ''}`}
       >
-        {pending ? 'Working...' : title}
+        <span style={textStyleToCSS(titleStyle)}>{pending ? 'Working...' : title}</span>
       </button>
     </div>
   );
