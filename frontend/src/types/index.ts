@@ -63,6 +63,10 @@ export interface Widget {
   w: number;
   h: number;
   props: Record<string, unknown>;
+  visible?: boolean;       // runtime visibility (default true)
+  visibleTag?: string;     // tag-driven visibility: show when tag is truthy
+  enabled?: boolean;       // runtime enabled state (default true)
+  enabledTag?: string;     // tag-driven enabled: enabled when tag is truthy
 }
 
 export interface UserData {

@@ -57,6 +57,8 @@ export const api = {
     request(`/screens/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   createScreen: (data: any) =>
     request('/screens/', { method: 'POST', body: JSON.stringify(data) }),
+  deleteScreen: (id: number) =>
+    request(`/screens/${id}`, { method: 'DELETE' }),
 
   // Jobs
   getJobs: () => request<any[]>('/jobs/'),

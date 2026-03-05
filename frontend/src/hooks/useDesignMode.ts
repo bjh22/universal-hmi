@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import type { Widget } from '../types';
 
 export interface GridSettings {
@@ -28,6 +28,7 @@ export interface DesignModeState {
 
   // Selection
   select: (id: string, additive?: boolean) => void;
+  selectMultiple: (ids: string[]) => void;
   selectAll: () => void;
   clearSelection: () => void;
 
@@ -50,6 +51,10 @@ export interface DesignModeState {
   sendToBack: () => void;
   bringForward: () => void;
   sendBackward: () => void;
+
+  // Alignment
+  align: (direction: 'left' | 'right' | 'top' | 'bottom' | 'center-h' | 'center-v') => void;
+  distribute: (direction: 'horizontal' | 'vertical') => void;
 
   // Undo/Redo
   undo: () => void;
@@ -90,14 +95,16 @@ export function useDesignMode(): DesignModeState {
   const [zoom, setZoomState] = useState(1);
   const [lockedIds, setLockedIds] = useState<Set<string>>(new Set());
 
-  // Undo/redo stacks
-  const undoStack = useRef<HistoryEntry[]>([]);
-  const redoStack = useRef<HistoryEntry[]>([]);
+  // Undo/redo stacks (using state for reactivity of canUndo/canRedo)
+  const [undoStack, setUndoStack] = useState<HistoryEntry[]>([]);
+  const [redoStack, setRedoStack] = useState<HistoryEntry[]>([]);
 
   const pushHistory = useCallback((ws: Widget[], description: string) => {
-    undoStack.current.push({ widgets: ws, description });
-    if (undoStack.current.length > MAX_HISTORY) undoStack.current.shift();
-    redoStack.current = [];
+    setUndoStack(prev => {
+      const next = [...prev, { widgets: ws, description }];
+      return next.length > MAX_HISTORY ? next.slice(1) : next;
+    });
+    setRedoStack([]);
   }, []);
 
   const commitWidgets = useCallback((updater: (prev: Widget[]) => Widget[], description: string) => {
@@ -115,8 +122,8 @@ export function useDesignMode(): DesignModeState {
     setEditing(true);
     setDirty(false);
     setSelectedIds(new Set());
-    undoStack.current = [];
-    redoStack.current = [];
+    setUndoStack([]);
+    setRedoStack([]);
     setLockedIds(new Set());
   }, []);
 
@@ -140,6 +147,10 @@ export function useDesignMode(): DesignModeState {
   const selectAll = useCallback(() => {
     setSelectedIds(new Set(widgets.map(w => w.id)));
   }, [widgets]);
+
+  const selectMultiple = useCallback((ids: string[]) => {
+    setSelectedIds(new Set(ids));
+  }, []);
 
   const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
@@ -253,25 +264,78 @@ export function useDesignMode(): DesignModeState {
     }, 'Send backward');
   }, [commitWidgets, selectedIds]);
 
+  // Alignment
+  const align = useCallback((direction: 'left' | 'right' | 'top' | 'bottom' | 'center-h' | 'center-v') => {
+    if (selectedIds.size < 2) return;
+    commitWidgets(prev => {
+      const selected = prev.filter(w => selectedIds.has(w.id));
+      const minX = Math.min(...selected.map(w => w.x));
+      const maxX = Math.max(...selected.map(w => w.x + w.w));
+      const minY = Math.min(...selected.map(w => w.y));
+      const maxY = Math.max(...selected.map(w => w.y + w.h));
+      return prev.map(w => {
+        if (!selectedIds.has(w.id) || lockedIds.has(w.id)) return w;
+        switch (direction) {
+          case 'left': return { ...w, x: minX };
+          case 'right': return { ...w, x: maxX - w.w };
+          case 'top': return { ...w, y: minY };
+          case 'bottom': return { ...w, y: maxY - w.h };
+          case 'center-h': return { ...w, x: Math.round(minX + (maxX - minX - w.w) / 2) };
+          case 'center-v': return { ...w, y: Math.round(minY + (maxY - minY - w.h) / 2) };
+          default: return w;
+        }
+      });
+    }, `Align ${direction}`);
+  }, [commitWidgets, selectedIds, lockedIds]);
+
+  const distribute = useCallback((direction: 'horizontal' | 'vertical') => {
+    if (selectedIds.size < 3) return;
+    commitWidgets(prev => {
+      const selected = prev.filter(w => selectedIds.has(w.id) && !lockedIds.has(w.id));
+      if (selected.length < 3) return prev;
+      if (direction === 'horizontal') {
+        const sorted = [...selected].sort((a, b) => a.x - b.x);
+        const min = sorted[0].x;
+        const max = sorted[sorted.length - 1].x;
+        const step = (max - min) / (sorted.length - 1);
+        const updates = new Map(sorted.map((w, i) => [w.id, Math.round(min + step * i)]));
+        return prev.map(w => updates.has(w.id) ? { ...w, x: updates.get(w.id)! } : w);
+      } else {
+        const sorted = [...selected].sort((a, b) => a.y - b.y);
+        const min = sorted[0].y;
+        const max = sorted[sorted.length - 1].y;
+        const step = (max - min) / (sorted.length - 1);
+        const updates = new Map(sorted.map((w, i) => [w.id, Math.round(min + step * i)]));
+        return prev.map(w => updates.has(w.id) ? { ...w, y: updates.get(w.id)! } : w);
+      }
+    }, `Distribute ${direction}`);
+  }, [commitWidgets, selectedIds, lockedIds]);
+
   // Undo/Redo
   const undo = useCallback(() => {
-    const entry = undoStack.current.pop();
-    if (!entry) return;
-    setWidgets(prev => {
-      redoStack.current.push({ widgets: prev, description: entry.description });
-      return entry.widgets;
+    setUndoStack(prev => {
+      if (prev.length === 0) return prev;
+      const entry = prev[prev.length - 1];
+      setWidgets(current => {
+        setRedoStack(rs => [...rs, { widgets: current, description: entry.description }]);
+        return entry.widgets;
+      });
+      setDirty(true);
+      return prev.slice(0, -1);
     });
-    setDirty(true);
   }, []);
 
   const redo = useCallback(() => {
-    const entry = redoStack.current.pop();
-    if (!entry) return;
-    setWidgets(prev => {
-      undoStack.current.push({ widgets: prev, description: entry.description });
-      return entry.widgets;
+    setRedoStack(prev => {
+      if (prev.length === 0) return prev;
+      const entry = prev[prev.length - 1];
+      setWidgets(current => {
+        setUndoStack(us => [...us, { widgets: current, description: entry.description }]);
+        return entry.widgets;
+      });
+      setDirty(true);
+      return prev.slice(0, -1);
     });
-    setDirty(true);
   }, []);
 
   // Grid & zoom
@@ -295,13 +359,14 @@ export function useDesignMode(): DesignModeState {
   return {
     editing, widgets, selectedIds, clipboard, gridSettings, dirty, zoom,
     enterEditMode, exitEditMode,
-    select, selectAll, clearSelection,
+    select, selectMultiple, selectAll, clearSelection,
     addWidget, updateWidget, updateWidgetProps, deleteSelected, moveWidget, resizeWidget,
     copySelected, cutSelected, paste, duplicateSelected,
     bringToFront, sendToBack, bringForward, sendBackward,
+    align, distribute,
     undo, redo,
-    canUndo: undoStack.current.length > 0,
-    canRedo: redoStack.current.length > 0,
+    canUndo: undoStack.length > 0,
+    canRedo: redoStack.length > 0,
     setGridSettings, setZoom,
     lockedIds, toggleLock,
   };

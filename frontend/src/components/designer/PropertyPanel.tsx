@@ -1,4 +1,6 @@
-import type { Widget, TextStyle } from '../../types';
+import { useState, useEffect, useRef } from 'react';
+import type { Widget, TextStyle, Tag } from '../../types';
+import { api } from '../../lib/api';
 import { WIDGET_TYPES } from './WidgetPalette';
 
 interface Props {
@@ -8,6 +10,55 @@ interface Props {
   onDelete: () => void;
   locked: boolean;
   onToggleLock: () => void;
+}
+
+function TagPicker({ value, onChange }: { value: string; onChange: (tag: string) => void }) {
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    api.getTags().then(setTags).catch(() => {});
+  }, []);
+
+  const filtered = tags.filter(t =>
+    t.name.toLowerCase().includes(search.toLowerCase()) ||
+    (t.description || '').toLowerCase().includes(search.toLowerCase()) ||
+    (t.group_name || '').toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="relative">
+      <input
+        ref={inputRef}
+        type="text"
+        value={open ? search : value}
+        onChange={e => { setSearch(e.target.value); if (!open) setOpen(true); }}
+        onFocus={() => { setSearch(value); setOpen(true); }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+        placeholder="Search tags..."
+      />
+      {open && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-600 rounded shadow-lg max-h-48 overflow-y-auto">
+          {filtered.length === 0 && (
+            <div className="px-2 py-1.5 text-xs text-slate-500">No tags found</div>
+          )}
+          {filtered.map(t => (
+            <button
+              key={t.id}
+              className={`w-full text-left px-2 py-1.5 text-xs hover:bg-slate-700 ${t.name === value ? 'bg-slate-700 text-blue-400' : 'text-slate-300'}`}
+              onMouseDown={e => { e.preventDefault(); onChange(t.name); setOpen(false); }}
+            >
+              <div className="font-medium">{t.name}</div>
+              {t.description && <div className="text-[10px] text-slate-500 truncate">{t.description}</div>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function TextStyleEditor({ label, value, onChange }: {
@@ -131,16 +182,10 @@ export function PropertyPanel({ widget, onUpdateProps, onUpdateWidget, onDelete,
         </Section>
 
         {/* Tag Binding */}
-        {widget.type !== 'text_label' && (
+        {widget.type !== 'text_label' && widget.type !== 'alarm_summary' && widget.type !== 'multi_value' && (
           <Section title="Tag Binding">
             <Field label="Tag Name">
-              <input
-                type="text"
-                value={p.tag || ''}
-                onChange={e => setProp('tag', e.target.value)}
-                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white"
-                placeholder="e.g. Machine.Speed"
-              />
+              <TagPicker value={p.tag || ''} onChange={v => setProp('tag', v)} />
             </Field>
           </Section>
         )}
@@ -213,6 +258,57 @@ export function PropertyPanel({ widget, onUpdateProps, onUpdateWidget, onDelete,
           </Section>
         )}
 
+        {/* Text Label */}
+        {widget.type === 'text_label' && (
+          <Section title="Content">
+            <Field label="Text">
+              <textarea value={p.text || ''} onChange={e => setProp('text', e.target.value)}
+                rows={2}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
+            </Field>
+          </Section>
+        )}
+
+        {/* Text Value */}
+        {widget.type === 'text_value' && (
+          <Section title="Display">
+            <Field label="Units">
+              <input type="text" value={p.units || ''} onChange={e => setProp('units', e.target.value)}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
+            </Field>
+            <Field label="Format">
+              <select value={p.format || ''} onChange={e => setProp('format', e.target.value)}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white">
+                <option value="">Auto</option>
+                <option value="decimal:0">Integer</option>
+                <option value="decimal:1">1 decimal</option>
+                <option value="decimal:2">2 decimals</option>
+                <option value="decimal:3">3 decimals</option>
+              </select>
+            </Field>
+          </Section>
+        )}
+
+        {/* Multi-Value Group */}
+        {widget.type === 'multi_value' && (
+          <Section title="Tags">
+            <MultiValueTagsEditor
+              tags={(p.tags as Array<{ tag: string; label: string; units?: string }>) || []}
+              onChange={tags => setProp('tags', tags)}
+            />
+          </Section>
+        )}
+
+        {/* Dropdown Select */}
+        {widget.type === 'dropdown_select' && (
+          <Section title="Options">
+            <DropdownOptionsEditor
+              options={(p.options as Array<{ label: string; value: unknown }>) || []}
+              onChange={opts => setProp('options', opts)}
+            />
+          </Section>
+        )}
+
         {/* Position & Size */}
         <Section title="Position & Size">
           <div className="grid grid-cols-2 gap-2">
@@ -251,6 +347,34 @@ export function PropertyPanel({ widget, onUpdateProps, onUpdateWidget, onDelete,
           )}
         </Section>
 
+        {/* Visibility & Enabled */}
+        <Section title="Visibility / Enabled">
+          <label className="flex items-center gap-1.5 text-xs text-slate-400">
+            <input type="checkbox" checked={widget.visible !== false}
+              onChange={e => onUpdateWidget(widget.id, { visible: e.target.checked })}
+              className="rounded bg-slate-700 border-slate-600" />
+            Visible
+          </label>
+          <Field label="Visible when tag is truthy">
+            <input type="text" value={widget.visibleTag || ''}
+              onChange={e => onUpdateWidget(widget.id, { visibleTag: e.target.value || undefined })}
+              className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+              placeholder="Optional tag" />
+          </Field>
+          <label className="flex items-center gap-1.5 text-xs text-slate-400">
+            <input type="checkbox" checked={widget.enabled !== false}
+              onChange={e => onUpdateWidget(widget.id, { enabled: e.target.checked })}
+              className="rounded bg-slate-700 border-slate-600" />
+            Enabled
+          </label>
+          <Field label="Enabled when tag is truthy">
+            <input type="text" value={widget.enabledTag || ''}
+              onChange={e => onUpdateWidget(widget.id, { enabledTag: e.target.value || undefined })}
+              className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+              placeholder="Optional tag" />
+          </Field>
+        </Section>
+
         {/* Delete */}
         <button
           onClick={onDelete}
@@ -277,6 +401,65 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <label className="text-[10px] text-slate-500 mb-0.5 block">{label}</label>
       {children}
+    </div>
+  );
+}
+
+function MultiValueTagsEditor({ tags, onChange }: {
+  tags: Array<{ tag: string; label: string; units?: string }>;
+  onChange: (tags: Array<{ tag: string; label: string; units?: string }>) => void;
+}) {
+  const addTag = () => onChange([...tags, { tag: '', label: '', units: '' }]);
+  const removeTag = (idx: number) => onChange(tags.filter((_, i) => i !== idx));
+  const updateTag = (idx: number, patch: Partial<{ tag: string; label: string; units: string }>) =>
+    onChange(tags.map((t, i) => i === idx ? { ...t, ...patch } : t));
+
+  return (
+    <div className="space-y-2">
+      {tags.map((entry, i) => (
+        <div key={i} className="space-y-1 p-1.5 bg-slate-800 rounded">
+          <div className="flex items-center gap-1">
+            <input type="text" value={entry.tag} onChange={e => updateTag(i, { tag: e.target.value })}
+              placeholder="Tag name" className="flex-1 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+            <button onClick={() => removeTag(i)} className="text-red-400 hover:text-red-300 text-xs px-1">&times;</button>
+          </div>
+          <div className="flex gap-1">
+            <input type="text" value={entry.label} onChange={e => updateTag(i, { label: e.target.value })}
+              placeholder="Label" className="flex-1 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+            <input type="text" value={entry.units || ''} onChange={e => updateTag(i, { units: e.target.value })}
+              placeholder="Units" className="w-16 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+          </div>
+        </div>
+      ))}
+      <button onClick={addTag} className="text-xs text-blue-400 hover:text-blue-300">+ Add tag</button>
+    </div>
+  );
+}
+
+function DropdownOptionsEditor({ options, onChange }: {
+  options: Array<{ label: string; value: unknown }>;
+  onChange: (opts: Array<{ label: string; value: unknown }>) => void;
+}) {
+  const addOption = () => onChange([...options, { label: '', value: '' }]);
+  const removeOption = (idx: number) => onChange(options.filter((_, i) => i !== idx));
+  const updateOption = (idx: number, patch: Partial<{ label: string; value: unknown }>) =>
+    onChange(options.map((o, i) => i === idx ? { ...o, ...patch } : o));
+
+  return (
+    <div className="space-y-1.5">
+      {options.map((opt, i) => (
+        <div key={i} className="flex gap-1 items-center">
+          <input type="text" value={opt.label} onChange={e => updateOption(i, { label: e.target.value })}
+            placeholder="Label" className="flex-1 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+          <input type="text" value={String(opt.value ?? '')} onChange={e => {
+            const v = e.target.value;
+            updateOption(i, { value: isNaN(Number(v)) ? v : Number(v) });
+          }}
+            placeholder="Value" className="w-16 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+          <button onClick={() => removeOption(i)} className="text-red-400 hover:text-red-300 text-xs px-1">&times;</button>
+        </div>
+      ))}
+      <button onClick={addOption} className="text-xs text-blue-400 hover:text-blue-300">+ Add option</button>
     </div>
   );
 }

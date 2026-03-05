@@ -1,32 +1,48 @@
-import type { Widget, TagValue } from '../../types';
+import type { Widget, TagValue, AlarmData } from '../../types';
 import { StatusIndicator } from './StatusIndicator';
 import { GaugeWidget } from './GaugeWidget';
 import { CounterWidget } from './CounterWidget';
 import { ToggleWidget } from './ToggleWidget';
 import { CommandButton } from './CommandButton';
 import { ParameterInput } from './ParameterInput';
+import { TextLabelWidget } from './TextLabelWidget';
+import { TextValueWidget } from './TextValueWidget';
+import { AlarmSummaryWidget } from './AlarmSummaryWidget';
+import { MultiValueWidget } from './MultiValueWidget';
+import { DropdownSelectWidget } from './DropdownSelectWidget';
 
 interface Props {
   widget: Widget;
   tagValues: Record<string, TagValue>;
+  alarms?: AlarmData[];
 }
 
-export function WidgetRenderer({ widget, tagValues }: Props) {
-  const p = widget.props as any;
+export function WidgetRenderer({ widget, tagValues, alarms = [] }: Props) {
+  const p = widget.props as Record<string, unknown>;
 
   switch (widget.type) {
     case 'status_indicator':
-      return <StatusIndicator title={p.title} tag={p.tag} tagValues={tagValues} mapping={p.mapping} titleStyle={p.titleStyle} valueStyle={p.valueStyle} />;
+      return <StatusIndicator title={p.title as string} tag={p.tag as string} tagValues={tagValues} mapping={p.mapping as Record<string, { label: string; color: string }>} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} />;
     case 'gauge':
-      return <GaugeWidget title={p.title} tag={p.tag} tagValues={tagValues} min={p.min} max={p.max} units={p.units} warning={p.warning} critical={p.critical} titleStyle={p.titleStyle} valueStyle={p.valueStyle} />;
+      return <GaugeWidget title={p.title as string} tag={p.tag as string} tagValues={tagValues} min={p.min as number} max={p.max as number} units={p.units as string} warning={p.warning as number} critical={p.critical as number} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} />;
     case 'counter':
-      return <CounterWidget title={p.title} tag={p.tag} tagValues={tagValues} titleStyle={p.titleStyle} valueStyle={p.valueStyle} />;
+      return <CounterWidget title={p.title as string} tag={p.tag as string} tagValues={tagValues} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} />;
     case 'toggle':
-      return <ToggleWidget title={p.title} tag={p.tag} tagValues={tagValues} titleStyle={p.titleStyle} valueStyle={p.valueStyle} />;
+      return <ToggleWidget title={p.title as string} tag={p.tag as string} tagValues={tagValues} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} />;
     case 'command_button':
-      return <CommandButton title={p.title} tag={p.tag} value={p.value} script={p.script} color={p.color} confirm={p.confirm} titleStyle={p.titleStyle} />;
+      return <CommandButton title={p.title as string} tag={p.tag as string} value={p.value} script={p.script as string} color={p.color as string} confirm={p.confirm as boolean} titleStyle={p.titleStyle as undefined} />;
     case 'parameter_input':
-      return <ParameterInput title={p.title} tag={p.tag} tagValues={tagValues} min={p.min} max={p.max} step={p.step} units={p.units} titleStyle={p.titleStyle} valueStyle={p.valueStyle} />;
+      return <ParameterInput title={p.title as string} tag={p.tag as string} tagValues={tagValues} min={p.min as number} max={p.max as number} step={p.step as number} units={p.units as string} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} />;
+    case 'text_label':
+      return <TextLabelWidget title={p.title as string} text={p.text as string} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} />;
+    case 'text_value':
+      return <TextValueWidget title={p.title as string} tag={p.tag as string} tagValues={tagValues} units={p.units as string} format={p.format as string} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} />;
+    case 'alarm_summary':
+      return <AlarmSummaryWidget title={p.title as string} alarms={alarms} titleStyle={p.titleStyle as undefined} />;
+    case 'multi_value':
+      return <MultiValueWidget title={p.title as string} tags={p.tags as Array<{ tag: string; label: string; units?: string }>} tagValues={tagValues} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} />;
+    case 'dropdown_select':
+      return <DropdownSelectWidget title={p.title as string} tag={p.tag as string} tagValues={tagValues} options={p.options as Array<{ label: string; value: unknown }>} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} />;
     default:
       return (
         <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 text-slate-400 text-sm">

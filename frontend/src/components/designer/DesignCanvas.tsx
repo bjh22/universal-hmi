@@ -1,89 +1,132 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { Lock } from 'lucide-react';
-import type { Widget, TagValue } from '../../types';
+import type { Widget, TagValue, AlarmData } from '../../types';
 import type { GridSettings } from '../../hooks/useDesignMode';
 import { WidgetRenderer } from '../widgets/WidgetRenderer';
+
+interface ContextMenuState {
+  x: number;
+  y: number;
+  widgetId: string | null; // null = canvas background
+}
+
+interface MarqueeState {
+  startX: number;
+  startY: number;
+  currentX: number;
+  currentY: number;
+}
 
 interface Props {
   widgets: Widget[];
   tagValues: Record<string, TagValue>;
+  alarms?: AlarmData[];
   selectedIds: Set<string>;
   lockedIds: Set<string>;
   gridSettings: GridSettings;
   zoom: number;
   onSelect: (id: string, additive?: boolean) => void;
+  onSelectMultiple: (ids: string[]) => void;
   onClearSelection: () => void;
   onMoveWidget: (id: string, x: number, y: number) => void;
   onResizeWidget: (id: string, w: number, h: number) => void;
+  // Context menu actions
+  onCopy: () => void;
+  onCut: () => void;
+  onPaste: () => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+  onBringToFront: () => void;
+  onSendToBack: () => void;
+  onBringForward: () => void;
+  onSendBackward: () => void;
+  onToggleLock: (id: string) => void;
+  onSelectAll: () => void;
+  // Alignment
+  onAlign: (direction: 'left' | 'right' | 'top' | 'bottom' | 'center-h' | 'center-v') => void;
+  onDistribute: (direction: 'horizontal' | 'vertical') => void;
 }
 
 const COL_COUNT = 12;
 const ROW_HEIGHT = 80;
-const GAP = 16; // matches gap-4
+const GAP = 16;
 
 export function DesignCanvas({
-  widgets, tagValues, selectedIds, lockedIds, gridSettings, zoom,
-  onSelect, onClearSelection, onMoveWidget, onResizeWidget,
+  widgets, tagValues, alarms = [], selectedIds, lockedIds, gridSettings, zoom,
+  onSelect, onSelectMultiple, onClearSelection, onMoveWidget, onResizeWidget,
+  onCopy, onCut, onPaste, onDuplicate, onDelete,
+  onBringToFront, onSendToBack, onBringForward, onSendBackward,
+  onToggleLock, onSelectAll, onAlign, onDistribute,
 }: Props) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState<{
-    id: string;
-    startX: number;
-    startY: number;
-    origCol: number;
-    origRow: number;
+    id: string; startX: number; startY: number; origCol: number; origRow: number;
   } | null>(null);
   const [resizing, setResizing] = useState<{
-    id: string;
-    startX: number;
-    startY: number;
-    origW: number;
-    origH: number;
+    id: string; startX: number; startY: number; origW: number; origH: number;
   } | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [marquee, setMarquee] = useState<MarqueeState | null>(null);
 
-  // Calculate column width based on canvas container
   const getColWidth = useCallback(() => {
     if (!canvasRef.current) return 80;
     return (canvasRef.current.clientWidth - GAP * (COL_COUNT - 1)) / COL_COUNT;
   }, []);
 
-  const handleCanvasClick = (e: React.MouseEvent) => {
-    if (e.target === canvasRef.current) {
-      onClearSelection();
+  const handleCanvasMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return; // left click only
+    if (e.target !== e.currentTarget && !(e.target as HTMLElement).closest('[data-canvas-grid]')) return;
+    onClearSelection();
+    setContextMenu(null);
+    // Start marquee selection
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (rect) {
+      setMarquee({
+        startX: (e.clientX - rect.left) / zoom,
+        startY: (e.clientY - rect.top) / zoom,
+        currentX: (e.clientX - rect.left) / zoom,
+        currentY: (e.clientY - rect.top) / zoom,
+      });
     }
   };
 
   const handleWidgetMouseDown = (e: React.MouseEvent, widget: Widget) => {
+    if (e.button !== 0) return;
     e.stopPropagation();
+    setContextMenu(null);
     onSelect(widget.id, e.shiftKey);
-
     if (lockedIds.has(widget.id)) return;
-
-    setDragging({
-      id: widget.id,
-      startX: e.clientX,
-      startY: e.clientY,
-      origCol: widget.x,
-      origRow: widget.y,
-    });
+    setDragging({ id: widget.id, startX: e.clientX, startY: e.clientY, origCol: widget.x, origRow: widget.y });
   };
 
   const handleResizeMouseDown = (e: React.MouseEvent, widget: Widget) => {
     e.stopPropagation();
     e.preventDefault();
     if (lockedIds.has(widget.id)) return;
-
-    setResizing({
-      id: widget.id,
-      startX: e.clientX,
-      startY: e.clientY,
-      origW: widget.w,
-      origH: widget.h,
-    });
+    setResizing({ id: widget.id, startX: e.clientX, startY: e.clientY, origW: widget.w, origH: widget.h });
   };
 
+  // Context menu
+  const handleContextMenu = (e: React.MouseEvent, widgetId: string | null) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (widgetId && !selectedIds.has(widgetId)) {
+      onSelect(widgetId);
+    }
+    setContextMenu({ x: e.clientX, y: e.clientY, widgetId });
+  };
+
+  // Close context menu on click elsewhere
   useEffect(() => {
-    if (!dragging && !resizing) return;
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    window.addEventListener('click', close);
+    return () => window.removeEventListener('click', close);
+  }, [contextMenu]);
+
+  // Drag/resize/marquee mouse events
+  useEffect(() => {
+    if (!dragging && !resizing && !marquee) return;
 
     const handleMouseMove = (e: MouseEvent) => {
       if (dragging) {
@@ -104,9 +147,40 @@ export function DesignCanvas({
         const newH = Math.max(1, Math.round(resizing.origH + dy / rowH));
         onResizeWidget(resizing.id, newW, newH);
       }
+      if (marquee) {
+        const rect = canvasRef.current?.getBoundingClientRect();
+        if (rect) {
+          setMarquee(prev => prev ? {
+            ...prev,
+            currentX: (e.clientX - rect.left) / zoom,
+            currentY: (e.clientY - rect.top) / zoom,
+          } : null);
+        }
+      }
     };
 
     const handleMouseUp = () => {
+      if (marquee) {
+        // Calculate which widgets intersect the marquee
+        const mx1 = Math.min(marquee.startX, marquee.currentX);
+        const my1 = Math.min(marquee.startY, marquee.currentY);
+        const mx2 = Math.max(marquee.startX, marquee.currentX);
+        const my2 = Math.max(marquee.startY, marquee.currentY);
+        // Only select if marquee is large enough (> 5px)
+        if (mx2 - mx1 > 5 || my2 - my1 > 5) {
+          const colW = getColWidth() + GAP;
+          const rowH = ROW_HEIGHT + GAP;
+          const ids = widgets.filter(w => {
+            const wx1 = w.x * colW;
+            const wy1 = w.y * rowH;
+            const wx2 = wx1 + w.w * colW - GAP;
+            const wy2 = wy1 + w.h * rowH - GAP;
+            return wx1 < mx2 && wx2 > mx1 && wy1 < my2 && wy2 > my1;
+          }).map(w => w.id);
+          if (ids.length > 0) onSelectMultiple(ids);
+        }
+        setMarquee(null);
+      }
       setDragging(null);
       setResizing(null);
     };
@@ -117,93 +191,180 @@ export function DesignCanvas({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [dragging, resizing, zoom, getColWidth, onMoveWidget, onResizeWidget]);
+  }, [dragging, resizing, marquee, zoom, getColWidth, onMoveWidget, onResizeWidget, onSelectMultiple, widgets]);
+
+  const hasMultipleSelected = selectedIds.size > 1;
 
   return (
-    <div className="flex-1 overflow-auto bg-slate-950 p-4">
-      <div
-        ref={canvasRef}
-        className="relative"
-        style={{
-          transform: `scale(${zoom})`,
-          transformOrigin: 'top left',
-          minHeight: '600px',
-        }}
-        onClick={handleCanvasClick}
-      >
-        {/* Grid overlay */}
-        {gridSettings.visible && (
-          <div
-            className="absolute inset-0 pointer-events-none opacity-10"
-            style={{
-              backgroundImage: `
-                linear-gradient(to right, #475569 1px, transparent 1px),
-                linear-gradient(to bottom, #475569 1px, transparent 1px)
-              `,
-              backgroundSize: `${gridSettings.cellSize}px ${gridSettings.cellSize}px`,
-            }}
-          />
-        )}
+    <div className="flex-1 overflow-auto bg-slate-950 p-4 flex flex-col">
+      {/* Alignment toolbar - shows when multiple selected */}
+      {hasMultipleSelected && (
+        <div className="flex items-center gap-1 mb-2 px-1">
+          <span className="text-[10px] text-slate-500 mr-1">Align:</span>
+          {(['left', 'center-h', 'right', 'top', 'center-v', 'bottom'] as const).map(dir => (
+            <button key={dir} onClick={() => onAlign(dir)}
+              className="px-1.5 py-0.5 rounded text-[10px] text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+              title={`Align ${dir}`}>
+              {dir === 'left' ? 'L' : dir === 'right' ? 'R' : dir === 'top' ? 'T' : dir === 'bottom' ? 'B' : dir === 'center-h' ? 'CH' : 'CV'}
+            </button>
+          ))}
+          <div className="w-px h-4 bg-slate-700 mx-1" />
+          <span className="text-[10px] text-slate-500 mr-1">Distribute:</span>
+          <button onClick={() => onDistribute('horizontal')}
+            className="px-1.5 py-0.5 rounded text-[10px] text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+            title="Distribute horizontally">H</button>
+          <button onClick={() => onDistribute('vertical')}
+            className="px-1.5 py-0.5 rounded text-[10px] text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+            title="Distribute vertically">V</button>
+        </div>
+      )}
 
-        {/* Widget grid layout */}
+      <div className="flex-1 relative">
         <div
-          className="grid gap-4 relative"
+          ref={canvasRef}
+          className="relative"
           style={{
-            gridTemplateColumns: `repeat(${COL_COUNT}, 1fr)`,
-            gridAutoRows: `${ROW_HEIGHT}px`,
+            transform: `scale(${zoom})`,
+            transformOrigin: 'top left',
+            minHeight: '600px',
           }}
+          onMouseDown={handleCanvasMouseDown}
+          onContextMenu={e => handleContextMenu(e, null)}
         >
-          {widgets.map((w) => {
-            const isSelected = selectedIds.has(w.id);
-            const isLocked = lockedIds.has(w.id);
+          {/* Grid overlay */}
+          {gridSettings.visible && (
+            <div
+              className="absolute inset-0 pointer-events-none opacity-10"
+              style={{
+                backgroundImage: `
+                  linear-gradient(to right, #475569 1px, transparent 1px),
+                  linear-gradient(to bottom, #475569 1px, transparent 1px)
+                `,
+                backgroundSize: `${gridSettings.cellSize}px ${gridSettings.cellSize}px`,
+              }}
+            />
+          )}
 
-            return (
-              <div
-                key={w.id}
-                className={`relative group ${dragging?.id === w.id ? 'opacity-70' : ''}`}
-                style={{
-                  gridColumn: `${w.x + 1} / span ${w.w}`,
-                  gridRow: `${w.y + 1} / span ${w.h}`,
-                  cursor: isLocked ? 'default' : 'move',
-                }}
-                onMouseDown={(e) => handleWidgetMouseDown(e, w)}
-              >
-                {/* Selection outline */}
-                <div className={`absolute inset-0 rounded-xl pointer-events-none z-10 border-2 transition-colors ${
-                  isSelected ? 'border-blue-500' : 'border-transparent group-hover:border-blue-500/30'
-                }`} />
-
-                {/* Lock indicator */}
-                {isLocked && (
-                  <div className="absolute top-1 right-1 z-20 bg-yellow-600/80 rounded p-0.5">
-                    <Lock size={10} className="text-white" />
+          {/* Widget grid layout */}
+          <div
+            data-canvas-grid
+            className="grid gap-4 relative"
+            style={{
+              gridTemplateColumns: `repeat(${COL_COUNT}, 1fr)`,
+              gridAutoRows: `${ROW_HEIGHT}px`,
+            }}
+          >
+            {widgets.map((w) => {
+              const isSelected = selectedIds.has(w.id);
+              const isLocked = lockedIds.has(w.id);
+              return (
+                <div
+                  key={w.id}
+                  className={`relative group ${dragging?.id === w.id ? 'opacity-70' : ''}`}
+                  style={{
+                    gridColumn: `${w.x + 1} / span ${w.w}`,
+                    gridRow: `${w.y + 1} / span ${w.h}`,
+                    cursor: isLocked ? 'default' : 'move',
+                  }}
+                  onMouseDown={e => handleWidgetMouseDown(e, w)}
+                  onContextMenu={e => handleContextMenu(e, w.id)}
+                >
+                  <div className={`absolute inset-0 rounded-xl pointer-events-none z-10 border-2 transition-colors ${
+                    isSelected ? 'border-blue-500' : 'border-transparent group-hover:border-blue-500/30'
+                  }`} />
+                  {isLocked && (
+                    <div className="absolute top-1 right-1 z-20 bg-yellow-600/80 rounded p-0.5">
+                      <Lock size={10} className="text-white" />
+                    </div>
+                  )}
+                  {isSelected && !isLocked && (
+                    <div className="absolute bottom-0 right-0 w-4 h-4 bg-blue-500 rounded-tl-md cursor-se-resize z-20"
+                      onMouseDown={e => handleResizeMouseDown(e, w)} />
+                  )}
+                  <div className="h-full pointer-events-none">
+                    <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} />
                   </div>
-                )}
-
-                {/* Resize handle */}
-                {isSelected && !isLocked && (
-                  <div
-                    className="absolute bottom-0 right-0 w-4 h-4 bg-blue-500 rounded-tl-md cursor-se-resize z-20"
-                    onMouseDown={(e) => handleResizeMouseDown(e, w)}
-                  />
-                )}
-
-                {/* Widget content */}
-                <div className="h-full pointer-events-none">
-                  <WidgetRenderer widget={w} tagValues={tagValues} />
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+
+          {/* Marquee selection rectangle */}
+          {marquee && (
+            <div
+              className="absolute border border-blue-400 bg-blue-400/10 pointer-events-none z-30"
+              style={{
+                left: Math.min(marquee.startX, marquee.currentX),
+                top: Math.min(marquee.startY, marquee.currentY),
+                width: Math.abs(marquee.currentX - marquee.startX),
+                height: Math.abs(marquee.currentY - marquee.startY),
+              }}
+            />
+          )}
+
+          {/* Empty state */}
+          {widgets.length === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center text-slate-500 pointer-events-none">
+              <p className="text-sm">Drag widgets from the palette to get started</p>
+            </div>
+          )}
         </div>
 
-        {/* Empty state */}
-        {widgets.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center text-slate-500">
-            <p className="text-sm">Drag widgets from the palette to get started</p>
+        {/* Context menu */}
+        {contextMenu && (
+          <div
+            className="fixed bg-slate-800 border border-slate-600 rounded-lg shadow-xl py-1 z-50 min-w-[180px]"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+            onClick={() => setContextMenu(null)}
+          >
+            {contextMenu.widgetId ? (
+              <>
+                <ContextMenuItem label="Cut" shortcut="Ctrl+X" onClick={onCut} />
+                <ContextMenuItem label="Copy" shortcut="Ctrl+C" onClick={onCopy} />
+                <ContextMenuItem label="Paste" shortcut="Ctrl+V" onClick={onPaste} />
+                <ContextMenuItem label="Duplicate" shortcut="Ctrl+D" onClick={onDuplicate} />
+                <ContextMenuDivider />
+                <ContextMenuItem label="Bring to Front" shortcut="Ctrl+Shift+]" onClick={onBringToFront} />
+                <ContextMenuItem label="Bring Forward" shortcut="Ctrl+]" onClick={onBringForward} />
+                <ContextMenuItem label="Send Backward" shortcut="Ctrl+[" onClick={onSendBackward} />
+                <ContextMenuItem label="Send to Back" shortcut="Ctrl+Shift+[" onClick={onSendToBack} />
+                <ContextMenuDivider />
+                <ContextMenuItem
+                  label={lockedIds.has(contextMenu.widgetId) ? 'Unlock Position' : 'Lock Position'}
+                  onClick={() => contextMenu.widgetId && onToggleLock(contextMenu.widgetId)}
+                />
+                <ContextMenuDivider />
+                <ContextMenuItem label="Delete" shortcut="Del" onClick={onDelete} danger />
+              </>
+            ) : (
+              <>
+                <ContextMenuItem label="Paste" shortcut="Ctrl+V" onClick={onPaste} />
+                <ContextMenuItem label="Select All" shortcut="Ctrl+A" onClick={onSelectAll} />
+              </>
+            )}
           </div>
         )}
       </div>
     </div>
   );
+}
+
+function ContextMenuItem({ label, shortcut, onClick, danger }: {
+  label: string; shortcut?: string; onClick: () => void; danger?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-slate-700 transition-colors ${
+        danger ? 'text-red-400' : 'text-slate-300'
+      }`}
+    >
+      <span>{label}</span>
+      {shortcut && <span className="text-[10px] text-slate-500 ml-4">{shortcut}</span>}
+    </button>
+  );
+}
+
+function ContextMenuDivider() {
+  return <div className="h-px bg-slate-700 my-1" />;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { Pencil } from 'lucide-react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { api } from '../lib/api';
 import { WidgetRenderer } from '../components/widgets/WidgetRenderer';
 import { WidgetPalette } from '../components/designer/WidgetPalette';
@@ -9,27 +9,34 @@ import { EditorToolbar } from '../components/designer/EditorToolbar';
 import { DesignCanvas } from '../components/designer/DesignCanvas';
 import { useDesignMode, generateWidgetId } from '../hooks/useDesignMode';
 import type { WidgetTypeInfo } from '../components/designer/WidgetPalette';
-import type { ScreenData, Widget, TagValue } from '../types';
+import type { ScreenData, Widget, TagValue, AlarmData } from '../types';
 
 interface Props {
   tagValues: Record<string, TagValue>;
+  alarms?: AlarmData[];
   userRole?: string;
 }
 
-export function DashboardPage({ tagValues, userRole }: Props) {
+export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
   const { slug } = useParams<{ slug?: string }>();
   const [screens, setScreens] = useState<ScreenData[]>([]);
   const [activeScreen, setActiveScreen] = useState<ScreenData | null>(null);
   const [runtimeWidgets, setRuntimeWidgets] = useState<Widget[]>([]);
   const [paletteCollapsed, setPaletteCollapsed] = useState(false);
+  const [showNewScreenDialog, setShowNewScreenDialog] = useState(false);
+  const [newScreenName, setNewScreenName] = useState('');
 
   const dm = useDesignMode();
   const isDesigner = userRole === 'designer';
 
-  // Load screens
-  useEffect(() => {
+  const refreshScreens = useCallback(() => {
     api.getScreens().then(setScreens).catch(() => {});
   }, []);
+
+  // Load screens
+  useEffect(() => {
+    refreshScreens();
+  }, [refreshScreens]);
 
   // Load active screen
   useEffect(() => {
@@ -90,6 +97,33 @@ export function DashboardPage({ tagValues, userRole }: Props) {
     dm.addWidget(widget);
     dm.select(widget.id);
   }, [dm]);
+
+  // Create new screen
+  const handleCreateScreen = useCallback(async () => {
+    if (!newScreenName.trim()) return;
+    const screenSlug = newScreenName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    await api.createScreen({
+      name: newScreenName.trim(),
+      slug: screenSlug,
+      layout: [],
+      is_default: screens.length === 0,
+      sort_order: screens.length,
+    });
+    setShowNewScreenDialog(false);
+    setNewScreenName('');
+    refreshScreens();
+    // Navigate to the new screen
+    window.location.href = `/screen/${screenSlug}`;
+  }, [newScreenName, screens.length, refreshScreens]);
+
+  // Delete current screen
+  const handleDeleteScreen = useCallback(async () => {
+    if (!activeScreen) return;
+    if (!window.confirm(`Delete screen "${activeScreen.name}"? This cannot be undone.`)) return;
+    await api.deleteScreen(activeScreen.id);
+    refreshScreens();
+    window.location.href = '/';
+  }, [activeScreen, refreshScreens]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -172,14 +206,29 @@ export function DashboardPage({ tagValues, userRole }: Props) {
           <DesignCanvas
             widgets={dm.widgets}
             tagValues={tagValues}
+            alarms={alarms}
             selectedIds={dm.selectedIds}
             lockedIds={dm.lockedIds}
             gridSettings={dm.gridSettings}
             zoom={dm.zoom}
             onSelect={dm.select}
+            onSelectMultiple={dm.selectMultiple}
             onClearSelection={dm.clearSelection}
             onMoveWidget={dm.moveWidget}
             onResizeWidget={dm.resizeWidget}
+            onCopy={dm.copySelected}
+            onCut={dm.cutSelected}
+            onPaste={dm.paste}
+            onDuplicate={dm.duplicateSelected}
+            onDelete={dm.deleteSelected}
+            onBringToFront={dm.bringToFront}
+            onSendToBack={dm.sendToBack}
+            onBringForward={dm.bringForward}
+            onSendBackward={dm.sendBackward}
+            onToggleLock={dm.toggleLock}
+            onSelectAll={dm.selectAll}
+            onAlign={dm.align}
+            onDistribute={dm.distribute}
           />
           <PropertyPanel
             widget={selectedWidget}
@@ -218,14 +267,34 @@ export function DashboardPage({ tagValues, userRole }: Props) {
         )}
         <div className="flex-1" />
         {isDesigner && (
-          <button
-            onClick={handleEnterEdit}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
-            title="Edit screen (Ctrl+E)"
-          >
-            <Pencil size={14} />
-            Edit
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setShowNewScreenDialog(true)}
+              className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
+              title="New screen"
+            >
+              <Plus size={14} />
+            </button>
+            {activeScreen && (
+              <button
+                onClick={handleDeleteScreen}
+                className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-red-400 hover:bg-red-600/10 transition-colors"
+                title="Delete screen"
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
+            {activeScreen && (
+              <button
+                onClick={handleEnterEdit}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
+                title="Edit screen (Ctrl+E)"
+              >
+                <Pencil size={14} />
+                Edit
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -234,25 +303,74 @@ export function DashboardPage({ tagValues, userRole }: Props) {
         className="grid gap-4"
         style={{ gridTemplateColumns: 'repeat(12, 1fr)', gridAutoRows: '80px' }}
       >
-        {runtimeWidgets.map((w) => (
-          <div
-            key={w.id}
-            style={{
-              gridColumn: `${w.x + 1} / span ${w.w}`,
-              gridRow: `${w.y + 1} / span ${w.h}`,
-            }}
-          >
-            <WidgetRenderer widget={w} tagValues={tagValues} />
-          </div>
-        ))}
+        {runtimeWidgets.map((w) => {
+          // Runtime visibility check
+          const visibleByProp = w.visible !== false;
+          const visibleByTag = w.visibleTag ? !!tagValues[w.visibleTag]?.value : true;
+          if (!visibleByProp || !visibleByTag) return null;
+
+          const enabledByProp = w.enabled !== false;
+          const enabledByTag = w.enabledTag ? !!tagValues[w.enabledTag]?.value : true;
+          const isEnabled = enabledByProp && enabledByTag;
+
+          return (
+            <div
+              key={w.id}
+              style={{
+                gridColumn: `${w.x + 1} / span ${w.w}`,
+                gridRow: `${w.y + 1} / span ${w.h}`,
+              }}
+              className={isEnabled ? '' : 'opacity-50 pointer-events-none'}
+            >
+              <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} />
+            </div>
+          );
+        })}
       </div>
 
-      {runtimeWidgets.length === 0 && (
+      {runtimeWidgets.length === 0 && !activeScreen && (
+        <div className="text-center text-slate-500 mt-20">
+          <p className="text-lg">No screen found</p>
+          <p className="text-sm mt-1">
+            {isDesigner ? 'Create a screen using the + button above' : 'No screens have been created yet'}
+          </p>
+        </div>
+      )}
+
+      {runtimeWidgets.length === 0 && activeScreen && (
         <div className="text-center text-slate-500 mt-20">
           <p className="text-lg">No widgets configured</p>
           <p className="text-sm mt-1">
             {isDesigner ? 'Press Ctrl+E or click Edit to design this screen' : 'Add widgets using the screen designer'}
           </p>
+        </div>
+      )}
+
+      {/* New Screen Dialog */}
+      {showNewScreenDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowNewScreenDialog(false)}>
+          <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 w-96 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-slate-200 mb-4">New Screen</h3>
+            <input
+              type="text"
+              value={newScreenName}
+              onChange={e => setNewScreenName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleCreateScreen(); if (e.key === 'Escape') setShowNewScreenDialog(false); }}
+              placeholder="Screen name"
+              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500 mb-4"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShowNewScreenDialog(false)}
+                className="px-4 py-2 rounded-lg text-sm text-slate-400 hover:text-slate-200 transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleCreateScreen} disabled={!newScreenName.trim()}
+                className="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-colors">
+                Create
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

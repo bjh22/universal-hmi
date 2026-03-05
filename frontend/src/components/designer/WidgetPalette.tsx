@@ -1,6 +1,6 @@
 import {
   Activity, Gauge, Hash, ToggleLeft, MousePointerClick,
-  SlidersHorizontal, Type,
+  SlidersHorizontal, Type, FileText, Bell, Table, ChevronDown,
 } from 'lucide-react';
 
 export interface WidgetTypeInfo {
@@ -43,6 +43,26 @@ export const WIDGET_TYPES: WidgetTypeInfo[] = [
     type: 'parameter_input', label: 'Parameter Input', icon: SlidersHorizontal, category: 'input',
     defaultW: 4, defaultH: 2,
     defaultProps: { title: 'Parameter', tag: '', min: 0, max: 100, step: 1, units: '' },
+  },
+  {
+    type: 'text_value', label: 'Text Value', icon: FileText, category: 'display',
+    defaultW: 3, defaultH: 2,
+    defaultProps: { title: 'Value', tag: '', units: '', format: '' },
+  },
+  {
+    type: 'alarm_summary', label: 'Alarm Summary', icon: Bell, category: 'display',
+    defaultW: 5, defaultH: 2,
+    defaultProps: { title: 'Alarms' },
+  },
+  {
+    type: 'multi_value', label: 'Multi-Value Group', icon: Table, category: 'display',
+    defaultW: 4, defaultH: 3,
+    defaultProps: { title: 'Values', tags: [] },
+  },
+  {
+    type: 'dropdown_select', label: 'Dropdown Select', icon: ChevronDown, category: 'input',
+    defaultW: 3, defaultH: 2,
+    defaultProps: { title: 'Select', tag: '', options: [] },
   },
   {
     type: 'text_label', label: 'Text Label', icon: Type, category: 'layout',
