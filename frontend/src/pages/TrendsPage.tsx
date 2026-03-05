@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { Download, Save, FolderOpen } from 'lucide-react';
 import { api } from '../lib/api';
 import type { Tag, TrendDataPoint } from '../types';
 
@@ -12,16 +13,31 @@ const TIME_RANGES = [
   { label: '30d', hours: 720 },
 ];
 
+interface TrendView {
+  id?: number;
+  name: string;
+  tag_ids: number[];
+  hours: number;
+}
+
 export function TrendsPage() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTags, setSelectedTags] = useState<number[]>([]);
   const [timeRange, setTimeRange] = useState(1);
+  const [useCustomRange, setUseCustomRange] = useState(false);
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
   const [chartData, setChartData] = useState<any[]>([]);
+  const [savedViews, setSavedViews] = useState<TrendView[]>([]);
+  const [viewName, setViewName] = useState('');
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [showLoadDialog, setShowLoadDialog] = useState(false);
 
   useEffect(() => {
     api.getTags().then((all) => {
       setTags(all.filter((t: Tag) => t.trending_enabled));
     }).catch(() => {});
+    api.getTrendViews().then(setSavedViews).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -29,23 +45,25 @@ export function TrendsPage() {
       setChartData([]);
       return;
     }
-    Promise.all(selectedTags.map((id) => api.getTrendData(id, timeRange)))
+    const hours = useCustomRange ? undefined : timeRange;
+    Promise.all(selectedTags.map((id) => api.getTrendData(id, hours || timeRange)))
       .then((results) => {
-        // Merge data by timestamp
         const merged: Record<string, any> = {};
         results.forEach((data, i) => {
           const tag = tags.find((t) => t.id === selectedTags[i]);
           data.forEach((pt: TrendDataPoint) => {
             if (!merged[pt.timestamp]) {
-              merged[pt.timestamp] = { time: new Date(pt.timestamp).toLocaleTimeString() };
+              merged[pt.timestamp] = { time: new Date(pt.timestamp).toLocaleTimeString(), fullTime: pt.timestamp };
             }
             merged[pt.timestamp][tag?.name || `tag_${i}`] = pt.value;
           });
         });
-        setChartData(Object.values(merged).sort((a, b) => a.time.localeCompare(b.time)));
+        setChartData(Object.values(merged).sort((a, b) =>
+          new Date(a.fullTime).getTime() - new Date(b.fullTime).getTime()
+        ));
       })
       .catch(() => {});
-  }, [selectedTags, timeRange, tags]);
+  }, [selectedTags, timeRange, useCustomRange, tags]);
 
   const toggleTag = (id: number) => {
     setSelectedTags((prev) =>
@@ -53,23 +71,151 @@ export function TrendsPage() {
     );
   };
 
+  const exportCsv = useCallback(() => {
+    if (chartData.length === 0) return;
+    const tagNames = selectedTags.map(id => tags.find(t => t.id === id)?.name || `tag_${id}`);
+    const header = ['Timestamp', ...tagNames].join(',');
+    const rows = chartData.map(row =>
+      [row.fullTime, ...tagNames.map(n => row[n] ?? '')].join(',')
+    );
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `trends_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, [chartData, selectedTags, tags]);
+
+  const handleSaveView = useCallback(() => {
+    if (!viewName.trim() || selectedTags.length === 0) return;
+    const view: TrendView = { name: viewName, tag_ids: selectedTags, hours: timeRange };
+    setSavedViews(prev => [...prev, view]);
+    setViewName('');
+    setShowSaveDialog(false);
+  }, [viewName, selectedTags, timeRange]);
+
+  const handleLoadView = useCallback((view: TrendView) => {
+    setSelectedTags(view.tag_ids.filter(id => tags.some(t => t.id === id)));
+    setTimeRange(view.hours);
+    setUseCustomRange(false);
+    setShowLoadDialog(false);
+  }, [tags]);
+
   return (
     <div>
-      <h1 className="text-xl font-bold text-slate-100 mb-4">Historical Trends</h1>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-bold text-slate-100">Historical Trends</h1>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowLoadDialog(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm"
+          >
+            <FolderOpen size={16} /> Load View
+          </button>
+          <button
+            onClick={() => setShowSaveDialog(true)}
+            disabled={selectedTags.length === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm disabled:opacity-50"
+          >
+            <Save size={16} /> Save View
+          </button>
+          <button
+            onClick={exportCsv}
+            disabled={chartData.length === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm disabled:opacity-50"
+          >
+            <Download size={16} /> Export CSV
+          </button>
+        </div>
+      </div>
+
+      {/* Save dialog */}
+      {showSaveDialog && (
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 mb-4">
+          <div className="text-sm font-medium text-slate-300 mb-2">Save Trend View</div>
+          <div className="flex gap-2">
+            <input
+              value={viewName}
+              onChange={e => setViewName(e.target.value)}
+              placeholder="View name"
+              className="flex-1 bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+              autoFocus
+              onKeyDown={e => { if (e.key === 'Enter') handleSaveView(); }}
+            />
+            <button onClick={handleSaveView} className="px-4 py-2 bg-blue-600 rounded-md text-sm text-white">Save</button>
+            <button onClick={() => setShowSaveDialog(false)} className="px-4 py-2 bg-slate-700 rounded-md text-sm text-slate-300">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Load dialog */}
+      {showLoadDialog && (
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 mb-4">
+          <div className="text-sm font-medium text-slate-300 mb-2">Load Trend View</div>
+          {savedViews.length > 0 ? (
+            <div className="space-y-1">
+              {savedViews.map((v, i) => (
+                <button
+                  key={i}
+                  onClick={() => handleLoadView(v)}
+                  className="w-full text-left px-3 py-2 rounded-md hover:bg-slate-700 text-sm text-slate-300"
+                >
+                  <span className="font-medium">{v.name}</span>
+                  <span className="text-slate-500 ml-2">{v.tag_ids.length} tags, {v.hours}h</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">No saved views</p>
+          )}
+          <button onClick={() => setShowLoadDialog(false)} className="mt-2 px-4 py-2 bg-slate-700 rounded-md text-sm text-slate-300">Close</button>
+        </div>
+      )}
 
       {/* Time range selector */}
-      <div className="flex gap-1 mb-4">
-        {TIME_RANGES.map((tr) => (
+      <div className="flex items-center gap-2 mb-4">
+        <div className="flex gap-1">
+          {TIME_RANGES.map((tr) => (
+            <button
+              key={tr.label}
+              onClick={() => { setTimeRange(tr.hours); setUseCustomRange(false); }}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+                !useCustomRange && timeRange === tr.hours ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
+              }`}
+            >
+              {tr.label}
+            </button>
+          ))}
+        </div>
+        <div className="border-l border-slate-700 pl-2 flex items-center gap-2">
           <button
-            key={tr.label}
-            onClick={() => setTimeRange(tr.hours)}
+            onClick={() => setUseCustomRange(!useCustomRange)}
             className={`px-3 py-1.5 rounded-md text-sm font-medium ${
-              timeRange === tr.hours ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
+              useCustomRange ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
             }`}
           >
-            {tr.label}
+            Custom
           </button>
-        ))}
+          {useCustomRange && (
+            <>
+              <input
+                type="datetime-local"
+                value={customStart}
+                onChange={e => setCustomStart(e.target.value)}
+                className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-white"
+              />
+              <span className="text-slate-500 text-sm">to</span>
+              <input
+                type="datetime-local"
+                value={customEnd}
+                onChange={e => setCustomEnd(e.target.value)}
+                className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-white"
+              />
+            </>
+          )}
+        </div>
       </div>
 
       <div className="flex gap-4">

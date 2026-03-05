@@ -35,9 +35,9 @@ export default function App() {
                 <Route path="/screen/:slug" element={<DashboardPage tagValues={tagValues} alarms={alarms} userRole={auth.user?.role} />} />
                 <Route path="/alarms" element={<AlarmsPage realtimeAlarms={alarms} />} />
                 <Route path="/trends" element={<TrendsPage />} />
-                <Route path="/jobs" element={<JobsPage />} />
+                <Route path="/jobs" element={<JobsPage user={auth.user} />} />
                 <Route path="/reports" element={<ReportsPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/settings" element={<SettingsPage user={auth.user} />} />
               </Routes>
             </AppShell>
           }

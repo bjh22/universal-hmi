@@ -14,7 +14,11 @@ export function AlarmSummaryWidget({ title, alarms, titleStyle }: Props) {
   const info = active.filter(a => a.severity === 'info').length;
 
   return (
-    <div className="bg-slate-800 rounded-xl p-4 h-full flex flex-col border border-slate-700">
+    <div
+      className="bg-slate-800 rounded-xl p-4 h-full flex flex-col border border-slate-700 cursor-pointer hover:border-slate-600 transition-colors"
+      onClick={() => window.location.href = '/alarms'}
+      title="View all alarms"
+    >
       <div className="text-xs text-slate-400 mb-2 font-medium uppercase tracking-wider" style={textStyleToCSS(titleStyle)}>{title}</div>
       <div className="flex-1 flex items-center gap-3">
         <Badge count={critical} color="bg-red-600" label="Critical" />

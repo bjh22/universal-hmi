@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Bell, Check, AlertTriangle, Info } from 'lucide-react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
+import { Bell, Check, CheckCheck, AlertTriangle, Info, Download, Search, ArrowUpDown } from 'lucide-react';
 import { api } from '../lib/api';
 import type { AlarmData } from '../types';
 
@@ -7,10 +7,19 @@ interface Props {
   realtimeAlarms: AlarmData[];
 }
 
+type SortField = 'severity' | 'triggered_at' | 'tag_name' | 'message';
+type SortDir = 'asc' | 'desc';
+
+const SEVERITY_ORDER: Record<string, number> = { critical: 0, warning: 1, info: 2 };
+
 export function AlarmsPage({ realtimeAlarms }: Props) {
   const [tab, setTab] = useState<'active' | 'history'>('active');
   const [activeAlarms, setActiveAlarms] = useState<AlarmData[]>([]);
   const [historyAlarms, setHistoryAlarms] = useState<AlarmData[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [severityFilter, setSeverityFilter] = useState<string>('all');
+  const [sortField, setSortField] = useState<SortField>('triggered_at');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
 
   useEffect(() => {
     if (tab === 'active') {
@@ -21,14 +30,93 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
   }, [tab]);
 
   // Merge realtime alarms
-  const displayAlarms = tab === 'active'
+  const rawAlarms = tab === 'active'
     ? [...realtimeAlarms.filter(a => a.state !== 'inactive'), ...activeAlarms]
     : historyAlarms;
+
+  // Deduplicate by id
+  const deduped = useMemo(() => {
+    const map = new Map<number, AlarmData>();
+    for (const a of rawAlarms) {
+      if (a.id) map.set(a.id, a);
+    }
+    return Array.from(map.values());
+  }, [rawAlarms]);
+
+  // Filter
+  const filtered = useMemo(() => {
+    return deduped.filter(a => {
+      if (severityFilter !== 'all' && a.severity !== severityFilter) return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        return (a.message?.toLowerCase().includes(q) ||
+                a.tag_name?.toLowerCase().includes(q));
+      }
+      return true;
+    });
+  }, [deduped, severityFilter, searchQuery]);
+
+  // Sort
+  const displayAlarms = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      let cmp = 0;
+      switch (sortField) {
+        case 'severity':
+          cmp = (SEVERITY_ORDER[a.severity] ?? 3) - (SEVERITY_ORDER[b.severity] ?? 3);
+          break;
+        case 'triggered_at':
+          cmp = new Date(a.triggered_at).getTime() - new Date(b.triggered_at).getTime();
+          break;
+        case 'tag_name':
+          cmp = (a.tag_name || '').localeCompare(b.tag_name || '');
+          break;
+        case 'message':
+          cmp = (a.message || '').localeCompare(b.message || '');
+          break;
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [filtered, sortField, sortDir]);
 
   const handleAck = async (id: number) => {
     await api.acknowledgeAlarm(id);
     setActiveAlarms(prev => prev.map(a => a.id === id ? { ...a, state: 'active_acked' as const } : a));
   };
+
+  const handleAckAll = useCallback(async () => {
+    const unacked = displayAlarms.filter(a => a.state === 'active_unacked' && a.id);
+    if (unacked.length === 0) return;
+    if (!window.confirm(`Acknowledge all ${unacked.length} unacknowledged alarm(s)?`)) return;
+    await Promise.all(unacked.map(a => api.acknowledgeAlarm(a.id)));
+    setActiveAlarms(prev => prev.map(a =>
+      a.state === 'active_unacked' ? { ...a, state: 'active_acked' as const } : a
+    ));
+  }, [displayAlarms]);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDir('desc');
+    }
+  };
+
+  const exportCsv = useCallback(() => {
+    const header = 'Severity,State,Tag,Message,Triggered At,Acknowledged At,Acknowledged By,Trigger Value';
+    const rows = displayAlarms.map(a =>
+      [a.severity, a.state, a.tag_name || '', `"${(a.message || '').replace(/"/g, '""')}"`,
+       a.triggered_at, a.acknowledged_at || '', a.acknowledged_by || '', a.trigger_value || ''].join(',')
+    );
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `alarms_${tab}_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, [displayAlarms, tab]);
 
   const severityIcon = (sev: string) => {
     switch (sev) {
@@ -46,9 +134,29 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
     }
   };
 
+  const unackedCount = displayAlarms.filter(a => a.state === 'active_unacked').length;
+
   return (
     <div>
-      <h1 className="text-xl font-bold text-slate-100 mb-4">Alarms</h1>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-bold text-slate-100">Alarms</h1>
+        <div className="flex gap-2">
+          {tab === 'active' && unackedCount > 0 && (
+            <button
+              onClick={handleAckAll}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600/20 text-green-400 hover:bg-green-600/30 rounded-lg text-sm font-medium"
+            >
+              <CheckCheck size={16} /> Acknowledge All ({unackedCount})
+            </button>
+          )}
+          <button
+            onClick={exportCsv}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm font-medium"
+          >
+            <Download size={16} /> Export CSV
+          </button>
+        </div>
+      </div>
 
       {/* Tabs */}
       <div className="flex gap-1 mb-4">
@@ -70,6 +178,44 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
         </button>
       </div>
 
+      {/* Filters */}
+      <div className="flex gap-3 mb-4">
+        <div className="relative flex-1 max-w-xs">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+          <input
+            type="text"
+            placeholder="Search alarms..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-8 pr-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+          />
+        </div>
+        <select
+          value={severityFilter}
+          onChange={e => setSeverityFilter(e.target.value)}
+          className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 outline-none focus:border-blue-500"
+        >
+          <option value="all">All Severities</option>
+          <option value="critical">Critical</option>
+          <option value="warning">Warning</option>
+          <option value="info">Info</option>
+        </select>
+      </div>
+
+      {/* Sortable column headers */}
+      <div className="flex gap-3 px-3 py-2 text-xs text-slate-500 font-medium uppercase mb-1">
+        {([['severity', 'Severity'], ['triggered_at', 'Time'], ['tag_name', 'Source'], ['message', 'Message']] as [SortField, string][]).map(([field, label]) => (
+          <button
+            key={field}
+            onClick={() => handleSort(field)}
+            className={`flex items-center gap-1 hover:text-slate-300 ${field === 'message' ? 'flex-1' : ''} ${field === 'severity' ? 'w-24' : field === 'triggered_at' ? 'w-40' : field === 'tag_name' ? 'w-32' : ''}`}
+          >
+            {label}
+            {sortField === field && <ArrowUpDown size={12} className="text-blue-400" />}
+          </button>
+        ))}
+      </div>
+
       {/* Alarm list */}
       <div className="space-y-2">
         {displayAlarms.map((alarm, i) => (
@@ -82,8 +228,8 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
               <div className="text-sm font-medium text-slate-200">{alarm.message}</div>
               <div className="text-xs text-slate-400">
                 {new Date(alarm.triggered_at).toLocaleString()}
-                {alarm.tag_name && ` • ${alarm.tag_name}`}
-                {alarm.trigger_value && ` • Value: ${alarm.trigger_value}`}
+                {alarm.tag_name && ` \u2022 ${alarm.tag_name}`}
+                {alarm.trigger_value && ` \u2022 Value: ${alarm.trigger_value}`}
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -111,7 +257,7 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
         {displayAlarms.length === 0 && (
           <div className="text-center text-slate-500 py-12">
             <Bell size={32} className="mx-auto mb-2 opacity-50" />
-            <p>No {tab} alarms</p>
+            <p>No {tab} alarms{searchQuery || severityFilter !== 'all' ? ' matching filters' : ''}</p>
           </div>
         )}
       </div>

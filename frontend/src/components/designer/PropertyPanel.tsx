@@ -309,6 +309,24 @@ export function PropertyPanel({ widget, onUpdateProps, onUpdateWidget, onDelete,
           </Section>
         )}
 
+        {/* OEE Widget */}
+        {widget.type === 'oee' && (
+          <Section title="OEE Tags">
+            <Field label="Availability Tag">
+              <TagPicker value={p.availabilityTag as string || ''} onChange={v => setProp('availabilityTag', v)} />
+            </Field>
+            <Field label="Performance Tag">
+              <TagPicker value={p.performanceTag as string || ''} onChange={v => setProp('performanceTag', v)} />
+            </Field>
+            <Field label="Quality Tag">
+              <TagPicker value={p.qualityTag as string || ''} onChange={v => setProp('qualityTag', v)} />
+            </Field>
+            <Field label="OEE Tag (optional)">
+              <TagPicker value={p.oeeTag as string || ''} onChange={v => setProp('oeeTag', v)} />
+            </Field>
+          </Section>
+        )}
+
         {/* Position & Size */}
         <Section title="Position & Size">
           <div className="grid grid-cols-2 gap-2">
@@ -373,6 +391,18 @@ export function PropertyPanel({ widget, onUpdateProps, onUpdateWidget, onDelete,
               className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white"
               placeholder="Optional tag" />
           </Field>
+          <Field label="Visible to roles">
+            <RoleSelector
+              selected={widget.visibleRoles || []}
+              onChange={roles => onUpdateWidget(widget.id, { visibleRoles: roles.length > 0 ? roles : undefined })}
+            />
+          </Field>
+          <Field label="Enabled for roles">
+            <RoleSelector
+              selected={widget.enabledRoles || []}
+              onChange={roles => onUpdateWidget(widget.id, { enabledRoles: roles.length > 0 ? roles : undefined })}
+            />
+          </Field>
         </Section>
 
         {/* Delete */}
@@ -432,6 +462,32 @@ function MultiValueTagsEditor({ tags, onChange }: {
         </div>
       ))}
       <button onClick={addTag} className="text-xs text-blue-400 hover:text-blue-300">+ Add tag</button>
+    </div>
+  );
+}
+
+const ROLES = ['operator', 'supervisor', 'engineer', 'designer'];
+
+function RoleSelector({ selected, onChange }: { selected: string[]; onChange: (roles: string[]) => void }) {
+  const toggle = (role: string) => {
+    onChange(selected.includes(role) ? selected.filter(r => r !== role) : [...selected, role]);
+  };
+  return (
+    <div className="flex flex-wrap gap-1">
+      {ROLES.map(role => (
+        <button
+          key={role}
+          onClick={() => toggle(role)}
+          className={`px-1.5 py-0.5 rounded text-[10px] capitalize ${
+            selected.includes(role) ? 'bg-blue-600/30 text-blue-400' : 'bg-slate-700 text-slate-500'
+          }`}
+        >
+          {role}
+        </button>
+      ))}
+      {selected.length > 0 && (
+        <span className="text-[10px] text-slate-500 self-center ml-1">({selected.length === 0 ? 'all' : selected.join(', ')})</span>
+      )}
     </div>
   );
 }

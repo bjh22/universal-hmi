@@ -65,8 +65,10 @@ export interface Widget {
   props: Record<string, unknown>;
   visible?: boolean;       // runtime visibility (default true)
   visibleTag?: string;     // tag-driven visibility: show when tag is truthy
+  visibleRoles?: string[]; // role-based visibility: show only for these roles
   enabled?: boolean;       // runtime enabled state (default true)
   enabledTag?: string;     // tag-driven enabled: enabled when tag is truthy
+  enabledRoles?: string[]; // role-based enabled: enabled only for these roles
 }
 
 export interface UserData {

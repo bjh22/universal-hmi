@@ -307,11 +307,13 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
           // Runtime visibility check
           const visibleByProp = w.visible !== false;
           const visibleByTag = w.visibleTag ? !!tagValues[w.visibleTag]?.value : true;
-          if (!visibleByProp || !visibleByTag) return null;
+          const visibleByRole = !w.visibleRoles || w.visibleRoles.length === 0 || (userRole && w.visibleRoles.includes(userRole));
+          if (!visibleByProp || !visibleByTag || !visibleByRole) return null;
 
           const enabledByProp = w.enabled !== false;
           const enabledByTag = w.enabledTag ? !!tagValues[w.enabledTag]?.value : true;
-          const isEnabled = enabledByProp && enabledByTag;
+          const enabledByRole = !w.enabledRoles || w.enabledRoles.length === 0 || (userRole && w.enabledRoles.includes(userRole));
+          const isEnabled = enabledByProp && enabledByTag && enabledByRole;
 
           return (
             <div

@@ -1,6 +1,6 @@
 import {
   Activity, Gauge, Hash, ToggleLeft, MousePointerClick,
-  SlidersHorizontal, Type, FileText, Bell, Table, ChevronDown,
+  SlidersHorizontal, Type, FileText, Bell, Table, ChevronDown, BarChart3,
 } from 'lucide-react';
 
 export interface WidgetTypeInfo {
@@ -63,6 +63,11 @@ export const WIDGET_TYPES: WidgetTypeInfo[] = [
     type: 'dropdown_select', label: 'Dropdown Select', icon: ChevronDown, category: 'input',
     defaultW: 3, defaultH: 2,
     defaultProps: { title: 'Select', tag: '', options: [] },
+  },
+  {
+    type: 'oee', label: 'OEE Display', icon: BarChart3, category: 'display',
+    defaultW: 4, defaultH: 4,
+    defaultProps: { title: 'OEE', availabilityTag: '', performanceTag: '', qualityTag: '', oeeTag: '' },
   },
   {
     type: 'text_label', label: 'Text Label', icon: Type, category: 'layout',

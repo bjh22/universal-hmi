@@ -15,12 +15,12 @@ interface AppShellProps {
 }
 
 const NAV_ITEMS = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/trends', icon: TrendingUp, label: 'Trends' },
-  { to: '/alarms', icon: Bell, label: 'Alarms' },
-  { to: '/jobs', icon: ClipboardList, label: 'Jobs' },
-  { to: '/reports', icon: BarChart3, label: 'Reports' },
-  { to: '/settings', icon: Settings, label: 'Settings' },
+  { to: '/', icon: LayoutDashboard, label: 'Dashboard', roles: null },
+  { to: '/trends', icon: TrendingUp, label: 'Trends', roles: null },
+  { to: '/alarms', icon: Bell, label: 'Alarms', roles: null },
+  { to: '/jobs', icon: ClipboardList, label: 'Jobs', roles: null },
+  { to: '/reports', icon: BarChart3, label: 'Reports', roles: null },
+  { to: '/settings', icon: Settings, label: 'Settings', roles: ['engineer', 'designer'] as string[] },
 ];
 
 export function AppShell({ children, user, wsConnected, activeAlarmCount, onLogout }: AppShellProps) {
@@ -46,7 +46,7 @@ export function AppShell({ children, user, wsConnected, activeAlarmCount, onLogo
         </div>
 
         <nav className="flex-1 py-2">
-          {NAV_ITEMS.map((item) => {
+          {NAV_ITEMS.filter(item => !item.roles || (user && item.roles.includes(user.role))).map((item) => {
             const active = location.pathname === item.to ||
               (item.to !== '/' && location.pathname.startsWith(item.to));
             return (
