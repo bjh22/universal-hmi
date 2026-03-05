@@ -1,5 +1,5 @@
 import {
-  Undo2, Redo2, Save, Grid3x3, ZoomIn, ZoomOut, X,
+  Undo2, Redo2, Save, Grid3x3, ZoomIn, ZoomOut,
 } from 'lucide-react';
 import type { GridSettings } from '../../hooks/useDesignMode';
 

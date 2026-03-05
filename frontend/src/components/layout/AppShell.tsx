@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, TrendingUp, Bell, ClipboardList, BarChart3,
-  Settings, User, Menu, X, Wifi, WifiOff, ChevronRight,
+  Settings, User, Menu, X, Wifi, WifiOff,
 } from 'lucide-react';
-import type { UserData, AlarmData } from '../../types';
+import type { UserData } from '../../types';
 
 interface AppShellProps {
   children: React.ReactNode;

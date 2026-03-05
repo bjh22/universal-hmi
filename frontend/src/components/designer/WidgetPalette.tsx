@@ -1,6 +1,6 @@
 import {
   Activity, Gauge, Hash, ToggleLeft, MousePointerClick,
-  SlidersHorizontal, Type, Image, Square,
+  SlidersHorizontal, Type,
 } from 'lucide-react';
 
 export interface WidgetTypeInfo {

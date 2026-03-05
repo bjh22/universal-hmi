@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import type { Widget, TextStyle } from '../../types';
 import { WIDGET_TYPES } from './WidgetPalette';
 
