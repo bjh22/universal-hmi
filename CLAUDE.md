@@ -36,7 +36,7 @@ frontend/              React SPA (Vite + TypeScript)
 
 **Backend:** FastAPI, SQLAlchemy 2.0 (async), SQLite (aiosqlite), Alembic, Pydantic v2, python-jose (JWT/HS256), passlib+bcrypt, asyncua, pycomm3, pymodbus, aiomqtt
 
-**Frontend:** React 19, TypeScript 5.9, Vite 7, Tailwind CSS 4, React Router 7, Recharts, Lucide icons, clsx
+**Frontend:** React 19, TypeScript 5.9, Vite 7, Shadcn/ui, Tailwind CSS 4, React Router 7, Recharts, Lucide icons, clsx
 
 ## Commands
 
@@ -74,12 +74,12 @@ JWT tokens stored in localStorage (`hmi_token`). Two login modes: password and P
 Only `designer` role can edit screens. Role checks via `require_role()` dependency.
 
 **Default seed users:**
-| Username   | Password | Role       |
-|------------|----------|------------|
-| admin      | admin    | designer   |
-| engineer   | engineer | engineer   |
-| supervisor | 1234     | supervisor |
-| operator   | 0000     | operator   |
+| Username   | Credential | Login mode | Role       |
+|------------|------------|------------|------------|
+| admin      | admin      | password   | designer   |
+| engineer   | engineer   | password   | engineer   |
+| supervisor | 1234       | PIN        | supervisor |
+| operator   | 0000       | PIN        | operator   |
 
 ## Backend Configuration
 
@@ -116,7 +116,7 @@ Environment variables prefixed with `HMI_` (or `.env` file):
 ## Key Backend Services
 
 - **TagEngine** (`services/tag_engine.py`): In-memory tag store, simulation engine (sine/ramp/random/toggle/enum_cycle), 500ms update cycle, publishes to WebSocket subscribers
-- **AlarmService** (`services/alarm_service.py`): Threshold evaluation (hi/hi_hi/lo/lo_lo), state machine (active_unacked -> active_acked -> inactive), history recording
+- **AlarmService** (`services/alarm_service.py`): Two alarm modes — **threshold** (hi/hi_hi/lo/lo_lo for analog tags) and **boolean** (discrete tag true/false triggers alarm). State machine with four states: `active_unacked`, `active_acked`, `inactive_unacked` (alarm clears before acknowledgment), `inactive` (cleared). History recording.
 - **TrendService** (`services/trend_service.py`): Time-series sampling, 90-day retention
 - **ScriptEngine** (`services/script_engine.py`): Sandboxed Python execution for button actions (5s timeout, restricted builtins)
 
@@ -125,9 +125,9 @@ Environment variables prefixed with `HMI_` (or `.env` file):
 - **API client:** `lib/api.ts` — centralized fetch wrapper with JWT Bearer headers
 - **WebSocket:** `useWebSocket` hook — auto-reconnect, maintains `tagValues` and `alarms` state
 - **Screen designer:** `useDesignMode` hook — full editor state machine (widgets, selection, undo/redo with useState for reactivity, clipboard, z-order, alignment/distribute, locking, zoom 0.5x-2x)
-- **Widget system:** `WidgetRenderer` dispatches by `widget.type`. Types: `status_indicator`, `gauge`, `counter`, `toggle`, `command_button`, `parameter_input`, `text_label`, `text_value`, `alarm_summary`, `multi_value`, `dropdown_select`
+- **Widget system:** `WidgetRenderer` dispatches by `widget.type`. Types: `status_indicator`, `gauge`, `counter`, `toggle`, `command_button`, `parameter_input`, `text_label`, `text_value`, `alarm_summary`, `multi_value`, `dropdown_select`, `oee`
 - **Tag binding:** Widgets bind to tags by name. `TagPicker` component provides searchable dropdown
-- **Visibility/Enabled:** Widgets support `visible`, `visibleTag`, `enabled`, `enabledTag` for conditional runtime rendering
+- **Visibility/Enabled:** Widgets support `visible`, `visibleTag`, `visibleRoles`, `enabled`, `enabledTag`, `enabledRoles` for conditional runtime rendering. Conditions can be combined — tag-based and role-based conditions on the same property are AND-ed.
 - **Screen management:** Create/delete screens via modal dialog, screen tabs for navigation
 
 ## Adding a New Widget Type
