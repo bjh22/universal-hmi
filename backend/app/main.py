@@ -15,6 +15,7 @@ from app.api import alarms, audit, auth, datasources, jobs, production, screens,
 from app.api.websocket import router as ws_router
 from app.core.config import settings
 from app.core.database import async_session, init_db
+from app.drivers.driver_manager import driver_manager
 from app.services.alarm_service import AlarmService
 from app.services.tag_engine import tag_engine
 from app.services.trend_service import TrendService
@@ -36,7 +37,9 @@ async def lifespan(app: FastAPI):
         await tag_engine.load_tags(session)
         await alarm_service.load_alarm_configs(session)
         await trend_service.load_trending_tags(session)
+        await driver_manager.load_and_connect(session)
 
+    tag_engine.set_driver_manager(driver_manager)
     await tag_engine.start_simulation()
     await alarm_service.start()
     await trend_service.start()
@@ -49,6 +52,7 @@ async def lifespan(app: FastAPI):
     await tag_engine.stop_simulation()
     await alarm_service.stop()
     await trend_service.stop()
+    await driver_manager.disconnect_all()
 
 
 app = FastAPI(

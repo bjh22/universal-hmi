@@ -7,9 +7,11 @@ for tags in simulation mode. Pushes updates via WebSocket.
 
 import asyncio
 import json
+import logging
 import math
 import random
 import time
+from collections import defaultdict
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -49,6 +51,8 @@ class TagEngine:
         self._tags: dict[str, Tag] = {}  # tag name -> Tag model
         self._running = False
         self._sim_task: asyncio.Task | None = None
+        self._poll_task: asyncio.Task | None = None
+        self._driver_manager = None
         self._subscribers: list[asyncio.Queue] = []
         self._start_time = time.time()
 
@@ -84,6 +88,21 @@ class TagEngine:
             case _:
                 return 0
 
+    def set_driver_manager(self, dm):
+        self._driver_manager = dm
+
+    def get_tag(self, tag_name: str) -> Tag | None:
+        return self._tags.get(tag_name)
+
+    def register_tag(self, tag: Tag):
+        """Register a new tag at runtime (e.g. after creation via API)."""
+        self._tags[tag.name] = tag
+        initial_value = self._get_initial_value(tag)
+        self._values[tag.name] = TagValue(
+            tag_id=tag.id, name=tag.name, value=initial_value,
+            data_type=tag.data_type.value, long_description=tag.long_description,
+        )
+
     def get_value(self, tag_name: str) -> TagValue | None:
         # Handle system tags
         if tag_name.startswith("$"):
@@ -105,6 +124,22 @@ class TagEngine:
         tv.quality = "good"
         self._notify_change(tag_name, tv)
         return True
+
+    async def write_value(self, tag_name: str, value) -> bool:
+        """Write a tag value, routing through the driver if the tag has a data source."""
+        tag = self._tags.get(tag_name)
+        if tag is None:
+            return False
+        # If tag is backed by a data source, write through the driver
+        if tag.data_source_id and tag.address and self._driver_manager:
+            driver = self._driver_manager.get_driver(tag.data_source_id)
+            if driver and driver.connected:
+                try:
+                    await driver.write_tag(tag.address, value)
+                except Exception:
+                    return False
+        # Update in-memory value regardless
+        return self.set_value(tag_name, value)
 
     def _notify_change(self, tag_name: str, tv: TagValue):
         msg = {"type": "tag_update", "data": {tag_name: tv.to_dict()}}
@@ -154,15 +189,18 @@ class TagEngine:
             return
         self._running = True
         self._sim_task = asyncio.create_task(self._simulation_loop())
+        if self._driver_manager:
+            self._poll_task = asyncio.create_task(self._polling_loop())
 
     async def stop_simulation(self):
         self._running = False
-        if self._sim_task:
-            self._sim_task.cancel()
-            try:
-                await self._sim_task
-            except asyncio.CancelledError:
-                pass
+        for task in [self._sim_task, self._poll_task]:
+            if task:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
 
     async def _simulation_loop(self):
         while self._running:
@@ -180,6 +218,50 @@ class TagEngine:
                     tv.value = new_val
                     tv.timestamp = datetime.now(timezone.utc)
                     changed[name] = tv.to_dict()
+
+            if changed:
+                msg = {"type": "tag_update", "data": changed}
+                for q in self._subscribers:
+                    try:
+                        q.put_nowait(msg)
+                    except asyncio.QueueFull:
+                        pass
+
+            await asyncio.sleep(0.5)
+
+    async def _polling_loop(self):
+        """Poll connected data source drivers for tag values."""
+        logger = logging.getLogger(__name__)
+        while self._running:
+            # Group tags by data_source_id for batch reads
+            ds_tags: dict[int, list[tuple[str, str]]] = defaultdict(list)
+            for name, tag in self._tags.items():
+                if tag.data_source_id and tag.address and not tag.simulation_enabled:
+                    ds_tags[tag.data_source_id].append((name, tag.address))
+
+            changed = {}
+            for ds_id, tag_list in ds_tags.items():
+                driver = self._driver_manager.get_driver(ds_id)
+                if not driver or not driver.connected:
+                    continue
+                addresses = [addr for _, addr in tag_list]
+                try:
+                    values = await driver.read_tags(addresses)
+                except Exception as e:
+                    logger.debug(f"Failed to poll data source {ds_id}: {e}")
+                    continue
+                for tag_name, addr in tag_list:
+                    if addr not in values or values[addr] is None:
+                        continue
+                    tv = self._values.get(tag_name)
+                    if tv is None:
+                        continue
+                    new_val = values[addr]
+                    if new_val != tv.value:
+                        tv.value = new_val
+                        tv.timestamp = datetime.now(timezone.utc)
+                        tv.quality = "good"
+                        changed[tag_name] = tv.to_dict()
 
             if changed:
                 msg = {"type": "tag_update", "data": changed}

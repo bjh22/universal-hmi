@@ -99,6 +99,7 @@ async def create_tag(
     session.add(tag)
     await session.flush()
     await session.refresh(tag, ["labels"])
+    tag_engine.register_tag(tag)
     return tag
 
 
@@ -116,6 +117,7 @@ async def update_tag(
         setattr(tag, key, val)
     await session.flush()
     await session.refresh(tag, ["labels"])
+    tag_engine.register_tag(tag)
     return tag
 
 
@@ -149,7 +151,7 @@ async def write_tag_value(tag_name: str, body: dict):
     value = body.get("value")
     if value is None:
         raise HTTPException(status_code=400, detail="Missing 'value' in body")
-    success = tag_engine.set_value(tag_name, value)
+    success = await tag_engine.write_value(tag_name, value)
     if not success:
         raise HTTPException(status_code=404, detail="Tag not found")
     return {"success": True}
