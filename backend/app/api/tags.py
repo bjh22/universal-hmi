@@ -99,6 +99,7 @@ async def create_tag(
     session.add(tag)
     await session.flush()
     await session.refresh(tag, ["labels"])
+    tag_engine.register_tag(tag)
     return tag
 
 
@@ -116,6 +117,7 @@ async def update_tag(
         setattr(tag, key, val)
     await session.flush()
     await session.refresh(tag, ["labels"])
+    tag_engine.register_tag(tag)
     return tag
 
 
@@ -137,19 +139,36 @@ async def get_all_tag_values():
 
 
 @router.get("/values/{tag_name}")
-async def get_tag_value(tag_name: str):
+async def get_tag_value(tag_name: str, session: AsyncSession = Depends(get_db)):
     tv = tag_engine.get_value(tag_name)
     if tv is None:
-        raise HTTPException(status_code=404, detail="Tag not found")
+        # Try loading from DB
+        result = await session.execute(select(Tag).where(Tag.name == tag_name))
+        tag = result.scalar_one_or_none()
+        if tag is None:
+            raise HTTPException(status_code=404, detail="Tag not found")
+        tag_engine.register_tag(tag)
+        tv = tag_engine.get_value(tag_name)
     return tv.to_dict()
 
 
 @router.post("/values/{tag_name}/write")
-async def write_tag_value(tag_name: str, body: dict):
+async def write_tag_value(
+    tag_name: str,
+    body: dict,
+    session: AsyncSession = Depends(get_db),
+):
     value = body.get("value")
     if value is None:
         raise HTTPException(status_code=400, detail="Missing 'value' in body")
-    success = tag_engine.set_value(tag_name, value)
+    # If tag is not yet in the engine, try loading it from the DB
+    if tag_engine.get_tag(tag_name) is None:
+        result = await session.execute(select(Tag).where(Tag.name == tag_name))
+        tag = result.scalar_one_or_none()
+        if tag is None:
+            raise HTTPException(status_code=404, detail="Tag not found")
+        tag_engine.register_tag(tag)
+    success = await tag_engine.write_value(tag_name, value)
     if not success:
         raise HTTPException(status_code=404, detail="Tag not found")
     return {"success": True}
@@ -176,9 +195,12 @@ async def import_tags_csv(
             engineering_units=td.get("engineering_units"),
         )
         session.add(tag)
-        created.append(td["name"])
+        created.append(tag)
     await session.flush()
-    return {"imported": len(created), "names": created}
+    for tag in created:
+        await session.refresh(tag)
+        tag_engine.register_tag(tag)
+    return {"imported": len(created), "names": [t.name for t in created]}
 
 
 # Tag Templates

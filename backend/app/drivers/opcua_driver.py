@@ -57,8 +57,12 @@ class OpcuaDriver(ProtocolDriver):
     async def write_tag(self, address: str, value: Any) -> bool:
         if not self._client:
             return False
+        from asyncua import ua
+
         node = self._client.get_node(address)
-        await node.write_value(value)
+        # Read the node's data type so we write with the correct VariantType
+        variant_type = await node.read_data_type_as_variant_type()
+        await node.write_value(ua.DataValue(ua.Variant(value, variant_type)))
         return True
 
     async def read_tags(self, addresses: list[str]) -> dict[str, Any]:

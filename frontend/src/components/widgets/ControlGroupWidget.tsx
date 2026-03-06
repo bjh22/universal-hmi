@@ -9,7 +9,7 @@ export type ControlItem =
   | { type: 'toggle'; tag: string; label: string }
   | { type: 'value'; tag: string; label: string; units?: string; decimalPlaces?: number }
   | { type: 'button'; tag: string; label: string; value: unknown; color?: string; confirm?: boolean; script?: string }
-  | { type: 'input'; tag: string; label: string; min?: number; max?: number; step?: number; units?: string };
+  | { type: 'input'; tag: string; label: string; min?: number; max?: number; step?: number; units?: string; decimalPlaces?: number };
 
 interface Props {
   title: string;
@@ -113,6 +113,7 @@ function InputControl({ item, tagValues, valueStyle }: { item: ControlItem & { t
   const [showKeypad, setShowKeypad] = useState(false);
   const min = item.min ?? 0;
   const max = item.max ?? 100;
+  const dp = item.decimalPlaces ?? 1;
 
   const handleSubmit = async (val: string) => {
     const num = Number(val);
@@ -133,7 +134,7 @@ function InputControl({ item, tagValues, valueStyle }: { item: ControlItem & { t
             <span className="text-xs text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{item.label}</span>
           </div>
           <span className="text-sm font-semibold text-slate-100 tabular-nums flex-shrink-0 group-hover:text-blue-300 transition-colors" style={textStyleToCSS(valueStyle)}>
-            {currentValue.toFixed(1)}
+            {currentValue.toFixed(dp)}
             {item.units && <span className="text-xs text-slate-500 font-normal ml-1">{item.units}</span>}
           </span>
         </div>
@@ -141,11 +142,12 @@ function InputControl({ item, tagValues, valueStyle }: { item: ControlItem & { t
       </button>
       {showKeypad && (
         <NumericKeypad
-          value={String(currentValue)}
+          value={currentValue.toFixed(dp)}
           title={item.label}
           units={item.units}
           min={min}
           max={max}
+          decimalPlaces={dp}
           onSubmit={handleSubmit}
           onClose={() => setShowKeypad(false)}
         />
