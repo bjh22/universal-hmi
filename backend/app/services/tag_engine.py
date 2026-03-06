@@ -19,6 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tag import SimulationBehavior, Tag
 
+logger = logging.getLogger(__name__)
+
 
 class TagValue:
     __slots__ = ("tag_id", "name", "value", "quality", "timestamp", "data_type", "long_description")
@@ -136,9 +138,9 @@ class TagEngine:
             if driver and driver.connected:
                 try:
                     await driver.write_tag(tag.address, value)
-                except Exception:
-                    return False
-        # Update in-memory value regardless
+                except Exception as e:
+                    logger.warning(f"Driver write failed for {tag_name}: {e}")
+        # Always update in-memory value
         return self.set_value(tag_name, value)
 
     def _notify_change(self, tag_name: str, tv: TagValue):
@@ -231,7 +233,6 @@ class TagEngine:
 
     async def _polling_loop(self):
         """Poll connected data source drivers for tag values."""
-        logger = logging.getLogger(__name__)
         while self._running:
             # Group tags by data_source_id for batch reads
             ds_tags: dict[int, list[tuple[str, str]]] = defaultdict(list)
