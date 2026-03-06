@@ -10,7 +10,7 @@ from app.core.database import async_session, init_db
 from app.core.security import hash_password
 from app.models.datasource import DataSource, ProtocolType
 from app.models.screen import Screen
-from app.models.tag import SimulationBehavior, Tag, TagAccessMode, TagDataType
+from app.models.tag import SimulationBehavior, Tag, TagAccessMode, TagDataType, TagLabel
 from app.models.user import User, UserRole
 
 
@@ -214,6 +214,29 @@ async def seed():
         ]
         for t in sim_tags:
             session.add(t)
+        await session.flush()
+
+        # Tag labels
+        job_setpoint_label = TagLabel(
+            name="Job Setpoint",
+            color="#3b82f6",
+            description="Tags included by default when creating a new job",
+        )
+        machine_label = TagLabel(
+            name="Machine",
+            color="#22c55e",
+            description="Machine status and sensor tags",
+        )
+        session.add(job_setpoint_label)
+        session.add(machine_label)
+        await session.flush()
+
+        # Assign "Job Setpoint" to writable setpoint tags
+        setpoint_names = {"Machine.TargetSpeed", "Machine.FilmWidth", "Machine.SealTemp"}
+        for t in sim_tags:
+            if t.name in setpoint_names:
+                t.labels.append(job_setpoint_label)
+            t.labels.append(machine_label)
 
         # Default dashboard screen
         dashboard = Screen(

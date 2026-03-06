@@ -3,12 +3,14 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     Boolean,
+    Column,
     DateTime,
     Enum,
     Float,
     ForeignKey,
     Integer,
     String,
+    Table,
     Text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -88,6 +90,11 @@ class Tag(Base):
         ForeignKey("tag_templates.id"), nullable=True
     )
 
+    # Labels (many-to-many)
+    labels: Mapped[list["TagLabel"]] = relationship(
+        secondary=tag_label_assignments, back_populates="tags", lazy="selectin"
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)
     )
@@ -95,6 +102,27 @@ class Tag(Base):
         DateTime,
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
+tag_label_assignments = Table(
+    "tag_label_assignments",
+    Base.metadata,
+    Column("tag_id", Integer, ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
+    Column("label_id", Integer, ForeignKey("tag_labels.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
+class TagLabel(Base):
+    __tablename__ = "tag_labels"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    color: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    tags: Mapped[list["Tag"]] = relationship(
+        secondary=tag_label_assignments, back_populates="labels"
     )
 
 

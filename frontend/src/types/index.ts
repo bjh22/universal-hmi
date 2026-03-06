@@ -6,6 +6,13 @@ export interface TagValue {
   timestamp: string;
 }
 
+export interface TagLabel {
+  id: number;
+  name: string;
+  color: string | null;
+  description: string | null;
+}
+
 export interface Tag {
   id: number;
   name: string;
@@ -28,6 +35,7 @@ export interface Tag {
   simulation_behavior: string | null;
   simulation_config: Record<string, unknown> | null;
   enum_mapping: Record<string, string> | null;
+  labels: TagLabel[];
 }
 
 export interface AlarmData {

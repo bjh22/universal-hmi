@@ -55,6 +55,19 @@ export const api = {
       body: JSON.stringify({ value }),
     }),
 
+  // Tag Labels
+  getTagLabels: () => request<any[]>('/tags/labels'),
+  createTagLabel: (data: { name: string; color?: string; description?: string }) =>
+    request('/tags/labels', { method: 'POST', body: JSON.stringify(data) }),
+  updateTagLabel: (id: number, data: { name: string; color?: string; description?: string }) =>
+    request(`/tags/labels/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteTagLabel: (id: number) =>
+    request(`/tags/labels/${id}`, { method: 'DELETE' }),
+  assignTagLabel: (tagId: number, labelId: number) =>
+    request(`/tags/${tagId}/labels/${labelId}`, { method: 'POST' }),
+  removeTagLabel: (tagId: number, labelId: number) =>
+    request(`/tags/${tagId}/labels/${labelId}`, { method: 'DELETE' }),
+
   // Alarms
   getActiveAlarms: () => request<any[]>('/alarms/active'),
   getAlarmHistory: (limit = 100) => request<any[]>(`/alarms/history?limit=${limit}`),

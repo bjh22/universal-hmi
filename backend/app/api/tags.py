@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_role
 from app.core.database import get_db
-from app.models.tag import Tag, TagAccessMode, TagDataType, TagTemplate
+from app.models.tag import Tag, TagAccessMode, TagDataType, TagLabel, TagTemplate
 from app.models.user import User, UserRole
 from app.services.tag_engine import tag_engine
 
@@ -37,6 +37,15 @@ class TagCreate(BaseModel):
     enum_mapping: str | None = None
 
 
+class TagLabelOut(BaseModel):
+    id: int
+    name: str
+    color: str | None
+    description: str | None
+
+    model_config = {"from_attributes": True}
+
+
 class TagOut(BaseModel):
     id: int
     name: str
@@ -53,6 +62,7 @@ class TagOut(BaseModel):
     trending_enabled: bool
     alarm_enabled: bool
     simulation_enabled: bool
+    labels: list[TagLabelOut] = []
 
     model_config = {"from_attributes": True}
 
@@ -199,3 +209,95 @@ async def create_template(
     session.add(template)
     await session.flush()
     return template
+
+
+# ─── Tag Labels ───
+
+
+class LabelCreate(BaseModel):
+    name: str
+    color: str | None = None
+    description: str | None = None
+
+
+@router.get("/labels", response_model=list[TagLabelOut])
+async def list_labels(session: AsyncSession = Depends(get_db)):
+    result = await session.execute(select(TagLabel).order_by(TagLabel.name))
+    return result.scalars().all()
+
+
+@router.post("/labels", response_model=TagLabelOut, status_code=status.HTTP_201_CREATED)
+async def create_label(
+    body: LabelCreate,
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    label = TagLabel(**body.model_dump())
+    session.add(label)
+    await session.flush()
+    return label
+
+
+@router.put("/labels/{label_id}", response_model=TagLabelOut)
+async def update_label(
+    label_id: int,
+    body: LabelCreate,
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    label = await session.get(TagLabel, label_id)
+    if not label:
+        raise HTTPException(status_code=404, detail="Label not found")
+    label.name = body.name
+    label.color = body.color
+    label.description = body.description
+    await session.flush()
+    return label
+
+
+@router.delete("/labels/{label_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_label(
+    label_id: int,
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    label = await session.get(TagLabel, label_id)
+    if not label:
+        raise HTTPException(status_code=404, detail="Label not found")
+    await session.delete(label)
+
+
+@router.post("/{tag_id}/labels/{label_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def assign_label(
+    tag_id: int,
+    label_id: int,
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    tag = await session.get(Tag, tag_id)
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found")
+    label = await session.get(TagLabel, label_id)
+    if not label:
+        raise HTTPException(status_code=404, detail="Label not found")
+    if label not in tag.labels:
+        tag.labels.append(label)
+        await session.flush()
+
+
+@router.delete("/{tag_id}/labels/{label_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_label(
+    tag_id: int,
+    label_id: int,
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    tag = await session.get(Tag, tag_id)
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found")
+    label = await session.get(TagLabel, label_id)
+    if not label:
+        raise HTTPException(status_code=404, detail="Label not found")
+    if label in tag.labels:
+        tag.labels.remove(label)
+        await session.flush()

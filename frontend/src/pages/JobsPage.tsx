@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { ClipboardList, Download, Plus, Trash2, Edit, Copy, Upload, Save, X, Search, History, Shield, ChevronDown, ChevronRight } from 'lucide-react';
+import { ClipboardList, Download, Plus, Trash2, Edit, Copy, Upload, Save, X, Search, History, Shield, ChevronDown, ChevronRight, Tag as TagIcon } from 'lucide-react';
 import { api } from '../lib/api';
 import type { JobData, JobHistoryEntry, Tag, UserData } from '../types';
 
@@ -222,6 +222,18 @@ function UploadDialog({ tags, onClose, onUploaded }: {
     [tags]
   );
 
+  // Auto-select tags labeled "Job Setpoint" on open
+  useEffect(() => {
+    const jobSetpointNames = new Set(
+      writableTags
+        .filter(t => t.labels?.some(l => l.name === 'Job Setpoint'))
+        .map(t => t.name)
+    );
+    if (jobSetpointNames.size > 0) {
+      setSelectedTags(jobSetpointNames);
+    }
+  }, [writableTags]);
+
   const filteredTags = useMemo(() => {
     if (!tagSearch) return writableTags;
     const q = tagSearch.toLowerCase();
@@ -292,6 +304,9 @@ function UploadDialog({ tags, onClose, onUploaded }: {
                     className="accent-blue-500"
                   />
                   <span className="text-slate-300">{t.name}</span>
+                  {t.labels?.map(l => (
+                    <span key={l.id} className="px-1.5 py-0.5 rounded text-[10px] font-medium" style={{ backgroundColor: (l.color || '#6b7280') + '20', color: l.color || '#6b7280' }}>{l.name}</span>
+                  ))}
                   {t.engineering_units && <span className="text-slate-600 ml-auto">{t.engineering_units}</span>}
                 </label>
               ))}
@@ -376,9 +391,20 @@ export function JobsPage({ user }: Props) {
     if (selectedJob?.id === id) setSelectedJob(null);
   };
 
+  // Get default setpoints from tags labeled "Job Setpoint"
+  const jobSetpointTags = useMemo(() =>
+    tags.filter(t => t.labels?.some(l => l.name === 'Job Setpoint')),
+    [tags]
+  );
+
   const handleCreate = async () => {
     if (!newName.trim()) return;
-    await api.createJob({ name: newName, description: newDescription, setpoints: {} });
+    // Auto-populate setpoints from "Job Setpoint" labeled tags
+    const defaultSetpoints: Record<string, unknown> = {};
+    for (const t of jobSetpointTags) {
+      defaultSetpoints[t.name] = '';
+    }
+    await api.createJob({ name: newName, description: newDescription, setpoints: defaultSetpoints });
     setNewName('');
     setNewDescription('');
     setShowCreate(false);
@@ -490,6 +516,15 @@ export function JobsPage({ user }: Props) {
               placeholder="Description (optional)"
               className={inputCls}
             />
+            {jobSetpointTags.length > 0 && (
+              <div className="flex items-start gap-1.5 text-xs text-slate-400 bg-slate-900 rounded-md px-3 py-2">
+                <TagIcon size={12} className="mt-0.5 text-blue-400 flex-shrink-0" />
+                <span>
+                  Default setpoints from <span className="text-blue-400 font-medium">Job Setpoint</span> tags:{' '}
+                  {jobSetpointTags.map(t => t.name).join(', ')}
+                </span>
+              </div>
+            )}
             <div className="flex gap-2">
               <button onClick={handleCreate} className="px-4 py-2 bg-blue-600 rounded-md text-sm text-white">Create</button>
               <button onClick={() => setShowCreate(false)} className="px-4 py-2 bg-slate-700 rounded-md text-sm text-slate-300">Cancel</button>
