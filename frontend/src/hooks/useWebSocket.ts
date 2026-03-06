@@ -6,19 +6,29 @@ interface WSMessage {
   data?: Record<string, TagValue> | AlarmData;
 }
 
+const RECONNECT_BASE_MS = 1000;
+const RECONNECT_MAX_MS = 30000;
+
 export function useWebSocket() {
   const [tagValues, setTagValues] = useState<Record<string, TagValue>>({});
   const [alarms, setAlarms] = useState<AlarmData[]>([]);
   const [connected, setConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<number | null>(null);
+  const attemptRef = useRef(0);
 
   const connect = useCallback(() => {
+    // Close any existing connection before opening a new one
+    if (wsRef.current && wsRef.current.readyState < WebSocket.CLOSING) {
+      wsRef.current.close();
+    }
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
     ws.onopen = () => {
       setConnected(true);
+      attemptRef.current = 0;
       if (reconnectTimer.current) {
         clearTimeout(reconnectTimer.current);
         reconnectTimer.current = null;
@@ -38,7 +48,9 @@ export function useWebSocket() {
 
     ws.onclose = () => {
       setConnected(false);
-      reconnectTimer.current = window.setTimeout(connect, 2000);
+      const delay = Math.min(RECONNECT_BASE_MS * 2 ** attemptRef.current, RECONNECT_MAX_MS);
+      attemptRef.current += 1;
+      reconnectTimer.current = window.setTimeout(connect, delay);
     };
 
     ws.onerror = () => {
@@ -51,8 +63,8 @@ export function useWebSocket() {
   useEffect(() => {
     connect();
     return () => {
-      if (wsRef.current) wsRef.current.close();
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      if (wsRef.current) wsRef.current.close();
     };
   }, [connect]);
 
