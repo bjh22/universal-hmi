@@ -90,6 +90,16 @@ export const api = {
 
   // Data Sources
   getDataSources: () => request<any[]>('/datasources/'),
+  createDataSource: (data: any) =>
+    request('/datasources/', { method: 'POST', body: JSON.stringify(data) }),
+  updateDataSource: (id: number, data: any) =>
+    request(`/datasources/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteDataSource: (id: number) =>
+    request(`/datasources/${id}`, { method: 'DELETE' }),
+  connectDataSource: (id: number) =>
+    request<{ connected: boolean }>(`/datasources/${id}/connect`, { method: 'POST' }),
+  browseDataSource: (id: number) =>
+    request<{ tags: any[] }>(`/datasources/${id}/browse`, { method: 'POST' }),
 
   // Users
   getUsers: () => request<any[]>('/users/'),

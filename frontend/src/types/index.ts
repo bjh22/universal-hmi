@@ -94,12 +94,15 @@ export interface JobData {
   created_at: string;
 }
 
+export type ProtocolType = 'opcua' | 'modbus_tcp' | 'ethernet_ip' | 'mqtt' | 'simulation';
+
 export interface DataSourceData {
   id: number;
   name: string;
-  protocol: string;
+  protocol: ProtocolType;
   enabled: boolean;
   connected: boolean;
+  config?: Record<string, unknown>;
 }
 
 export interface TrendDataPoint {

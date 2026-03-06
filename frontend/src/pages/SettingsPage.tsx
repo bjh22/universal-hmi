@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { Search, Download, UserPlus, Plus, Pencil, Trash2, Upload, X } from 'lucide-react';
+import { Search, Download, UserPlus, Plus, Pencil, Trash2, Upload, X, Plug, Unplug, FolderSearch } from 'lucide-react';
 import { api } from '../lib/api';
-import type { Tag, DataSourceData, AuditEntry, UserData } from '../types';
+import type { Tag, DataSourceData, ProtocolType, AuditEntry, UserData } from '../types';
 
 interface Props {
   user: UserData | null;
@@ -30,9 +30,163 @@ const EMPTY_TAG: Omit<Tag, 'id'> = {
   enum_mapping: null,
 };
 
+const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white outline-none focus:border-blue-500';
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="text-xs text-slate-400 mb-1 block">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+// ─── Generic Delete Confirmation ───
+function DeleteConfirmDialog({ title, name, onConfirm, onCancel }: {
+  title: string;
+  name: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onCancel}>
+      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 max-w-sm" onClick={e => e.stopPropagation()}>
+        <div className="text-slate-100 font-medium mb-2">{title}</div>
+        <p className="text-sm text-slate-400 mb-4">Are you sure you want to delete <span className="text-slate-200 font-mono">{name}</span>? This cannot be undone.</p>
+        <div className="flex justify-end gap-2">
+          <button onClick={onCancel} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300">Cancel</button>
+          <button onClick={onConfirm} className="px-4 py-2 bg-red-600 rounded-lg text-sm text-white hover:bg-red-700">Delete</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Protocol Config Fields ───
+const PROTOCOL_CONFIGS: Record<ProtocolType, { label: string; fields: { key: string; label: string; type: string; placeholder?: string }[] }> = {
+  opcua: {
+    label: 'OPC-UA',
+    fields: [
+      { key: 'endpoint_url', label: 'Endpoint URL', type: 'text', placeholder: 'opc.tcp://localhost:4840' },
+      { key: 'security_policy', label: 'Security Policy', type: 'text', placeholder: 'None' },
+      { key: 'security_mode', label: 'Security Mode', type: 'text', placeholder: 'None' },
+      { key: 'username', label: 'Username', type: 'text' },
+      { key: 'password', label: 'Password', type: 'password' },
+    ],
+  },
+  modbus_tcp: {
+    label: 'Modbus TCP',
+    fields: [
+      { key: 'host', label: 'Host', type: 'text', placeholder: '192.168.1.100' },
+      { key: 'port', label: 'Port', type: 'number', placeholder: '502' },
+      { key: 'unit_id', label: 'Unit ID', type: 'number', placeholder: '1' },
+    ],
+  },
+  ethernet_ip: {
+    label: 'EtherNet/IP',
+    fields: [
+      { key: 'host', label: 'Host', type: 'text', placeholder: '192.168.1.100' },
+      { key: 'slot', label: 'Slot', type: 'number', placeholder: '0' },
+    ],
+  },
+  mqtt: {
+    label: 'MQTT',
+    fields: [
+      { key: 'broker', label: 'Broker', type: 'text', placeholder: 'localhost' },
+      { key: 'port', label: 'Port', type: 'number', placeholder: '1883' },
+      { key: 'username', label: 'Username', type: 'text' },
+      { key: 'password', label: 'Password', type: 'password' },
+      { key: 'topic_prefix', label: 'Topic Prefix', type: 'text', placeholder: 'plant/' },
+    ],
+  },
+  simulation: {
+    label: 'Simulation',
+    fields: [],
+  },
+};
+
+// ─── Data Source Dialog ───
+function DataSourceDialog({ ds, onSave, onClose }: {
+  ds: { id?: number; name: string; protocol: ProtocolType; enabled: boolean; config: Record<string, unknown> };
+  onSave: (data: { id?: number; name: string; protocol: ProtocolType; enabled: boolean; config: Record<string, unknown> }) => void;
+  onClose: () => void;
+}) {
+  const [form, setForm] = useState(ds);
+  const protoFields = PROTOCOL_CONFIGS[form.protocol]?.fields || [];
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim()) return;
+    onSave(form);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-lg max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-slate-100">{form.id != null ? 'Edit Data Source' : 'New Data Source'}</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Field label="Name *">
+            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required className={inputCls} placeholder="e.g. PLC-01" />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Protocol *">
+              <select
+                value={form.protocol}
+                onChange={e => setForm(f => ({ ...f, protocol: e.target.value as ProtocolType, config: {} }))}
+                className={inputCls}
+              >
+                {Object.entries(PROTOCOL_CONFIGS).map(([k, v]) => (
+                  <option key={k} value={k}>{v.label}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Enabled">
+              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer pt-2">
+                <input type="checkbox" checked={form.enabled} onChange={e => setForm(f => ({ ...f, enabled: e.target.checked }))} className="accent-blue-500" />
+                {form.enabled ? 'Yes' : 'No'}
+              </label>
+            </Field>
+          </div>
+
+          {protoFields.length > 0 && (
+            <fieldset className="border border-slate-700 rounded-lg p-3">
+              <legend className="text-xs text-slate-400 px-2">Connection Settings</legend>
+              <div className="space-y-3">
+                {protoFields.map(f => (
+                  <Field key={f.key} label={f.label}>
+                    <input
+                      type={f.type}
+                      value={(form.config[f.key] as string) ?? ''}
+                      onChange={e => setForm(prev => ({
+                        ...prev,
+                        config: { ...prev.config, [f.key]: f.type === 'number' ? (e.target.value ? Number(e.target.value) : '') : e.target.value },
+                      }))}
+                      className={inputCls}
+                      placeholder={f.placeholder}
+                    />
+                  </Field>
+                ))}
+              </div>
+            </fieldset>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 hover:bg-slate-600">Cancel</button>
+            <button type="submit" className="px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-700">{form.id != null ? 'Save' : 'Create'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── Tag Edit Dialog ───
-function TagDialog({ tag, onSave, onClose }: {
+function TagDialog({ tag, dataSources, onSave, onClose }: {
   tag: Omit<Tag, 'id'> & { id?: number };
+  dataSources: DataSourceData[];
   onSave: (data: Omit<Tag, 'id'> & { id?: number }) => void;
   onClose: () => void;
 }) {
@@ -69,8 +223,17 @@ function TagDialog({ tag, onSave, onClose }: {
 
           {/* Data source & address */}
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Data Source ID">
-              <input type="number" value={form.data_source_id ?? ''} onChange={e => set('data_source_id', e.target.value ? Number(e.target.value) : null)} className={inputCls} />
+            <Field label="Data Source">
+              <select
+                value={form.data_source_id ?? ''}
+                onChange={e => set('data_source_id', e.target.value ? Number(e.target.value) : null)}
+                className={inputCls}
+              >
+                <option value="">None (simulation)</option>
+                {dataSources.map(ds => (
+                  <option key={ds.id} value={ds.id}>{ds.name} ({ds.protocol})</option>
+                ))}
+              </select>
             </Field>
             <Field label="Address">
               <input value={form.address || ''} onChange={e => set('address', e.target.value || null)} className={inputCls} placeholder="e.g. ns=2;s=Temperature" />
@@ -169,17 +332,6 @@ function TagDialog({ tag, onSave, onClose }: {
   );
 }
 
-const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white outline-none focus:border-blue-500';
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="text-xs text-slate-400 mb-1 block">{label}</label>
-      {children}
-    </div>
-  );
-}
-
 // ─── CSV Import Dialog ───
 function CsvImportDialog({ onImport, onClose }: {
   onImport: (tags: Record<string, unknown>[]) => void;
@@ -254,16 +406,55 @@ function CsvImportDialog({ onImport, onClose }: {
   );
 }
 
-// ─── Delete Confirmation ───
-function DeleteConfirm({ tagName, onConfirm, onCancel }: { tagName: string; onConfirm: () => void; onCancel: () => void }) {
+// ─── Browse Tags Dialog ───
+function BrowseTagsDialog({ dsId, dsName, onClose }: { dsId: number; dsName: string; onClose: () => void }) {
+  const [browsedTags, setBrowsedTags] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setLoading(true);
+    api.browseDataSource(dsId)
+      .then(r => { setBrowsedTags(r.tags || []); setLoading(false); })
+      .catch(err => { setError(err.message); setLoading(false); });
+  }, [dsId]);
+
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onCancel}>
-      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 max-w-sm" onClick={e => e.stopPropagation()}>
-        <div className="text-slate-100 font-medium mb-2">Delete Tag</div>
-        <p className="text-sm text-slate-400 mb-4">Are you sure you want to delete <span className="text-slate-200 font-mono">{tagName}</span>? This cannot be undone.</p>
-        <div className="flex justify-end gap-2">
-          <button onClick={onCancel} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300">Cancel</button>
-          <button onClick={onConfirm} className="px-4 py-2 bg-red-600 rounded-lg text-sm text-white hover:bg-red-700">Delete</button>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-slate-100">Browse Tags: {dsName}</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
+        </div>
+        {loading && <p className="text-slate-400 text-sm py-4 text-center">Browsing data source...</p>}
+        {error && <p className="text-red-400 text-sm py-4 text-center">{error}</p>}
+        {!loading && !error && browsedTags.length === 0 && (
+          <p className="text-slate-500 text-sm py-4 text-center">No tags found on this data source</p>
+        )}
+        {browsedTags.length > 0 && (
+          <div className="max-h-96 overflow-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-700 text-slate-400">
+                  <th className="text-left px-3 py-2 font-medium">Name</th>
+                  <th className="text-left px-3 py-2 font-medium">Node ID / Address</th>
+                  <th className="text-left px-3 py-2 font-medium">Type</th>
+                </tr>
+              </thead>
+              <tbody>
+                {browsedTags.map((t: any, i: number) => (
+                  <tr key={i} className="border-b border-slate-700/50">
+                    <td className="px-3 py-2 text-slate-200">{t.name || t.display_name || '\u2014'}</td>
+                    <td className="px-3 py-2 text-slate-400 font-mono text-xs">{t.node_id || t.address || '\u2014'}</td>
+                    <td className="px-3 py-2 text-slate-400">{t.data_type || '\u2014'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div className="flex justify-end mt-4">
+          <button onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300">Close</button>
         </div>
       </div>
     </div>
@@ -285,6 +476,12 @@ export function SettingsPage({ user }: Props) {
   const [deleteTagTarget, setDeleteTagTarget] = useState<Tag | null>(null);
   const [showCsvImport, setShowCsvImport] = useState(false);
 
+  // Data source state
+  const [editDs, setEditDs] = useState<{ id?: number; name: string; protocol: ProtocolType; enabled: boolean; config: Record<string, unknown> } | null>(null);
+  const [deleteDsTarget, setDeleteDsTarget] = useState<DataSourceData | null>(null);
+  const [browseDs, setBrowseDs] = useState<DataSourceData | null>(null);
+  const [connectingId, setConnectingId] = useState<number | null>(null);
+
   // Audit filters
   const [auditSearch, setAuditSearch] = useState('');
   const [auditActionFilter, setAuditActionFilter] = useState('all');
@@ -296,15 +493,21 @@ export function SettingsPage({ user }: Props) {
   const canManage = ['engineer', 'designer'].includes(user?.role || '');
 
   const loadTags = useCallback(() => { api.getTags().then(setTags).catch(() => {}); }, []);
+  const loadDataSources = useCallback(() => { api.getDataSources().then(setDataSources).catch(() => {}); }, []);
+
+  useEffect(() => {
+    // Always load data sources so tag dialog can use them
+    loadDataSources();
+  }, [loadDataSources]);
 
   useEffect(() => {
     switch (tab) {
       case 'tags': loadTags(); break;
-      case 'datasources': api.getDataSources().then(setDataSources).catch(() => {}); break;
+      case 'datasources': loadDataSources(); break;
       case 'users': api.getUsers().then(setUsers).catch(() => {}); break;
       case 'audit': api.getAuditLog(500).then(setAuditLog).catch(() => {}); break;
     }
-  }, [tab, loadTags]);
+  }, [tab, loadTags, loadDataSources]);
 
   const tagGroups = useMemo(() => {
     const groups = new Set(tags.map(t => t.group_name).filter(Boolean));
@@ -324,6 +527,7 @@ export function SettingsPage({ user }: Props) {
     });
   }, [tags, tagSearch, tagGroupFilter]);
 
+  // Tag handlers
   const handleSaveTag = useCallback(async (data: Omit<Tag, 'id'> & { id?: number }) => {
     try {
       if (data.id != null) {
@@ -359,6 +563,51 @@ export function SettingsPage({ user }: Props) {
       alert(err.message);
     }
   }, [loadTags]);
+
+  // Data source handlers
+  const handleSaveDs = useCallback(async (data: { id?: number; name: string; protocol: ProtocolType; enabled: boolean; config: Record<string, unknown> }) => {
+    try {
+      if (data.id != null) {
+        await api.updateDataSource(data.id, data);
+      } else {
+        await api.createDataSource(data);
+      }
+      setEditDs(null);
+      loadDataSources();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  }, [loadDataSources]);
+
+  const handleDeleteDs = useCallback(async () => {
+    if (!deleteDsTarget) return;
+    try {
+      await api.deleteDataSource(deleteDsTarget.id);
+      setDeleteDsTarget(null);
+      loadDataSources();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  }, [deleteDsTarget, loadDataSources]);
+
+  const handleConnect = useCallback(async (ds: DataSourceData) => {
+    setConnectingId(ds.id);
+    try {
+      await api.connectDataSource(ds.id);
+      loadDataSources();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setConnectingId(null);
+    }
+  }, [loadDataSources]);
+
+  // Data source name lookup for tag table
+  const dsNameMap = useMemo(() => {
+    const map = new Map<number, string>();
+    dataSources.forEach(ds => map.set(ds.id, ds.name));
+    return map;
+  }, [dataSources]);
 
   const auditActions = useMemo(() => {
     const actions = new Set(auditLog.map(e => e.action));
@@ -405,7 +654,7 @@ export function SettingsPage({ user }: Props) {
     URL.revokeObjectURL(url);
   };
 
-  const tabs = [
+  const tabList = [
     { key: 'tags' as const, label: 'Tags' },
     { key: 'datasources' as const, label: 'Data Sources' },
     { key: 'users' as const, label: 'Users' },
@@ -417,7 +666,7 @@ export function SettingsPage({ user }: Props) {
       <h1 className="text-xl font-bold text-slate-100 mb-4">Settings</h1>
 
       <div className="flex gap-1 mb-4">
-        {tabs.map((t) => (
+        {tabList.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
@@ -430,7 +679,7 @@ export function SettingsPage({ user }: Props) {
         ))}
       </div>
 
-      {/* Tags */}
+      {/* ═══ Tags ═══ */}
       {tab === 'tags' && (
         <div>
           <div className="flex gap-3 mb-3 flex-wrap">
@@ -476,6 +725,7 @@ export function SettingsPage({ user }: Props) {
                 <tr className="border-b border-slate-700 text-slate-400">
                   <th className="text-left px-4 py-3 font-medium">Name</th>
                   <th className="text-left px-4 py-3 font-medium">Group</th>
+                  <th className="text-left px-4 py-3 font-medium">Source</th>
                   <th className="text-left px-4 py-3 font-medium">Type</th>
                   <th className="text-left px-4 py-3 font-medium">Access</th>
                   <th className="text-left px-4 py-3 font-medium">Units</th>
@@ -493,6 +743,9 @@ export function SettingsPage({ user }: Props) {
                       {tag.description && <div className="text-[10px] text-slate-500 truncate max-w-48">{tag.description}</div>}
                     </td>
                     <td className="px-4 py-2 text-slate-400">{tag.group_name || '\u2014'}</td>
+                    <td className="px-4 py-2 text-slate-400 text-xs">
+                      {tag.data_source_id ? dsNameMap.get(tag.data_source_id) || `#${tag.data_source_id}` : '\u2014'}
+                    </td>
                     <td className="px-4 py-2 text-slate-400">{tag.data_type}</td>
                     <td className="px-4 py-2 text-slate-400">{tag.access_mode}</td>
                     <td className="px-4 py-2 text-slate-400">{tag.engineering_units || '\u2014'}</td>
@@ -514,39 +767,97 @@ export function SettingsPage({ user }: Props) {
                   </tr>
                 ))}
                 {filteredTags.length === 0 && (
-                  <tr><td colSpan={canManage ? 9 : 8} className="px-4 py-8 text-center text-slate-500">No tags found</td></tr>
+                  <tr><td colSpan={canManage ? 10 : 9} className="px-4 py-8 text-center text-slate-500">No tags found</td></tr>
                 )}
               </tbody>
             </table>
           </div>
 
-          {/* Dialogs */}
-          {editTag && <TagDialog tag={editTag} onSave={handleSaveTag} onClose={() => setEditTag(null)} />}
-          {deleteTagTarget && <DeleteConfirm tagName={deleteTagTarget.name} onConfirm={handleDeleteTag} onCancel={() => setDeleteTagTarget(null)} />}
+          {editTag && <TagDialog tag={editTag} dataSources={dataSources} onSave={handleSaveTag} onClose={() => setEditTag(null)} />}
+          {deleteTagTarget && <DeleteConfirmDialog title="Delete Tag" name={deleteTagTarget.name} onConfirm={handleDeleteTag} onCancel={() => setDeleteTagTarget(null)} />}
           {showCsvImport && <CsvImportDialog onImport={handleCsvImport} onClose={() => setShowCsvImport(false)} />}
         </div>
       )}
 
-      {/* Data Sources */}
+      {/* ═══ Data Sources ═══ */}
       {tab === 'datasources' && (
-        <div className="space-y-2">
-          {dataSources.map((ds) => (
-            <div key={ds.id} className="bg-slate-800 rounded-xl p-4 border border-slate-700 flex items-center gap-4">
-              <div className={`w-3 h-3 rounded-full ${ds.connected ? 'bg-green-400' : 'bg-red-400'}`} />
-              <div className="flex-1">
-                <div className="font-medium text-slate-200">{ds.name}</div>
-                <div className="text-xs text-slate-400">{ds.protocol} {'\u2022'} {ds.enabled ? 'Enabled' : 'Disabled'}</div>
-              </div>
-              <span className={`text-xs px-2 py-1 rounded ${ds.connected ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                {ds.connected ? 'Connected' : 'Disconnected'}
-              </span>
+        <div>
+          {canManage && (
+            <div className="flex justify-end mb-3">
+              <button
+                onClick={() => setEditDs({ name: '', protocol: 'opcua', enabled: true, config: {} })}
+                className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+              >
+                <Plus size={16} /> New Data Source
+              </button>
             </div>
-          ))}
-          {dataSources.length === 0 && <p className="text-slate-500 text-center py-8">No data sources configured</p>}
+          )}
+          <div className="space-y-2">
+            {dataSources.map((ds) => (
+              <div key={ds.id} className="bg-slate-800 rounded-xl p-4 border border-slate-700 flex items-center gap-4">
+                <div className={`w-3 h-3 rounded-full flex-shrink-0 ${ds.connected ? 'bg-green-400' : 'bg-red-400'}`} />
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-slate-200">{ds.name}</div>
+                  <div className="text-xs text-slate-400">
+                    {PROTOCOL_CONFIGS[ds.protocol]?.label || ds.protocol} {'\u2022'} {ds.enabled ? 'Enabled' : 'Disabled'}
+                  </div>
+                </div>
+                <span className={`text-xs px-2 py-1 rounded flex-shrink-0 ${ds.connected ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                  {ds.connected ? 'Connected' : 'Disconnected'}
+                </span>
+                {canManage && (
+                  <div className="flex gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => handleConnect(ds)}
+                      disabled={connectingId === ds.id}
+                      className="p-1.5 text-slate-500 hover:text-green-400 disabled:opacity-50"
+                      title={ds.connected ? 'Reconnect' : 'Connect'}
+                    >
+                      {connectingId === ds.id ? (
+                        <span className="inline-block w-4 h-4 border-2 border-slate-500 border-t-blue-400 rounded-full animate-spin" />
+                      ) : ds.connected ? (
+                        <Unplug size={16} />
+                      ) : (
+                        <Plug size={16} />
+                      )}
+                    </button>
+                    {ds.connected && (
+                      <button
+                        onClick={() => setBrowseDs(ds)}
+                        className="p-1.5 text-slate-500 hover:text-blue-400"
+                        title="Browse tags"
+                      >
+                        <FolderSearch size={16} />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setEditDs({ id: ds.id, name: ds.name, protocol: ds.protocol, enabled: ds.enabled, config: ds.config || {} })}
+                      className="p-1.5 text-slate-500 hover:text-blue-400"
+                      title="Edit"
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    <button
+                      onClick={() => setDeleteDsTarget(ds)}
+                      className="p-1.5 text-slate-500 hover:text-red-400"
+                      title="Delete"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+            {dataSources.length === 0 && <p className="text-slate-500 text-center py-8">No data sources configured</p>}
+          </div>
+
+          {editDs && <DataSourceDialog ds={editDs} onSave={handleSaveDs} onClose={() => setEditDs(null)} />}
+          {deleteDsTarget && <DeleteConfirmDialog title="Delete Data Source" name={deleteDsTarget.name} onConfirm={handleDeleteDs} onCancel={() => setDeleteDsTarget(null)} />}
+          {browseDs && <BrowseTagsDialog dsId={browseDs.id} dsName={browseDs.name} onClose={() => setBrowseDs(null)} />}
         </div>
       )}
 
-      {/* Users */}
+      {/* ═══ Users ═══ */}
       {tab === 'users' && (
         <div>
           <div className="flex justify-end mb-3">
@@ -628,7 +939,7 @@ export function SettingsPage({ user }: Props) {
         </div>
       )}
 
-      {/* Audit Trail */}
+      {/* ═══ Audit Trail ═══ */}
       {tab === 'audit' && (
         <div>
           <div className="flex gap-3 mb-3">
