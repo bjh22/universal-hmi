@@ -16,26 +16,25 @@ export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<number | null>(null);
   const attemptRef = useRef(0);
+  // Tracks whether the effect is live. Set to false during StrictMode cleanup
+  // and on unmount so stale onclose handlers don't trigger reconnects.
+  const activeRef = useRef(false);
 
   const connect = useCallback(() => {
-    // Close any existing connection before opening a new one
-    if (wsRef.current && wsRef.current.readyState < WebSocket.CLOSING) {
-      wsRef.current.close();
-    }
+    if (!activeRef.current) return;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+    wsRef.current = ws;
 
     ws.onopen = () => {
+      if (wsRef.current !== ws) return; // stale connection
       setConnected(true);
       attemptRef.current = 0;
-      if (reconnectTimer.current) {
-        clearTimeout(reconnectTimer.current);
-        reconnectTimer.current = null;
-      }
     };
 
     ws.onmessage = (event) => {
+      if (wsRef.current !== ws) return; // stale connection
       const msg: WSMessage = JSON.parse(event.data);
       if (msg.type === 'snapshot' || msg.type === 'tag_update') {
         const data = msg.data as Record<string, TagValue>;
@@ -47,7 +46,9 @@ export function useWebSocket() {
     };
 
     ws.onclose = () => {
+      if (wsRef.current !== ws) return; // stale — cleanup already replaced this socket
       setConnected(false);
+      if (!activeRef.current) return; // unmounted — don't reconnect
       const delay = Math.min(RECONNECT_BASE_MS * 2 ** attemptRef.current, RECONNECT_MAX_MS);
       attemptRef.current += 1;
       reconnectTimer.current = window.setTimeout(connect, delay);
@@ -56,15 +57,22 @@ export function useWebSocket() {
     ws.onerror = () => {
       ws.close();
     };
-
-    wsRef.current = ws;
   }, []);
 
   useEffect(() => {
+    activeRef.current = true;
     connect();
     return () => {
-      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
-      if (wsRef.current) wsRef.current.close();
+      activeRef.current = false;
+      if (reconnectTimer.current) {
+        clearTimeout(reconnectTimer.current);
+        reconnectTimer.current = null;
+      }
+      // Null wsRef before closing so the onclose handler sees a stale ref
+      // and skips the reconnect logic.
+      const ws = wsRef.current;
+      wsRef.current = null;
+      ws?.close();
     };
   }, [connect]);
 
