@@ -304,21 +304,6 @@ export function PropertyPanel({ widget, onUpdateProps, onUpdateWidget, onDelete,
           </Section>
         )}
 
-        {/* Multi-Value Group */}
-        {widget.type === 'multi_value' && (
-          <Section title="Tags">
-            <MultiValueTagsEditor
-              tags={(p.tags as Array<{ tag: string; label: string; units?: string }>) || []}
-              onChange={tags => setProp('tags', tags)}
-            />
-            <Field label="Decimal Places">
-              <input type="number" value={p.decimalPlaces ?? 1} onChange={e => setProp('decimalPlaces', Number(e.target.value))}
-                min={0} max={6}
-                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
-            </Field>
-          </Section>
-        )}
-
         {/* Dropdown Select */}
         {widget.type === 'dropdown_select' && (
           <Section title="Options">
@@ -486,37 +471,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <label className="text-[10px] text-slate-500 mb-0.5 block">{label}</label>
       {children}
-    </div>
-  );
-}
-
-function MultiValueTagsEditor({ tags, onChange }: {
-  tags: Array<{ tag: string; label: string; units?: string }>;
-  onChange: (tags: Array<{ tag: string; label: string; units?: string }>) => void;
-}) {
-  const addTag = () => onChange([...tags, { tag: '', label: '', units: '' }]);
-  const removeTag = (idx: number) => onChange(tags.filter((_, i) => i !== idx));
-  const updateTag = (idx: number, patch: Partial<{ tag: string; label: string; units: string }>) =>
-    onChange(tags.map((t, i) => i === idx ? { ...t, ...patch } : t));
-
-  return (
-    <div className="space-y-2">
-      {tags.map((entry, i) => (
-        <div key={i} className="space-y-1 p-1.5 bg-slate-800 rounded">
-          <div className="flex items-center gap-1">
-            <input type="text" value={entry.tag} onChange={e => updateTag(i, { tag: e.target.value })}
-              placeholder="Tag name" className="flex-1 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
-            <button onClick={() => removeTag(i)} className="text-red-400 hover:text-red-300 text-xs px-1">&times;</button>
-          </div>
-          <div className="flex gap-1">
-            <input type="text" value={entry.label} onChange={e => updateTag(i, { label: e.target.value })}
-              placeholder="Label" className="flex-1 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
-            <input type="text" value={entry.units || ''} onChange={e => updateTag(i, { units: e.target.value })}
-              placeholder="Units" className="w-16 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
-          </div>
-        </div>
-      ))}
-      <button onClick={addTag} className="text-xs text-blue-400 hover:text-blue-300">+ Add tag</button>
     </div>
   );
 }

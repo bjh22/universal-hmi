@@ -8,7 +8,6 @@ import { ParameterInput } from './ParameterInput';
 import { TextLabelWidget } from './TextLabelWidget';
 import { TextValueWidget } from './TextValueWidget';
 import { AlarmSummaryWidget } from './AlarmSummaryWidget';
-import { MultiValueWidget } from './MultiValueWidget';
 import { DropdownSelectWidget } from './DropdownSelectWidget';
 import { OeeWidget } from './OeeWidget';
 import { ControlGroupWidget, type ControlItem } from './ControlGroupWidget';
@@ -41,8 +40,14 @@ export function WidgetRenderer({ widget, tagValues, alarms = [] }: Props) {
       return <TextValueWidget title={p.title as string} tag={p.tag as string} tagValues={tagValues} units={p.units as string} format={p.format as string} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} />;
     case 'alarm_summary':
       return <AlarmSummaryWidget title={p.title as string} alarms={alarms} titleStyle={p.titleStyle as undefined} />;
-    case 'multi_value':
-      return <MultiValueWidget title={p.title as string} tags={p.tags as Array<{ tag: string; label: string; units?: string }>} tagValues={tagValues} decimalPlaces={p.decimalPlaces as number} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} />;
+    case 'multi_value': {
+      // Legacy: convert multi_value tags to control_group value controls
+      const mvTags = (p.tags as Array<{ tag: string; label: string; units?: string }>) || [];
+      const mvControls: ControlItem[] = mvTags.map(t => ({
+        type: 'value' as const, tag: t.tag, label: t.label, units: t.units, decimalPlaces: p.decimalPlaces as number ?? 1,
+      }));
+      return <ControlGroupWidget title={p.title as string} controls={mvControls} tagValues={tagValues} columns={p.columns as number} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} />;
+    }
     case 'dropdown_select':
       return <DropdownSelectWidget title={p.title as string} tag={p.tag as string} tagValues={tagValues} options={p.options as Array<{ label: string; value: unknown }>} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} />;
     case 'oee':
