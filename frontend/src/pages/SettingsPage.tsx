@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { Search, Download, UserPlus, Plus, Pencil, Trash2, Upload, X, Plug, Unplug, FolderSearch } from 'lucide-react';
+import { Search, Download, UserPlus, Plus, Pencil, Trash2, Upload, X, Plug, Unplug, FolderSearch, Tag as TagIcon } from 'lucide-react';
 import { api } from '../lib/api';
-import type { Tag, DataSourceData, ProtocolType, AuditEntry, UserData } from '../types';
+import type { Tag, TagLabel, DataSourceData, ProtocolType, AuditEntry, UserData } from '../types';
 
 interface Props {
   user: UserData | null;
@@ -29,7 +29,13 @@ const EMPTY_TAG: Omit<Tag, 'id'> = {
   simulation_behavior: null,
   simulation_config: null,
   enum_mapping: null,
+  labels: [],
 };
+
+const LABEL_COLORS = [
+  '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
+  '#ec4899', '#06b6d4', '#f97316', '#6366f1', '#14b8a6',
+];
 
 const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white outline-none focus:border-blue-500';
 
@@ -185,15 +191,41 @@ function DataSourceDialog({ ds, onSave, onClose }: {
 }
 
 // ─── Tag Edit Dialog ───
-function TagDialog({ tag, dataSources, onSave, onClose }: {
+function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
   tag: Omit<Tag, 'id'> & { id?: number };
   dataSources: DataSourceData[];
+  allLabels: TagLabel[];
   onSave: (data: Omit<Tag, 'id'> & { id?: number }) => void;
   onClose: () => void;
 }) {
   const [form, setForm] = useState(tag);
   const set = useCallback(<K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm(f => ({ ...f, [k]: v })), []);
+  const [labelSearch, setLabelSearch] = useState('');
+  const [showLabelDropdown, setShowLabelDropdown] = useState(false);
+  const labelRef = useRef<HTMLDivElement>(null);
+
+  const selectedLabelIds = new Set((form.labels || []).map(l => l.id));
+  const filteredLabels = allLabels.filter(l =>
+    !selectedLabelIds.has(l.id) && l.name.toLowerCase().includes(labelSearch.toLowerCase())
+  );
+
+  const toggleLabel = useCallback((label: TagLabel) => {
+    setForm(f => {
+      const current = f.labels || [];
+      const exists = current.some(l => l.id === label.id);
+      return { ...f, labels: exists ? current.filter(l => l.id !== label.id) : [...current, label] };
+    });
+    setLabelSearch('');
+  }, []);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (labelRef.current && !labelRef.current.contains(e.target as Node)) setShowLabelDropdown(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -210,14 +242,43 @@ function TagDialog({ tag, dataSources, onSave, onClose }: {
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Identity */}
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Name *">
-              <input value={form.name} onChange={e => set('name', e.target.value)} required className={inputCls} placeholder="e.g. Tank1.Level" />
-            </Field>
-            <Field label="Group">
-              <input value={form.group_name || ''} onChange={e => set('group_name', e.target.value || null)} className={inputCls} placeholder="e.g. Process" />
-            </Field>
-          </div>
+          <Field label="Name *">
+            <input value={form.name} onChange={e => set('name', e.target.value)} required className={inputCls} placeholder="e.g. Tank1.Level" />
+          </Field>
+          <Field label="Labels">
+            <div ref={labelRef} className="relative">
+              <div className="flex flex-wrap gap-1.5 min-h-[38px] w-full bg-slate-700 border border-slate-600 rounded-md px-2 py-1.5 cursor-text"
+                onClick={() => setShowLabelDropdown(true)}>
+                {(form.labels || []).map(l => (
+                  <span key={l.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs text-white"
+                    style={{ backgroundColor: l.color || '#3b82f6' }}>
+                    {l.name}
+                    <button type="button" onClick={e => { e.stopPropagation(); toggleLabel(l); }}
+                      className="hover:text-slate-200 ml-0.5">&times;</button>
+                  </span>
+                ))}
+                <input
+                  value={labelSearch}
+                  onChange={e => { setLabelSearch(e.target.value); setShowLabelDropdown(true); }}
+                  onFocus={() => setShowLabelDropdown(true)}
+                  placeholder={form.labels?.length ? '' : 'Search labels...'}
+                  className="flex-1 min-w-[80px] bg-transparent text-sm text-white outline-none"
+                />
+              </div>
+              {showLabelDropdown && filteredLabels.length > 0 && (
+                <div className="absolute z-10 mt-1 w-full bg-slate-700 border border-slate-600 rounded-md shadow-lg max-h-40 overflow-y-auto">
+                  {filteredLabels.map(l => (
+                    <button key={l.id} type="button"
+                      onClick={() => { toggleLabel(l); setShowLabelDropdown(false); }}
+                      className="w-full text-left px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-600 flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: l.color || '#3b82f6' }} />
+                      {l.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Field>
           <Field label="Description">
             <input value={form.description || ''} onChange={e => set('description', e.target.value || null)} className={inputCls} />
           </Field>
@@ -481,10 +542,13 @@ export function SettingsPage({ user }: Props) {
 
   // Tag state
   const [tagSearch, setTagSearch] = useState('');
-  const [tagGroupFilter, setTagGroupFilter] = useState('all');
+  const [tagLabelFilter, setTagLabelFilter] = useState('all');
+  const [allLabels, setAllLabels] = useState<TagLabel[]>([]);
   const [editTag, setEditTag] = useState<(Omit<Tag, 'id'> & { id?: number }) | null>(null);
   const [deleteTagTarget, setDeleteTagTarget] = useState<Tag | null>(null);
   const [showCsvImport, setShowCsvImport] = useState(false);
+  const [editLabel, setEditLabel] = useState<{ id?: number; name: string; color: string; description: string } | null>(null);
+  const [deleteLabelTarget, setDeleteLabelTarget] = useState<TagLabel | null>(null);
 
   // Data source state
   const [editDs, setEditDs] = useState<{ id?: number; name: string; protocol: ProtocolType; enabled: boolean; config: Record<string, unknown> } | null>(null);
@@ -503,6 +567,7 @@ export function SettingsPage({ user }: Props) {
   const canManage = ['engineer', 'designer'].includes(user?.role || '');
 
   const loadTags = useCallback(() => { api.getTags().then(setTags).catch(() => {}); }, []);
+  const loadLabels = useCallback(() => { api.getTagLabels().then(setAllLabels).catch(() => {}); }, []);
   const loadDataSources = useCallback(() => { api.getDataSources().then(setDataSources).catch(() => {}); }, []);
 
   useEffect(() => {
@@ -512,38 +577,47 @@ export function SettingsPage({ user }: Props) {
 
   useEffect(() => {
     switch (tab) {
-      case 'tags': loadTags(); break;
+      case 'tags': loadTags(); loadLabels(); break;
       case 'datasources': loadDataSources(); break;
       case 'users': api.getUsers().then(setUsers).catch(() => {}); break;
       case 'audit': api.getAuditLog(500).then(setAuditLog).catch(() => {}); break;
     }
-  }, [tab, loadTags, loadDataSources]);
-
-  const tagGroups = useMemo(() => {
-    const groups = new Set(tags.map(t => t.group_name).filter(Boolean));
-    return Array.from(groups).sort() as string[];
-  }, [tags]);
+  }, [tab, loadTags, loadLabels, loadDataSources]);
 
   const filteredTags = useMemo(() => {
     return tags.filter(t => {
-      if (tagGroupFilter !== 'all' && t.group_name !== tagGroupFilter) return false;
+      if (tagLabelFilter !== 'all') {
+        const labelId = Number(tagLabelFilter);
+        if (!(t.labels || []).some(l => l.id === labelId)) return false;
+      }
       if (tagSearch) {
         const q = tagSearch.toLowerCase();
         return t.name.toLowerCase().includes(q) ||
                (t.description || '').toLowerCase().includes(q) ||
-               (t.group_name || '').toLowerCase().includes(q);
+               (t.labels || []).some(l => l.name.toLowerCase().includes(q));
       }
       return true;
     });
-  }, [tags, tagSearch, tagGroupFilter]);
+  }, [tags, tagSearch, tagLabelFilter]);
 
   // Tag handlers
   const handleSaveTag = useCallback(async (data: Omit<Tag, 'id'> & { id?: number }) => {
     try {
+      let savedTag: Tag;
       if (data.id != null) {
-        await api.updateTag(data.id, data);
+        savedTag = await api.updateTag(data.id, data) as Tag;
       } else {
-        await api.createTag(data);
+        savedTag = await api.createTag(data) as Tag;
+      }
+      // Sync label assignments
+      const tagId = savedTag.id ?? data.id!;
+      const oldLabelIds = new Set((savedTag.labels || []).map(l => l.id));
+      const newLabelIds = new Set((data.labels || []).map(l => l.id));
+      for (const lid of newLabelIds) {
+        if (!oldLabelIds.has(lid)) await api.assignTagLabel(tagId, lid);
+      }
+      for (const lid of oldLabelIds) {
+        if (!newLabelIds.has(lid)) await api.removeTagLabel(tagId, lid);
       }
       setEditTag(null);
       loadTags();
@@ -573,6 +647,33 @@ export function SettingsPage({ user }: Props) {
       alert(err.message);
     }
   }, [loadTags]);
+
+  // Label handlers
+  const handleSaveLabel = useCallback(async (data: { id?: number; name: string; color: string; description: string }) => {
+    try {
+      if (data.id != null) {
+        await api.updateTagLabel(data.id, data);
+      } else {
+        await api.createTagLabel(data);
+      }
+      setEditLabel(null);
+      loadLabels();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  }, [loadLabels]);
+
+  const handleDeleteLabel = useCallback(async () => {
+    if (!deleteLabelTarget) return;
+    try {
+      await api.deleteTagLabel(deleteLabelTarget.id);
+      setDeleteLabelTarget(null);
+      loadLabels();
+      loadTags(); // refresh tags to reflect removed labels
+    } catch (err: any) {
+      alert(err.message);
+    }
+  }, [deleteLabelTarget, loadLabels, loadTags]);
 
   // Data source handlers
   const handleSaveDs = useCallback(async (data: { id?: number; name: string; protocol: ProtocolType; enabled: boolean; config: Record<string, unknown> }) => {
@@ -704,12 +805,12 @@ export function SettingsPage({ user }: Props) {
               />
             </div>
             <select
-              value={tagGroupFilter}
-              onChange={e => setTagGroupFilter(e.target.value)}
+              value={tagLabelFilter}
+              onChange={e => setTagLabelFilter(e.target.value)}
               className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 outline-none"
             >
-              <option value="all">All Groups</option>
-              {tagGroups.map(g => <option key={g} value={g}>{g}</option>)}
+              <option value="all">All Labels</option>
+              {allLabels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
             <span className="self-center text-xs text-slate-500">{filteredTags.length} / {tags.length} tags</span>
             {canManage && (
@@ -734,7 +835,7 @@ export function SettingsPage({ user }: Props) {
               <thead>
                 <tr className="border-b border-slate-700 text-slate-400">
                   <th className="text-left px-4 py-3 font-medium">Name</th>
-                  <th className="text-left px-4 py-3 font-medium">Group</th>
+                  <th className="text-left px-4 py-3 font-medium">Labels</th>
                   <th className="text-left px-4 py-3 font-medium">Source</th>
                   <th className="text-left px-4 py-3 font-medium">Type</th>
                   <th className="text-left px-4 py-3 font-medium">Access</th>
@@ -752,7 +853,18 @@ export function SettingsPage({ user }: Props) {
                       <div className="text-slate-200">{tag.name}</div>
                       {tag.description && <div className="text-[10px] text-slate-500 truncate max-w-48">{tag.description}</div>}
                     </td>
-                    <td className="px-4 py-2 text-slate-400">{tag.group_name || '\u2014'}</td>
+                    <td className="px-4 py-2">
+                      <div className="flex flex-wrap gap-1">
+                        {(tag.labels || []).length > 0
+                          ? tag.labels.map(l => (
+                              <span key={l.id} className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] text-white"
+                                style={{ backgroundColor: l.color || '#3b82f6' }}>
+                                {l.name}
+                              </span>
+                            ))
+                          : <span className="text-slate-500">{'\u2014'}</span>}
+                      </div>
+                    </td>
                     <td className="px-4 py-2 text-slate-400 text-xs">
                       {tag.data_source_id ? dsNameMap.get(tag.data_source_id) || `#${tag.data_source_id}` : '\u2014'}
                     </td>
@@ -783,9 +895,85 @@ export function SettingsPage({ user }: Props) {
             </table>
           </div>
 
-          {editTag && <TagDialog tag={editTag} dataSources={dataSources} onSave={handleSaveTag} onClose={() => setEditTag(null)} />}
+          {editTag && <TagDialog tag={editTag} dataSources={dataSources} allLabels={allLabels} onSave={handleSaveTag} onClose={() => setEditTag(null)} />}
           {deleteTagTarget && <DeleteConfirmDialog title="Delete Tag" name={deleteTagTarget.name} onConfirm={handleDeleteTag} onCancel={() => setDeleteTagTarget(null)} />}
           {showCsvImport && <CsvImportDialog onImport={handleCsvImport} onClose={() => setShowCsvImport(false)} />}
+
+          {/* Label Management */}
+          <div className="mt-6">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-slate-300 flex items-center gap-1.5"><TagIcon size={14} /> Labels</h2>
+              {canManage && (
+                <button
+                  onClick={() => setEditLabel({ name: '', color: LABEL_COLORS[allLabels.length % LABEL_COLORS.length], description: '' })}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-xs font-medium"
+                >
+                  <Plus size={14} /> New Label
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {allLabels.map(l => (
+                <div key={l.id} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs text-white"
+                  style={{ backgroundColor: l.color || '#3b82f6' }}>
+                  {l.name}
+                  {canManage && (
+                    <>
+                      <button onClick={() => setEditLabel({ id: l.id, name: l.name, color: l.color || '#3b82f6', description: l.description || '' })}
+                        className="hover:text-slate-200 ml-1" title="Edit">
+                        <Pencil size={10} />
+                      </button>
+                      <button onClick={() => setDeleteLabelTarget(l)}
+                        className="hover:text-slate-200" title="Delete">
+                        <Trash2 size={10} />
+                      </button>
+                    </>
+                  )}
+                </div>
+              ))}
+              {allLabels.length === 0 && <span className="text-slate-500 text-xs">No labels defined yet</span>}
+            </div>
+          </div>
+
+          {/* Label Edit Dialog */}
+          {editLabel && (
+            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setEditLabel(null)}>
+              <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-slate-100">{editLabel.id != null ? 'Edit Label' : 'New Label'}</h2>
+                  <button onClick={() => setEditLabel(null)} className="text-slate-400 hover:text-white"><X size={20} /></button>
+                </div>
+                <div className="space-y-3">
+                  <Field label="Name *">
+                    <input value={editLabel.name} onChange={e => setEditLabel(l => l ? { ...l, name: e.target.value } : l)} className={inputCls} placeholder="e.g. Process" />
+                  </Field>
+                  <Field label="Color">
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={editLabel.color} onChange={e => setEditLabel(l => l ? { ...l, color: e.target.value } : l)}
+                        className="w-8 h-8 rounded border border-slate-600 cursor-pointer bg-transparent" />
+                      <div className="flex gap-1">
+                        {LABEL_COLORS.map(c => (
+                          <button key={c} type="button" onClick={() => setEditLabel(l => l ? { ...l, color: c } : l)}
+                            className={`w-5 h-5 rounded-full border-2 ${editLabel.color === c ? 'border-white' : 'border-transparent'}`}
+                            style={{ backgroundColor: c }} />
+                        ))}
+                      </div>
+                    </div>
+                  </Field>
+                  <Field label="Description">
+                    <input value={editLabel.description} onChange={e => setEditLabel(l => l ? { ...l, description: e.target.value } : l)} className={inputCls} />
+                  </Field>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button onClick={() => setEditLabel(null)} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 hover:bg-slate-600">Cancel</button>
+                    <button onClick={() => editLabel.name.trim() && handleSaveLabel(editLabel)} className="px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-700">
+                      {editLabel.id != null ? 'Save' : 'Create'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          {deleteLabelTarget && <DeleteConfirmDialog title="Delete Label" name={deleteLabelTarget.name} onConfirm={handleDeleteLabel} onCancel={() => setDeleteLabelTarget(null)} />}
         </div>
       )}
 
