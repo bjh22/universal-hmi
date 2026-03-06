@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { ClipboardList, Download, Plus, Trash2, Edit, Copy, Upload, Save, X, Search, History, Shield, ChevronDown, ChevronRight, Tag as TagIcon } from 'lucide-react';
 import { api } from '../lib/api';
+import { NumericKeypad, AlphaKeyboard } from '../components/widgets/TouchInput';
 import type { JobData, JobHistoryEntry, Tag, UserData } from '../types';
 
 interface Props {
@@ -9,6 +10,15 @@ interface Props {
 
 const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-3 text-sm text-white outline-none focus:border-blue-500 min-h-[44px]';
 
+// ─── Helper: parse a string into a typed value ───
+function parseTypedValue(val: string): unknown {
+  if (val === 'true') return true;
+  if (val === 'false') return false;
+  const num = Number(val);
+  if (!isNaN(num) && val.trim() !== '') return num;
+  return val;
+}
+
 // ─── Setpoint Editor (structured tag picker) ───
 function SetpointEditor({ value, onChange, tags }: {
   value: Record<string, unknown>;
@@ -16,6 +26,7 @@ function SetpointEditor({ value, onChange, tags }: {
   tags: Tag[];
 }) {
   const entries = Object.entries(value);
+  const [keypad, setKeypad] = useState<{ key: string; kind: 'numeric' | 'alpha' } | null>(null);
 
   const addRow = () => {
     onChange({ ...value, '': '' });
@@ -30,14 +41,19 @@ function SetpointEditor({ value, onChange, tags }: {
   };
 
   const updateValue = (key: string, val: string) => {
-    const num = Number(val);
-    onChange({ ...value, [key]: val === 'true' ? true : val === 'false' ? false : !isNaN(num) && val.trim() !== '' ? num : val });
+    onChange({ ...value, [key]: parseTypedValue(val) });
   };
 
   const removeRow = (key: string) => {
     const copy = { ...value };
     delete copy[key];
     onChange(copy);
+  };
+
+  const openKeypad = (key: string) => {
+    const current = value[key];
+    const isNumeric = typeof current === 'number' || (typeof current === 'string' && current !== '' && !isNaN(Number(current)));
+    setKeypad({ key, kind: isNumeric || current === '' ? 'numeric' : 'alpha' });
   };
 
   return (
@@ -58,14 +74,17 @@ function SetpointEditor({ value, onChange, tags }: {
               className={inputCls + ' text-xs'}
             />
           </div>
-          <div className="w-32">
-            <input
-              value={String(val ?? '')}
-              onChange={e => updateValue(key, e.target.value)}
-              placeholder="Value"
-              className={inputCls + ' text-xs'}
-            />
-          </div>
+          <button
+            type="button"
+            onClick={() => openKeypad(key)}
+            className="w-32 min-h-[44px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white text-left hover:border-blue-500 active:scale-95 transition-all"
+          >
+            {val !== '' && val != null ? (
+              <span>{String(val)}</span>
+            ) : (
+              <span className="text-slate-500">Tap to set</span>
+            )}
+          </button>
           <button type="button" onClick={() => removeRow(key)} className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:text-red-400 active:scale-95 transition-transform">
             <X size={18} />
           </button>
@@ -74,6 +93,22 @@ function SetpointEditor({ value, onChange, tags }: {
       <datalist id="tag-names">
         {tags.map(t => <option key={t.id} value={t.name} />)}
       </datalist>
+      {keypad?.kind === 'numeric' && (
+        <NumericKeypad
+          value={String(value[keypad.key] ?? '')}
+          title={keypad.key || 'Setpoint Value'}
+          onSubmit={val => { updateValue(keypad.key, val); setKeypad(null); }}
+          onClose={() => setKeypad(null)}
+        />
+      )}
+      {keypad?.kind === 'alpha' && (
+        <AlphaKeyboard
+          value={String(value[keypad.key] ?? '')}
+          title={keypad.key || 'Setpoint Value'}
+          onSubmit={val => { updateValue(keypad.key, val); setKeypad(null); }}
+          onClose={() => setKeypad(null)}
+        />
+      )}
     </div>
   );
 }
@@ -85,6 +120,7 @@ function ConditionsEditor({ value, onChange, tags }: {
   tags: Tag[];
 }) {
   const guards = value.guards || [];
+  const [keypad, setKeypad] = useState<{ idx: number; kind: 'numeric' | 'alpha' } | null>(null);
 
   const addGuard = () => {
     onChange({ guards: [...guards, { tag: '', value: '' }] });
@@ -94,15 +130,19 @@ function ConditionsEditor({ value, onChange, tags }: {
     const updated = guards.map((g, i) => {
       if (i !== idx) return g;
       if (field === 'tag') return { ...g, tag: val };
-      const num = Number(val);
-      const parsed = val === 'true' ? true : val === 'false' ? false : !isNaN(num) && val.trim() !== '' ? num : val;
-      return { ...g, value: parsed };
+      return { ...g, value: parseTypedValue(val) };
     });
     onChange({ guards: updated });
   };
 
   const removeGuard = (idx: number) => {
     onChange({ guards: guards.filter((_, i) => i !== idx) });
+  };
+
+  const openKeypad = (idx: number) => {
+    const current = guards[idx].value;
+    const isNumeric = typeof current === 'number' || (typeof current === 'string' && current !== '' && !isNaN(Number(current)));
+    setKeypad({ idx, kind: isNumeric || current === '' ? 'numeric' : 'alpha' });
   };
 
   return (
@@ -124,20 +164,39 @@ function ConditionsEditor({ value, onChange, tags }: {
               className={inputCls + ' text-xs'}
             />
           </div>
-          <span className="text-xs text-slate-500">=</span>
-          <div className="w-28">
-            <input
-              value={String(g.value ?? '')}
-              onChange={e => updateGuard(idx, 'value', e.target.value)}
-              placeholder="Value"
-              className={inputCls + ' text-xs'}
-            />
-          </div>
+          <span className="text-sm text-slate-500">=</span>
+          <button
+            type="button"
+            onClick={() => openKeypad(idx)}
+            className="w-28 min-h-[44px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white text-left hover:border-blue-500 active:scale-95 transition-all"
+          >
+            {g.value !== '' && g.value != null ? (
+              <span>{String(g.value)}</span>
+            ) : (
+              <span className="text-slate-500">Tap to set</span>
+            )}
+          </button>
           <button type="button" onClick={() => removeGuard(idx)} className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:text-red-400 active:scale-95 transition-transform">
             <X size={18} />
           </button>
         </div>
       ))}
+      {keypad?.kind === 'numeric' && (
+        <NumericKeypad
+          value={String(guards[keypad.idx].value ?? '')}
+          title={guards[keypad.idx].tag || 'Guard Value'}
+          onSubmit={val => { updateGuard(keypad.idx, 'value', val); setKeypad(null); }}
+          onClose={() => setKeypad(null)}
+        />
+      )}
+      {keypad?.kind === 'alpha' && (
+        <AlphaKeyboard
+          value={String(guards[keypad.idx].value ?? '')}
+          title={guards[keypad.idx].tag || 'Guard Value'}
+          onSubmit={val => { updateGuard(keypad.idx, 'value', val); setKeypad(null); }}
+          onClose={() => setKeypad(null)}
+        />
+      )}
     </div>
   );
 }
