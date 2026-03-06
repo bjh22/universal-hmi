@@ -216,7 +216,17 @@ export function PropertyPanel({ widget, onUpdateProps, onUpdateWidget, onDelete,
         )}
 
         {widget.type === 'gauge' && (
-          <Section title="Thresholds">
+          <Section title="Display & Thresholds">
+            <Field label="Display Mode">
+              <select value={p.displayMode as string || 'bar'} onChange={e => setProp('displayMode', e.target.value)}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white">
+                <option value="bar">Horizontal Bar</option>
+                <option value="radial">Radial / Dial</option>
+                <option value="donut">Donut / Ring</option>
+                <option value="vertical">Vertical Bar</option>
+                <option value="numeric">Numeric Only</option>
+              </select>
+            </Field>
             <div className="grid grid-cols-2 gap-2">
               <Field label="Warning">
                 <input type="number" value={p.warning ?? ''} onChange={e => setProp('warning', e.target.value ? Number(e.target.value) : undefined)}
