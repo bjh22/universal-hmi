@@ -6,6 +6,8 @@ Run: python -m app.seed
 import asyncio
 import json
 
+from sqlalchemy import select
+
 from app.core.database import async_session, init_db
 from app.core.security import hash_password
 from app.models.datasource import DataSource, ProtocolType
@@ -18,45 +20,39 @@ async def seed():
     await init_db()
 
     async with async_session() as session:
-        # Default users
-        users = [
-            User(
-                username="admin",
-                display_name="Administrator",
-                hashed_password=hash_password("admin"),
-                role=UserRole.DESIGNER,
-            ),
-            User(
-                username="engineer",
-                display_name="Engineer",
-                hashed_password=hash_password("engineer"),
-                role=UserRole.ENGINEER,
-            ),
-            User(
-                username="supervisor",
-                display_name="Supervisor",
-                hashed_password=hash_password("1234"),
-                role=UserRole.SUPERVISOR,
-            ),
-            User(
-                username="operator",
-                display_name="Operator",
-                hashed_password=hash_password("0000"),
-                role=UserRole.OPERATOR,
-            ),
+        # Default users (skip existing)
+        user_defs = [
+            ("admin", "Administrator", hash_password("admin"), UserRole.DESIGNER),
+            ("engineer", "Engineer", hash_password("engineer"), UserRole.ENGINEER),
+            ("supervisor", "Supervisor", hash_password("1234"), UserRole.SUPERVISOR),
+            ("operator", "Operator", hash_password("0000"), UserRole.OPERATOR),
         ]
-        for u in users:
-            session.add(u)
+        for username, display_name, hashed_pw, role in user_defs:
+            existing = await session.execute(
+                select(User).where(User.username == username)
+            )
+            if existing.scalar_one_or_none() is None:
+                session.add(User(
+                    username=username,
+                    display_name=display_name,
+                    hashed_password=hashed_pw,
+                    role=role,
+                ))
 
-        # Simulation data source
-        sim_ds = DataSource(
-            name="Simulation",
-            protocol=ProtocolType.SIMULATION,
-            enabled=True,
-            config=json.dumps({"description": "Built-in simulation data source"}),
+        # Simulation data source (get or create)
+        result = await session.execute(
+            select(DataSource).where(DataSource.name == "Simulation")
         )
-        session.add(sim_ds)
-        await session.flush()
+        sim_ds = result.scalar_one_or_none()
+        if sim_ds is None:
+            sim_ds = DataSource(
+                name="Simulation",
+                protocol=ProtocolType.SIMULATION,
+                enabled=True,
+                config=json.dumps({"description": "Built-in simulation data source"}),
+            )
+            session.add(sim_ds)
+            await session.flush()
 
         # Packaging machine simulation tags
         sim_tags = [
@@ -220,30 +216,53 @@ async def seed():
             ),
         ]
         for t in sim_tags:
-            session.add(t)
+            existing = await session.execute(
+                select(Tag).where(Tag.name == t.name)
+            )
+            if existing.scalar_one_or_none() is None:
+                session.add(t)
         await session.flush()
 
-        # Tag labels
-        job_setpoint_label = TagLabel(
-            name="Job Setpoint",
-            color="#3b82f6",
-            description="Tags included by default when creating a new job",
+        # Tag labels (get or create)
+        result = await session.execute(
+            select(TagLabel).where(TagLabel.name == "Job Setpoint")
         )
-        machine_label = TagLabel(
-            name="Machine",
-            color="#22c55e",
-            description="Machine status and sensor tags",
+        job_setpoint_label = result.scalar_one_or_none()
+        if job_setpoint_label is None:
+            job_setpoint_label = TagLabel(
+                name="Job Setpoint",
+                color="#3b82f6",
+                description="Tags included by default when creating a new job",
+            )
+            session.add(job_setpoint_label)
+
+        result = await session.execute(
+            select(TagLabel).where(TagLabel.name == "Machine")
         )
-        session.add(job_setpoint_label)
-        session.add(machine_label)
+        machine_label = result.scalar_one_or_none()
+        if machine_label is None:
+            machine_label = TagLabel(
+                name="Machine",
+                color="#22c55e",
+                description="Machine status and sensor tags",
+            )
+            session.add(machine_label)
         await session.flush()
 
-        # Assign "Job Setpoint" to writable setpoint tags
+        # Assign labels to tags (skip if already assigned)
         setpoint_names = {"Machine.TargetSpeed", "Machine.FilmWidth", "Machine.SealTemp"}
         for t in sim_tags:
-            if t.name in setpoint_names:
-                t.labels.append(job_setpoint_label)
-            t.labels.append(machine_label)
+            # Re-fetch the tag from DB to get managed instance
+            result = await session.execute(
+                select(Tag).where(Tag.name == t.name)
+            )
+            db_tag = result.scalar_one_or_none()
+            if db_tag is None:
+                continue
+            if job_setpoint_label not in db_tag.labels and db_tag.name in setpoint_names:
+                db_tag.labels.append(job_setpoint_label)
+            if machine_label not in db_tag.labels:
+                db_tag.labels.append(machine_label)
 
         # Default dashboard screen
         dashboard = Screen(
@@ -318,7 +337,11 @@ async def seed():
                 },
             ]),
         )
-        session.add(dashboard)
+        result = await session.execute(
+            select(Screen).where(Screen.slug == "dashboard")
+        )
+        if result.scalar_one_or_none() is None:
+            session.add(dashboard)
 
         # Control panel screen
         controls = Screen(
@@ -396,7 +419,11 @@ async def seed():
                 },
             ]),
         )
-        session.add(controls)
+        result = await session.execute(
+            select(Screen).where(Screen.slug == "controls")
+        )
+        if result.scalar_one_or_none() is None:
+            session.add(controls)
 
         await session.commit()
         print("Seed data created successfully!")

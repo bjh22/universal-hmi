@@ -1,3 +1,4 @@
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -24,3 +25,13 @@ async def get_db() -> AsyncSession:
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Lightweight column migrations for SQLite (no Alembic)
+        await _add_column_if_missing(conn, "tags", "long_description", "TEXT")
+
+
+async def _add_column_if_missing(conn, table: str, column: str, col_type: str):
+    """Add a column to an existing table if it doesn't exist yet."""
+    result = await conn.execute(text(f"PRAGMA table_info({table})"))
+    columns = [row[1] for row in result.fetchall()]
+    if column not in columns:
+        await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
