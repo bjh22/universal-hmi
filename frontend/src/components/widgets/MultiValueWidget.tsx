@@ -1,5 +1,6 @@
 import type { TagValue, TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
+import { InlineInfoButton } from './InfoButton';
 
 interface TagEntry {
   tag: string;
@@ -29,7 +30,12 @@ export function MultiValueWidget({ title, tags = [], tagValues, decimalPlaces = 
               const display = val != null ? (typeof val === 'number' ? val.toFixed(decimalPlaces) : String(val)) : '—';
               return (
                 <tr key={entry.tag} className="border-b border-slate-700/50 last:border-0">
-                  <td className="py-1 text-slate-400 pr-3">{entry.label}</td>
+                  <td className="py-1 text-slate-400 pr-3">
+                    <div className="flex items-center gap-1">
+                      {tv?.long_description && <InlineInfoButton description={tv.long_description} title={entry.label} />}
+                      {entry.label}
+                    </div>
+                  </td>
                   <td className="py-1 text-right font-medium text-slate-100" style={textStyleToCSS(valueStyle)}>
                     {display}
                     {entry.units && <span className="text-xs text-slate-500 ml-1">{entry.units}</span>}

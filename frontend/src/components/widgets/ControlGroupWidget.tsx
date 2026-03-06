@@ -3,6 +3,7 @@ import { api } from '../../lib/api';
 import type { TagValue, TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
 import { NumericKeypad } from './TouchInput';
+import { InlineInfoButton } from './InfoButton';
 
 export type ControlItem =
   | { type: 'toggle'; tag: string; label: string }
@@ -29,9 +30,14 @@ function ToggleControl({ item, tagValues, valueStyle }: { item: ControlItem & { 
     await api.writeTag(item.tag, !value);
   };
 
+  const longDesc = tv?.long_description;
+
   return (
     <div className="flex items-center justify-between gap-2 py-1.5">
-      <span className="text-xs text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{item.label}</span>
+      <div className="flex items-center gap-1 min-w-0">
+        {longDesc && <InlineInfoButton description={longDesc} title={item.label} />}
+        <span className="text-xs text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{item.label}</span>
+      </div>
       <div className="flex items-center gap-2 flex-shrink-0">
         <span className={`text-[10px] font-medium ${value ? 'text-green-400' : 'text-slate-500'}`}>
           {value ? 'ON' : 'OFF'}
@@ -52,12 +58,16 @@ function ToggleControl({ item, tagValues, valueStyle }: { item: ControlItem & { 
 function ValueControl({ item, tagValues, valueStyle }: { item: ControlItem & { type: 'value' }; tagValues: Record<string, TagValue>; valueStyle?: TextStyle }) {
   const tv = tagValues[item.tag];
   const value = tv?.value;
+  const longDesc = tv?.long_description;
   const dp = item.decimalPlaces ?? 1;
   const display = typeof value === 'number' ? value.toFixed(dp) : String(value ?? '—');
 
   return (
     <div className="flex items-center justify-between gap-2 py-1.5">
-      <span className="text-xs text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{item.label}</span>
+      <div className="flex items-center gap-1 min-w-0">
+        {longDesc && <InlineInfoButton description={longDesc} title={item.label} />}
+        <span className="text-xs text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{item.label}</span>
+      </div>
       <span className="text-sm font-semibold text-slate-100 tabular-nums flex-shrink-0" style={textStyleToCSS(valueStyle)}>
         {display}
         {item.units && <span className="text-xs text-slate-500 font-normal ml-1">{item.units}</span>}
@@ -66,7 +76,8 @@ function ValueControl({ item, tagValues, valueStyle }: { item: ControlItem & { t
   );
 }
 
-function ButtonControl({ item }: { item: ControlItem & { type: 'button' } }) {
+function ButtonControl({ item, tagValues }: { item: ControlItem & { type: 'button' }; tagValues: Record<string, TagValue> }) {
+  const longDesc = tagValues[item.tag]?.long_description;
   const colorMap: Record<string, string> = {
     blue: 'bg-blue-600 hover:bg-blue-700',
     green: 'bg-green-600 hover:bg-green-700',
@@ -86,9 +97,12 @@ function ButtonControl({ item }: { item: ControlItem & { type: 'button' } }) {
 
   return (
     <div className="py-1">
-      <button onClick={handleClick} className={`w-full px-3 py-1.5 rounded-md text-xs text-white font-medium ${cls}`}>
-        {item.label}
-      </button>
+      <div className="flex items-center gap-1">
+        {longDesc && <InlineInfoButton description={longDesc} title={item.label} />}
+        <button onClick={handleClick} className={`flex-1 px-3 py-1.5 rounded-md text-xs text-white font-medium ${cls}`}>
+          {item.label}
+        </button>
+      </div>
     </div>
   );
 }
@@ -108,11 +122,16 @@ function InputControl({ item, tagValues, valueStyle }: { item: ControlItem & { t
     setShowKeypad(false);
   };
 
+  const longDesc = tv?.long_description;
+
   return (
     <div className="py-1.5">
       <button onClick={() => setShowKeypad(true)} className="w-full text-left group">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{item.label}</span>
+          <div className="flex items-center gap-1 min-w-0">
+            {longDesc && <InlineInfoButton description={longDesc} title={item.label} />}
+            <span className="text-xs text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{item.label}</span>
+          </div>
           <span className="text-sm font-semibold text-slate-100 tabular-nums flex-shrink-0 group-hover:text-blue-300 transition-colors" style={textStyleToCSS(valueStyle)}>
             {currentValue.toFixed(1)}
             {item.units && <span className="text-xs text-slate-500 font-normal ml-1">{item.units}</span>}
@@ -156,7 +175,7 @@ export function ControlGroupWidget({ title, controls = [], tagValues, columns = 
           <div key={i} className="border-b border-slate-700/50 last:border-0">
             {ctrl.type === 'toggle' && <ToggleControl item={ctrl as ControlItem & { type: 'toggle' }} tagValues={tagValues} valueStyle={valueStyle} />}
             {ctrl.type === 'value' && <ValueControl item={ctrl as ControlItem & { type: 'value' }} tagValues={tagValues} valueStyle={valueStyle} />}
-            {ctrl.type === 'button' && <ButtonControl item={ctrl as ControlItem & { type: 'button' }} />}
+            {ctrl.type === 'button' && <ButtonControl item={ctrl as ControlItem & { type: 'button' }} tagValues={tagValues} />}
             {ctrl.type === 'input' && <InputControl item={ctrl as ControlItem & { type: 'input' }} tagValues={tagValues} valueStyle={valueStyle} />}
           </div>
         ))}
