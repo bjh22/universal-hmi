@@ -1,6 +1,6 @@
 import {
   Activity, Gauge, Hash, ToggleLeft, MousePointerClick,
-  SlidersHorizontal, Type, FileText, Bell, Table, ChevronDown, BarChart3,
+  SlidersHorizontal, Type, FileText, Bell, Table, ChevronDown, BarChart3, LayoutGrid,
 } from 'lucide-react';
 
 export interface WidgetTypeInfo {
@@ -68,6 +68,11 @@ export const WIDGET_TYPES: WidgetTypeInfo[] = [
     type: 'oee', label: 'OEE Display', icon: BarChart3, category: 'display',
     defaultW: 4, defaultH: 4,
     defaultProps: { title: 'OEE', availabilityTag: '', performanceTag: '', qualityTag: '', oeeTag: '' },
+  },
+  {
+    type: 'control_group', label: 'Control Group', icon: LayoutGrid, category: 'input',
+    defaultW: 4, defaultH: 4,
+    defaultProps: { title: 'Controls', controls: [], columns: 1 },
   },
   {
     type: 'text_label', label: 'Text Label', icon: Type, category: 'layout',

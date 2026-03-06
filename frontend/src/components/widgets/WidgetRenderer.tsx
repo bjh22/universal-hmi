@@ -11,6 +11,7 @@ import { AlarmSummaryWidget } from './AlarmSummaryWidget';
 import { MultiValueWidget } from './MultiValueWidget';
 import { DropdownSelectWidget } from './DropdownSelectWidget';
 import { OeeWidget } from './OeeWidget';
+import { ControlGroupWidget, type ControlItem } from './ControlGroupWidget';
 
 interface Props {
   widget: Widget;
@@ -46,6 +47,8 @@ export function WidgetRenderer({ widget, tagValues, alarms = [] }: Props) {
       return <DropdownSelectWidget title={p.title as string} tag={p.tag as string} tagValues={tagValues} options={p.options as Array<{ label: string; value: unknown }>} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} />;
     case 'oee':
       return <OeeWidget title={p.title as string} availabilityTag={p.availabilityTag as string} performanceTag={p.performanceTag as string} qualityTag={p.qualityTag as string} oeeTag={p.oeeTag as string} tagValues={tagValues} decimalPlaces={p.decimalPlaces as number} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} />;
+    case 'control_group':
+      return <ControlGroupWidget title={p.title as string} controls={p.controls as ControlItem[] || []} tagValues={tagValues} columns={p.columns as number} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} />;
     default:
       return (
         <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 text-slate-400 text-sm">

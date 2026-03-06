@@ -182,7 +182,7 @@ export function PropertyPanel({ widget, onUpdateProps, onUpdateWidget, onDelete,
         </Section>
 
         {/* Tag Binding */}
-        {widget.type !== 'text_label' && widget.type !== 'alarm_summary' && widget.type !== 'multi_value' && (
+        {widget.type !== 'text_label' && widget.type !== 'alarm_summary' && widget.type !== 'multi_value' && widget.type !== 'control_group' && (
           <Section title="Tag Binding">
             <Field label="Tag Name">
               <TagPicker value={p.tag || ''} onChange={v => setProp('tag', v)} />
@@ -326,6 +326,24 @@ export function PropertyPanel({ widget, onUpdateProps, onUpdateWidget, onDelete,
               options={(p.options as Array<{ label: string; value: unknown }>) || []}
               onChange={opts => setProp('options', opts)}
             />
+          </Section>
+        )}
+
+        {/* Control Group */}
+        {widget.type === 'control_group' && (
+          <Section title="Controls">
+            <ControlGroupEditor
+              controls={(p.controls as Array<{ type: string; tag: string; label: string; [k: string]: unknown }>) || []}
+              onChange={ctrls => setProp('controls', ctrls)}
+            />
+            <Field label="Columns">
+              <select value={p.columns as number || 1} onChange={e => setProp('columns', Number(e.target.value))}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white">
+                <option value={1}>1</option>
+                <option value={2}>2</option>
+                <option value={3}>3</option>
+              </select>
+            </Field>
           </Section>
         )}
 
@@ -513,6 +531,114 @@ function RoleSelector({ selected, onChange }: { selected: string[]; onChange: (r
       {selected.length > 0 && (
         <span className="text-[10px] text-slate-500 self-center ml-1">({selected.length === 0 ? 'all' : selected.join(', ')})</span>
       )}
+    </div>
+  );
+}
+
+const CONTROL_TYPES = [
+  { value: 'toggle', label: 'Toggle Switch' },
+  { value: 'value', label: 'Value Display' },
+  { value: 'button', label: 'Button' },
+  { value: 'input', label: 'Parameter Input' },
+];
+
+function ControlGroupEditor({ controls, onChange }: {
+  controls: Array<{ type: string; tag: string; label: string; [k: string]: unknown }>;
+  onChange: (ctrls: Array<{ type: string; tag: string; label: string; [k: string]: unknown }>) => void;
+}) {
+  const addControl = (type: string) => {
+    const base: Record<string, unknown> = { type, tag: '', label: '' };
+    if (type === 'button') { base.value = null; base.color = 'blue'; }
+    if (type === 'input') { base.min = 0; base.max = 100; base.step = 1; }
+    if (type === 'value') { base.decimalPlaces = 1; }
+    onChange([...controls, base as any]);
+  };
+  const removeControl = (idx: number) => onChange(controls.filter((_, i) => i !== idx));
+  const updateControl = (idx: number, patch: Record<string, unknown>) =>
+    onChange(controls.map((c, i) => i === idx ? { ...c, ...patch } : c));
+  const moveUp = (idx: number) => {
+    if (idx === 0) return;
+    const copy = [...controls];
+    [copy[idx - 1], copy[idx]] = [copy[idx], copy[idx - 1]];
+    onChange(copy);
+  };
+  const moveDown = (idx: number) => {
+    if (idx >= controls.length - 1) return;
+    const copy = [...controls];
+    [copy[idx], copy[idx + 1]] = [copy[idx + 1], copy[idx]];
+    onChange(copy);
+  };
+
+  return (
+    <div className="space-y-2">
+      {controls.map((ctrl, i) => (
+        <div key={i} className="p-2 bg-slate-800 rounded border border-slate-700 space-y-1.5">
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] font-medium text-slate-500 uppercase w-12 flex-shrink-0">{ctrl.type}</span>
+            <div className="flex gap-0.5 ml-auto">
+              <button onClick={() => moveUp(i)} className="text-slate-500 hover:text-slate-300 text-[10px] px-1" title="Move up">&uarr;</button>
+              <button onClick={() => moveDown(i)} className="text-slate-500 hover:text-slate-300 text-[10px] px-1" title="Move down">&darr;</button>
+              <button onClick={() => removeControl(i)} className="text-red-400 hover:text-red-300 text-xs px-1">&times;</button>
+            </div>
+          </div>
+          <input type="text" value={ctrl.label} onChange={e => updateControl(i, { label: e.target.value })}
+            placeholder="Label" className="w-full bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+          <input type="text" value={ctrl.tag} onChange={e => updateControl(i, { tag: e.target.value })}
+            placeholder="Tag name" className="w-full bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+
+          {ctrl.type === 'button' && (
+            <div className="flex gap-1">
+              <select value={(ctrl.color as string) || 'blue'} onChange={e => updateControl(i, { color: e.target.value })}
+                className="flex-1 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white">
+                <option value="blue">Blue</option>
+                <option value="green">Green</option>
+                <option value="red">Red</option>
+                <option value="yellow">Yellow</option>
+              </select>
+              <input type="text" value={String(ctrl.value ?? '')} onChange={e => {
+                const v = e.target.value;
+                updateControl(i, { value: v === 'true' ? true : v === 'false' ? false : isNaN(Number(v)) ? v : Number(v) });
+              }}
+                placeholder="Value" className="w-16 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+              <label className="flex items-center gap-1 text-[10px] text-slate-400">
+                <input type="checkbox" checked={!!ctrl.confirm} onChange={e => updateControl(i, { confirm: e.target.checked })}
+                  className="rounded bg-slate-700 border-slate-600" />
+                Confirm
+              </label>
+            </div>
+          )}
+
+          {ctrl.type === 'input' && (
+            <div className="flex gap-1">
+              <input type="number" value={ctrl.min as number ?? 0} onChange={e => updateControl(i, { min: Number(e.target.value) })}
+                placeholder="Min" className="w-14 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+              <input type="number" value={ctrl.max as number ?? 100} onChange={e => updateControl(i, { max: Number(e.target.value) })}
+                placeholder="Max" className="w-14 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+              <input type="number" value={ctrl.step as number ?? 1} onChange={e => updateControl(i, { step: Number(e.target.value) })}
+                placeholder="Step" className="w-14 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+              <input type="text" value={(ctrl.units as string) || ''} onChange={e => updateControl(i, { units: e.target.value })}
+                placeholder="Units" className="w-14 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+            </div>
+          )}
+
+          {ctrl.type === 'value' && (
+            <div className="flex gap-1">
+              <input type="text" value={(ctrl.units as string) || ''} onChange={e => updateControl(i, { units: e.target.value })}
+                placeholder="Units" className="flex-1 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+              <input type="number" value={ctrl.decimalPlaces as number ?? 1} onChange={e => updateControl(i, { decimalPlaces: Number(e.target.value) })}
+                min={0} max={6} placeholder="DP" className="w-12 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+            </div>
+          )}
+        </div>
+      ))}
+      <div className="flex flex-wrap gap-1">
+        {CONTROL_TYPES.map(ct => (
+          <button key={ct.value} onClick={() => addControl(ct.value)}
+            className="text-[10px] px-2 py-1 bg-slate-800 border border-slate-700 rounded text-blue-400 hover:text-blue-300 hover:border-slate-600">
+            + {ct.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
