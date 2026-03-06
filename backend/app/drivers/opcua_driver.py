@@ -78,7 +78,7 @@ class OpcuaDriver(ProtocolDriver):
             return []
         tags = []
         root = self._client.get_objects_node()
-        await self._browse_recursive(root, tags, depth=0, max_depth=5)
+        await self._browse_recursive(root, tags, depth=0, max_depth=10)
         return tags
 
     async def _browse_recursive(self, node, tags: list, depth: int, max_depth: int):
