@@ -19,9 +19,15 @@ export interface Tag {
   display_format: string | null;
   min_value: number | null;
   max_value: number | null;
+  deadband: number | null;
   trending_enabled: boolean;
+  trending_sample_rate_ms: number | null;
   alarm_enabled: boolean;
+  alarm_config: Record<string, unknown> | null;
   simulation_enabled: boolean;
+  simulation_behavior: string | null;
+  simulation_config: Record<string, unknown> | null;
+  enum_mapping: Record<string, string> | null;
 }
 
 export interface AlarmData {

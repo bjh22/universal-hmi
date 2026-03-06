@@ -37,6 +37,17 @@ export const api = {
 
   // Tags
   getTags: () => request<any[]>('/tags/'),
+  createTag: (data: any) =>
+    request('/tags/', { method: 'POST', body: JSON.stringify(data) }),
+  updateTag: (id: number, data: any) =>
+    request(`/tags/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteTag: (id: number) =>
+    request(`/tags/${id}`, { method: 'DELETE' }),
+  importTagsCsv: (tags: any[]) =>
+    request<{ imported: number; names: string[] }>('/tags/import/csv', {
+      method: 'POST',
+      body: JSON.stringify({ tags }),
+    }),
   getTagValues: () => request<Record<string, any>>('/tags/values'),
   writeTag: (name: string, value: unknown) =>
     request('/tags/values/' + encodeURIComponent(name) + '/write', {

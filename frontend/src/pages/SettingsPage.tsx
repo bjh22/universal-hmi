@@ -1,5 +1,5 @@
-import { useEffect, useState, useMemo } from 'react';
-import { Search, Download, UserPlus } from 'lucide-react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { Search, Download, UserPlus, Plus, Pencil, Trash2, Upload, X } from 'lucide-react';
 import { api } from '../lib/api';
 import type { Tag, DataSourceData, AuditEntry, UserData } from '../types';
 
@@ -7,6 +7,270 @@ interface Props {
   user: UserData | null;
 }
 
+const EMPTY_TAG: Omit<Tag, 'id'> = {
+  name: '',
+  description: null,
+  group_name: null,
+  data_source_id: null,
+  address: null,
+  data_type: 'float',
+  access_mode: 'read_write',
+  engineering_units: null,
+  display_format: null,
+  min_value: null,
+  max_value: null,
+  deadband: null,
+  trending_enabled: false,
+  trending_sample_rate_ms: null,
+  alarm_enabled: false,
+  alarm_config: null,
+  simulation_enabled: false,
+  simulation_behavior: null,
+  simulation_config: null,
+  enum_mapping: null,
+};
+
+// ─── Tag Edit Dialog ───
+function TagDialog({ tag, onSave, onClose }: {
+  tag: Omit<Tag, 'id'> & { id?: number };
+  onSave: (data: Omit<Tag, 'id'> & { id?: number }) => void;
+  onClose: () => void;
+}) {
+  const [form, setForm] = useState(tag);
+  const set = useCallback(<K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
+    setForm(f => ({ ...f, [k]: v })), []);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim()) return;
+    onSave(form);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-slate-100">{form.id != null ? 'Edit Tag' : 'New Tag'}</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Identity */}
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Name *">
+              <input value={form.name} onChange={e => set('name', e.target.value)} required className={inputCls} placeholder="e.g. Tank1.Level" />
+            </Field>
+            <Field label="Group">
+              <input value={form.group_name || ''} onChange={e => set('group_name', e.target.value || null)} className={inputCls} placeholder="e.g. Process" />
+            </Field>
+          </div>
+          <Field label="Description">
+            <input value={form.description || ''} onChange={e => set('description', e.target.value || null)} className={inputCls} />
+          </Field>
+
+          {/* Data source & address */}
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Data Source ID">
+              <input type="number" value={form.data_source_id ?? ''} onChange={e => set('data_source_id', e.target.value ? Number(e.target.value) : null)} className={inputCls} />
+            </Field>
+            <Field label="Address">
+              <input value={form.address || ''} onChange={e => set('address', e.target.value || null)} className={inputCls} placeholder="e.g. ns=2;s=Temperature" />
+            </Field>
+          </div>
+
+          {/* Type & access */}
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="Data Type">
+              <select value={form.data_type} onChange={e => set('data_type', e.target.value as Tag['data_type'])} className={inputCls}>
+                <option value="bool">Bool</option>
+                <option value="int">Int</option>
+                <option value="float">Float</option>
+                <option value="string">String</option>
+              </select>
+            </Field>
+            <Field label="Access Mode">
+              <select value={form.access_mode} onChange={e => set('access_mode', e.target.value as Tag['access_mode'])} className={inputCls}>
+                <option value="read">Read</option>
+                <option value="write">Write</option>
+                <option value="read_write">Read/Write</option>
+              </select>
+            </Field>
+            <Field label="Units">
+              <input value={form.engineering_units || ''} onChange={e => set('engineering_units', e.target.value || null)} className={inputCls} placeholder="e.g. \u00b0C" />
+            </Field>
+          </div>
+
+          {/* Range & deadband */}
+          <div className="grid grid-cols-4 gap-3">
+            <Field label="Min Value">
+              <input type="number" value={form.min_value ?? ''} onChange={e => set('min_value', e.target.value ? Number(e.target.value) : null)} className={inputCls} />
+            </Field>
+            <Field label="Max Value">
+              <input type="number" value={form.max_value ?? ''} onChange={e => set('max_value', e.target.value ? Number(e.target.value) : null)} className={inputCls} />
+            </Field>
+            <Field label="Deadband">
+              <input type="number" value={form.deadband ?? ''} onChange={e => set('deadband', e.target.value ? Number(e.target.value) : null)} className={inputCls} step="0.1" />
+            </Field>
+            <Field label="Display Format">
+              <input value={form.display_format || ''} onChange={e => set('display_format', e.target.value || null)} className={inputCls} placeholder="e.g. 0.00" />
+            </Field>
+          </div>
+
+          {/* Trending */}
+          <fieldset className="border border-slate-700 rounded-lg p-3">
+            <legend className="text-xs text-slate-400 px-2">Trending</legend>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={form.trending_enabled} onChange={e => set('trending_enabled', e.target.checked)} className="accent-blue-500" />
+                Enabled
+              </label>
+              <Field label="Sample Rate (ms)">
+                <input type="number" value={form.trending_sample_rate_ms ?? ''} onChange={e => set('trending_sample_rate_ms', e.target.value ? Number(e.target.value) : null)} className={inputCls + ' w-28'} min={100} step={100} />
+              </Field>
+            </div>
+          </fieldset>
+
+          {/* Alarm */}
+          <fieldset className="border border-slate-700 rounded-lg p-3">
+            <legend className="text-xs text-slate-400 px-2">Alarm</legend>
+            <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+              <input type="checkbox" checked={form.alarm_enabled} onChange={e => set('alarm_enabled', e.target.checked)} className="accent-blue-500" />
+              Enabled
+            </label>
+          </fieldset>
+
+          {/* Simulation */}
+          <fieldset className="border border-slate-700 rounded-lg p-3">
+            <legend className="text-xs text-slate-400 px-2">Simulation</legend>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={form.simulation_enabled} onChange={e => set('simulation_enabled', e.target.checked)} className="accent-blue-500" />
+                Enabled
+              </label>
+              <Field label="Behavior">
+                <select value={form.simulation_behavior || ''} onChange={e => set('simulation_behavior', e.target.value || null)} className={inputCls + ' w-36'}>
+                  <option value="">None</option>
+                  <option value="sine">Sine</option>
+                  <option value="ramp">Ramp</option>
+                  <option value="random">Random</option>
+                  <option value="toggle">Toggle</option>
+                  <option value="enum_cycle">Enum Cycle</option>
+                </select>
+              </Field>
+            </div>
+          </fieldset>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 hover:bg-slate-600">Cancel</button>
+            <button type="submit" className="px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-700">{form.id != null ? 'Save' : 'Create'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white outline-none focus:border-blue-500';
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="text-xs text-slate-400 mb-1 block">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+// ─── CSV Import Dialog ───
+function CsvImportDialog({ onImport, onClose }: {
+  onImport: (tags: Record<string, unknown>[]) => void;
+  onClose: () => void;
+}) {
+  const [rows, setRows] = useState<Record<string, string>[]>([]);
+  const [headers, setHeaders] = useState<string[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = reader.result as string;
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) return;
+      const hdr = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+      setHeaders(hdr);
+      const parsed = lines.slice(1).map(line => {
+        const vals = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+        const row: Record<string, string> = {};
+        hdr.forEach((h, i) => { row[h] = vals[i] || ''; });
+        return row;
+      });
+      setRows(parsed);
+    };
+    reader.readAsText(file);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-3xl max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-slate-100">Import Tags from CSV</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
+        </div>
+        <div className="mb-4">
+          <p className="text-xs text-slate-400 mb-2">CSV must have a header row. Supported columns: name, description, group_name, data_type, access_mode, engineering_units, min_value, max_value, address</p>
+          <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} className="text-sm text-slate-300" />
+        </div>
+        {rows.length > 0 && (
+          <>
+            <div className="text-sm text-slate-300 mb-2">{rows.length} tags to import</div>
+            <div className="max-h-60 overflow-auto mb-4">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-slate-700 text-slate-400">
+                    {headers.map(h => <th key={h} className="text-left px-2 py-1 font-medium">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.slice(0, 50).map((row, i) => (
+                    <tr key={i} className="border-b border-slate-700/50">
+                      {headers.map(h => <td key={h} className="px-2 py-1 text-slate-300 truncate max-w-32">{row[h]}</td>)}
+                    </tr>
+                  ))}
+                  {rows.length > 50 && (
+                    <tr><td colSpan={headers.length} className="px-2 py-1 text-slate-500 text-center">...and {rows.length - 50} more</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300">Cancel</button>
+              <button onClick={() => onImport(rows)} className="px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-700">Import {rows.length} Tags</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Delete Confirmation ───
+function DeleteConfirm({ tagName, onConfirm, onCancel }: { tagName: string; onConfirm: () => void; onCancel: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onCancel}>
+      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 max-w-sm" onClick={e => e.stopPropagation()}>
+        <div className="text-slate-100 font-medium mb-2">Delete Tag</div>
+        <p className="text-sm text-slate-400 mb-4">Are you sure you want to delete <span className="text-slate-200 font-mono">{tagName}</span>? This cannot be undone.</p>
+        <div className="flex justify-end gap-2">
+          <button onClick={onCancel} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300">Cancel</button>
+          <button onClick={onConfirm} className="px-4 py-2 bg-red-600 rounded-lg text-sm text-white hover:bg-red-700">Delete</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main SettingsPage ───
 export function SettingsPage({ user }: Props) {
   const [tab, setTab] = useState<'tags' | 'datasources' | 'users' | 'audit'>('tags');
   const [tags, setTags] = useState<Tag[]>([]);
@@ -14,9 +278,12 @@ export function SettingsPage({ user }: Props) {
   const [users, setUsers] = useState<any[]>([]);
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
 
-  // Tag search/filter
+  // Tag state
   const [tagSearch, setTagSearch] = useState('');
   const [tagGroupFilter, setTagGroupFilter] = useState('all');
+  const [editTag, setEditTag] = useState<(Omit<Tag, 'id'> & { id?: number }) | null>(null);
+  const [deleteTagTarget, setDeleteTagTarget] = useState<Tag | null>(null);
+  const [showCsvImport, setShowCsvImport] = useState(false);
 
   // Audit filters
   const [auditSearch, setAuditSearch] = useState('');
@@ -26,14 +293,18 @@ export function SettingsPage({ user }: Props) {
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [newUser, setNewUser] = useState({ username: '', display_name: '', password: '', role: 'operator', login_mode: 'password' });
 
+  const canManage = ['engineer', 'designer'].includes(user?.role || '');
+
+  const loadTags = useCallback(() => { api.getTags().then(setTags).catch(() => {}); }, []);
+
   useEffect(() => {
     switch (tab) {
-      case 'tags': api.getTags().then(setTags).catch(() => {}); break;
+      case 'tags': loadTags(); break;
       case 'datasources': api.getDataSources().then(setDataSources).catch(() => {}); break;
       case 'users': api.getUsers().then(setUsers).catch(() => {}); break;
       case 'audit': api.getAuditLog(500).then(setAuditLog).catch(() => {}); break;
     }
-  }, [tab]);
+  }, [tab, loadTags]);
 
   const tagGroups = useMemo(() => {
     const groups = new Set(tags.map(t => t.group_name).filter(Boolean));
@@ -52,6 +323,42 @@ export function SettingsPage({ user }: Props) {
       return true;
     });
   }, [tags, tagSearch, tagGroupFilter]);
+
+  const handleSaveTag = useCallback(async (data: Omit<Tag, 'id'> & { id?: number }) => {
+    try {
+      if (data.id != null) {
+        await api.updateTag(data.id, data);
+      } else {
+        await api.createTag(data);
+      }
+      setEditTag(null);
+      loadTags();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  }, [loadTags]);
+
+  const handleDeleteTag = useCallback(async () => {
+    if (!deleteTagTarget) return;
+    try {
+      await api.deleteTag(deleteTagTarget.id);
+      setDeleteTagTarget(null);
+      loadTags();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  }, [deleteTagTarget, loadTags]);
+
+  const handleCsvImport = useCallback(async (rows: Record<string, unknown>[]) => {
+    try {
+      const result = await api.importTagsCsv(rows);
+      setShowCsvImport(false);
+      alert(`Imported ${result.imported} tags`);
+      loadTags();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  }, [loadTags]);
 
   const auditActions = useMemo(() => {
     const actions = new Set(auditLog.map(e => e.action));
@@ -126,7 +433,7 @@ export function SettingsPage({ user }: Props) {
       {/* Tags */}
       {tab === 'tags' && (
         <div>
-          <div className="flex gap-3 mb-3">
+          <div className="flex gap-3 mb-3 flex-wrap">
             <div className="relative flex-1 max-w-xs">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
               <input
@@ -146,6 +453,22 @@ export function SettingsPage({ user }: Props) {
               {tagGroups.map(g => <option key={g} value={g}>{g}</option>)}
             </select>
             <span className="self-center text-xs text-slate-500">{filteredTags.length} / {tags.length} tags</span>
+            {canManage && (
+              <div className="flex gap-2 ml-auto">
+                <button
+                  onClick={() => setShowCsvImport(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm font-medium"
+                >
+                  <Upload size={16} /> Import CSV
+                </button>
+                <button
+                  onClick={() => setEditTag({ ...EMPTY_TAG })}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+                >
+                  <Plus size={16} /> New Tag
+                </button>
+              </div>
+            )}
           </div>
           <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
             <table className="w-full text-sm">
@@ -159,6 +482,7 @@ export function SettingsPage({ user }: Props) {
                   <th className="text-center px-4 py-3 font-medium">Trend</th>
                   <th className="text-center px-4 py-3 font-medium">Alarm</th>
                   <th className="text-center px-4 py-3 font-medium">Sim</th>
+                  {canManage && <th className="px-4 py-3 font-medium w-20"></th>}
                 </tr>
               </thead>
               <tbody>
@@ -175,11 +499,31 @@ export function SettingsPage({ user }: Props) {
                     <td className="px-4 py-2 text-center">{tag.trending_enabled ? '\u2713' : ''}</td>
                     <td className="px-4 py-2 text-center">{tag.alarm_enabled ? '\u2713' : ''}</td>
                     <td className="px-4 py-2 text-center">{tag.simulation_enabled ? '\u2713' : ''}</td>
+                    {canManage && (
+                      <td className="px-4 py-2">
+                        <div className="flex gap-1 justify-end">
+                          <button onClick={() => setEditTag(tag)} className="p-1 text-slate-500 hover:text-blue-400" title="Edit">
+                            <Pencil size={14} />
+                          </button>
+                          <button onClick={() => setDeleteTagTarget(tag)} className="p-1 text-slate-500 hover:text-red-400" title="Delete">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
+                {filteredTags.length === 0 && (
+                  <tr><td colSpan={canManage ? 9 : 8} className="px-4 py-8 text-center text-slate-500">No tags found</td></tr>
+                )}
               </tbody>
             </table>
           </div>
+
+          {/* Dialogs */}
+          {editTag && <TagDialog tag={editTag} onSave={handleSaveTag} onClose={() => setEditTag(null)} />}
+          {deleteTagTarget && <DeleteConfirm tagName={deleteTagTarget.name} onConfirm={handleDeleteTag} onCancel={() => setDeleteTagTarget(null)} />}
+          {showCsvImport && <CsvImportDialog onImport={handleCsvImport} onClose={() => setShowCsvImport(false)} />}
         </div>
       )}
 
@@ -206,7 +550,7 @@ export function SettingsPage({ user }: Props) {
       {tab === 'users' && (
         <div>
           <div className="flex justify-end mb-3">
-            {['engineer', 'designer'].includes(user?.role || '') && (
+            {canManage && (
               <button
                 onClick={() => setShowCreateUser(true)}
                 className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
