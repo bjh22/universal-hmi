@@ -98,6 +98,7 @@ async def create_tag(
     tag = Tag(**body.model_dump())
     session.add(tag)
     await session.flush()
+    await session.refresh(tag, ["labels"])
     return tag
 
 
@@ -114,6 +115,7 @@ async def update_tag(
     for key, val in body.model_dump().items():
         setattr(tag, key, val)
     await session.flush()
+    await session.refresh(tag, ["labels"])
     return tag
 
 
