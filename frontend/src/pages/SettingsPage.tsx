@@ -478,10 +478,26 @@ function CsvImportDialog({ onImport, onClose }: {
 }
 
 // ─── Browse Tags Dialog ───
-function BrowseTagsDialog({ dsId, dsName, onClose }: { dsId: number; dsName: string; onClose: () => void }) {
+function mapBrowseDataType(dt: string | undefined): 'bool' | 'int' | 'float' | 'string' {
+  if (!dt) return 'float';
+  const lower = dt.toLowerCase();
+  if (lower === 'boolean' || lower === 'bool') return 'bool';
+  if (['int16', 'int32', 'int64', 'uint16', 'uint32', 'uint64', 'byte', 'sbyte', 'integer', 'int'].includes(lower)) return 'int';
+  if (['string', 'bytestring', 'xmlelement', 'localizedtext', 'qualifiedname'].includes(lower)) return 'string';
+  return 'float';
+}
+
+function BrowseTagsDialog({ dsId, dsName, existingTags, onCreateTag, onClose }: {
+  dsId: number;
+  dsName: string;
+  existingTags: Tag[];
+  onCreateTag: (tag: Omit<Tag, 'id'>) => void;
+  onClose: () => void;
+}) {
   const [browsedTags, setBrowsedTags] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [createdAddresses, setCreatedAddresses] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setLoading(true);
@@ -490,9 +506,31 @@ function BrowseTagsDialog({ dsId, dsName, onClose }: { dsId: number; dsName: str
       .catch(err => { setError(err.message); setLoading(false); });
   }, [dsId]);
 
+  const existingAddresses = useMemo(() => {
+    const set = new Set<string>();
+    existingTags.forEach(t => {
+      if (t.data_source_id === dsId && t.address) set.add(t.address);
+    });
+    return set;
+  }, [existingTags, dsId]);
+
+  const handleCreate = useCallback((t: any) => {
+    const address = t.node_id || t.address || '';
+    const name = t.name || t.display_name || '';
+    onCreateTag({
+      ...EMPTY_TAG,
+      name,
+      data_source_id: dsId,
+      address,
+      data_type: mapBrowseDataType(t.data_type),
+      access_mode: 'read',
+    });
+    setCreatedAddresses(prev => new Set(prev).add(address));
+  }, [dsId, onCreateTag]);
+
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-3xl max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-slate-100">Browse Tags: {dsName}</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
@@ -510,16 +548,33 @@ function BrowseTagsDialog({ dsId, dsName, onClose }: { dsId: number; dsName: str
                   <th className="text-left px-3 py-2 font-medium">Name</th>
                   <th className="text-left px-3 py-2 font-medium">Node ID / Address</th>
                   <th className="text-left px-3 py-2 font-medium">Type</th>
+                  <th className="px-3 py-2 font-medium w-28"></th>
                 </tr>
               </thead>
               <tbody>
-                {browsedTags.map((t: any, i: number) => (
-                  <tr key={i} className="border-b border-slate-700/50">
-                    <td className="px-3 py-2 text-slate-200">{t.name || t.display_name || '\u2014'}</td>
-                    <td className="px-3 py-2 text-slate-400 font-mono text-xs">{t.node_id || t.address || '\u2014'}</td>
-                    <td className="px-3 py-2 text-slate-400">{t.data_type || '\u2014'}</td>
-                  </tr>
-                ))}
+                {browsedTags.map((t: any, i: number) => {
+                  const address = t.node_id || t.address || '';
+                  const alreadyExists = existingAddresses.has(address) || createdAddresses.has(address);
+                  return (
+                    <tr key={i} className="border-b border-slate-700/50">
+                      <td className="px-3 py-2 text-slate-200">{t.name || t.display_name || '\u2014'}</td>
+                      <td className="px-3 py-2 text-slate-400 font-mono text-xs">{address || '\u2014'}</td>
+                      <td className="px-3 py-2 text-slate-400">{t.data_type || '\u2014'}</td>
+                      <td className="px-3 py-2 text-right">
+                        {alreadyExists ? (
+                          <span className="text-xs text-green-400">Exists</span>
+                        ) : (
+                          <button
+                            onClick={() => handleCreate(t)}
+                            className="px-2 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs text-white flex items-center gap-1 ml-auto"
+                          >
+                            <Plus size={12} /> Create Tag
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -578,7 +633,7 @@ export function SettingsPage({ user }: Props) {
   useEffect(() => {
     switch (tab) {
       case 'tags': loadTags(); loadLabels(); break;
-      case 'datasources': loadDataSources(); break;
+      case 'datasources': loadDataSources(); loadTags(); break;
       case 'users': api.getUsers().then(setUsers).catch(() => {}); break;
       case 'audit': api.getAuditLog(500).then(setAuditLog).catch(() => {}); break;
     }
@@ -1051,7 +1106,8 @@ export function SettingsPage({ user }: Props) {
 
           {editDs && <DataSourceDialog ds={editDs} onSave={handleSaveDs} onClose={() => setEditDs(null)} />}
           {deleteDsTarget && <DeleteConfirmDialog title="Delete Data Source" name={deleteDsTarget.name} onConfirm={handleDeleteDs} onCancel={() => setDeleteDsTarget(null)} />}
-          {browseDs && <BrowseTagsDialog dsId={browseDs.id} dsName={browseDs.name} onClose={() => setBrowseDs(null)} />}
+          {browseDs && <BrowseTagsDialog dsId={browseDs.id} dsName={browseDs.name} existingTags={tags} onCreateTag={(tagData) => { setEditTag(tagData); }} onClose={() => setBrowseDs(null)} />}
+          {editTag && <TagDialog tag={editTag} dataSources={dataSources} allLabels={allLabels} onSave={handleSaveTag} onClose={() => setEditTag(null)} />}
         </div>
       )}
 
