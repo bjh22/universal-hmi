@@ -127,11 +127,33 @@ class TagEngine:
         self._notify_change(tag_name, tv)
         return True
 
+    @staticmethod
+    def _coerce_value(value, data_type: str):
+        """Coerce a value to match the tag's data type."""
+        match data_type:
+            case "float":
+                return float(value)
+            case "int":
+                return int(value)
+            case "bool":
+                if isinstance(value, str):
+                    return value.lower() in ("true", "1", "yes")
+                return bool(value)
+            case "string":
+                return str(value)
+            case _:
+                return value
+
     async def write_value(self, tag_name: str, value) -> bool:
         """Write a tag value, routing through the driver if the tag has a data source."""
         tag = self._tags.get(tag_name)
         if tag is None:
             return False
+        # Coerce value to match the tag's declared data type
+        try:
+            value = self._coerce_value(value, tag.data_type.value)
+        except (ValueError, TypeError):
+            pass
         # If tag is backed by a data source, write through the driver
         if tag.data_source_id and tag.address and self._driver_manager:
             driver = self._driver_manager.get_driver(tag.data_source_id)
