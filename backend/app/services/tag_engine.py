@@ -57,6 +57,7 @@ class TagEngine:
         self._driver_manager = None
         self._subscribers: list[asyncio.Queue] = []
         self._start_time = time.time()
+        self._system_values: dict[str, object] = {}  # mutable system tag values
 
     @property
     def values(self) -> dict[str, TagValue]:
@@ -118,6 +119,9 @@ class TagEngine:
         return result
 
     def set_value(self, tag_name: str, value) -> bool:
+        if tag_name.startswith("$"):
+            self._system_values[tag_name] = value
+            return True
         tv = self._values.get(tag_name)
         if tv is None:
             return False
@@ -207,7 +211,7 @@ class TagEngine:
             case "$UNACKED_ALARM_COUNT":
                 value = 0
             case _:
-                value = None
+                value = self._system_values.get(name)
         return TagValue(tag_id=0, name=name, value=value, data_type="string")
 
     async def start_simulation(self):

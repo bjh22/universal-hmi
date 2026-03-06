@@ -29,6 +29,7 @@ class JobOut(BaseModel):
     description: str | None
     version: int
     setpoints: str
+    download_conditions: str | None = None
     created_by: str | None
     created_at: str
 
@@ -156,8 +157,15 @@ async def download_job(
     # Write all setpoints
     results = {}
     for tag_name, value in setpoints.items():
-        success = tag_engine.set_value(tag_name, value)
+        success = await tag_engine.write_value(tag_name, value)
         results[tag_name] = success
+
+    failed = [k for k, v in results.items() if not v]
+    if failed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to write tags: {', '.join(failed)}",
+        )
 
     # Set active job system tag
     tag_engine.set_value("$ACTIVE_JOB", job.name)
