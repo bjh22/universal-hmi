@@ -1,7 +1,7 @@
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +27,14 @@ class DataSourceOut(BaseModel):
     protocol: ProtocolType
     enabled: bool
     connected: bool
+    config: dict = {}
+
+    @field_validator("config", mode="before")
+    @classmethod
+    def parse_config(cls, v):
+        if isinstance(v, str):
+            return json.loads(v)
+        return v
 
     model_config = {"from_attributes": True}
 

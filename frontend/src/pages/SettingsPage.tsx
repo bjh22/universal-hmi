@@ -68,7 +68,7 @@ const PROTOCOL_CONFIGS: Record<ProtocolType, { label: string; fields: { key: str
   opcua: {
     label: 'OPC-UA',
     fields: [
-      { key: 'endpoint_url', label: 'Endpoint URL', type: 'text', placeholder: 'opc.tcp://localhost:4840' },
+      { key: 'endpoint', label: 'Endpoint URL', type: 'text', placeholder: 'opc.tcp://localhost:4840' },
       { key: 'security_policy', label: 'Security Policy', type: 'text', placeholder: 'None' },
       { key: 'security_mode', label: 'Security Mode', type: 'text', placeholder: 'None' },
       { key: 'username', label: 'Username', type: 'text' },
