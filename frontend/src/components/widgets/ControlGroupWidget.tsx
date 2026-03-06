@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api } from '../../lib/api';
 import type { TagValue, TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
+import { NumericKeypad } from './TouchInput';
 
 export type ControlItem =
   | { type: 'toggle'; tag: string; label: string }
@@ -95,50 +96,40 @@ function ButtonControl({ item }: { item: ControlItem & { type: 'button' } }) {
 function InputControl({ item, tagValues, valueStyle }: { item: ControlItem & { type: 'input' }; tagValues: Record<string, TagValue>; valueStyle?: TextStyle }) {
   const tv = tagValues[item.tag];
   const currentValue = Number(tv?.value ?? 0);
-  const [inputValue, setInputValue] = useState('');
-  const [editing, setEditing] = useState(false);
+  const [showKeypad, setShowKeypad] = useState(false);
   const min = item.min ?? 0;
   const max = item.max ?? 100;
 
-  const handleSubmit = async () => {
-    const val = Number(inputValue);
-    if (isNaN(val)) return;
-    const clamped = Math.max(min, Math.min(max, val));
+  const handleSubmit = async (val: string) => {
+    const num = Number(val);
+    if (isNaN(num)) return;
+    const clamped = Math.max(min, Math.min(max, num));
     await api.writeTag(item.tag, clamped);
-    setEditing(false);
-    setInputValue('');
+    setShowKeypad(false);
   };
 
   return (
     <div className="py-1.5">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{item.label}</span>
-        <span className="text-sm font-semibold text-slate-100 tabular-nums flex-shrink-0" style={textStyleToCSS(valueStyle)}>
-          {currentValue.toFixed(1)}
-          {item.units && <span className="text-xs text-slate-500 font-normal ml-1">{item.units}</span>}
-        </span>
-      </div>
-      {editing ? (
-        <div className="flex gap-1.5 mt-1">
-          <input
-            type="number"
-            value={inputValue}
-            onChange={e => setInputValue(e.target.value)}
-            min={min} max={max} step={item.step ?? 1}
-            className="flex-1 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white outline-none focus:border-blue-500"
-            autoFocus
-            onKeyDown={e => { if (e.key === 'Enter') handleSubmit(); if (e.key === 'Escape') setEditing(false); }}
-          />
-          <button onClick={handleSubmit} className="px-2 py-1 bg-blue-600 rounded text-xs text-white">Set</button>
-          <button onClick={() => setEditing(false)} className="px-2 py-1 bg-slate-700 rounded text-xs text-slate-400">Esc</button>
+      <button onClick={() => setShowKeypad(true)} className="w-full text-left group">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{item.label}</span>
+          <span className="text-sm font-semibold text-slate-100 tabular-nums flex-shrink-0 group-hover:text-blue-300 transition-colors" style={textStyleToCSS(valueStyle)}>
+            {currentValue.toFixed(1)}
+            {item.units && <span className="text-xs text-slate-500 font-normal ml-1">{item.units}</span>}
+          </span>
         </div>
-      ) : (
-        <button
-          onClick={() => { setInputValue(String(currentValue)); setEditing(true); }}
-          className="text-[10px] text-blue-400 hover:text-blue-300 mt-0.5"
-        >
-          Change
-        </button>
+        <div className="text-[10px] text-blue-400 group-hover:text-blue-300 mt-0.5">Tap to change</div>
+      </button>
+      {showKeypad && (
+        <NumericKeypad
+          value={String(currentValue)}
+          title={item.label}
+          units={item.units}
+          min={min}
+          max={max}
+          onSubmit={handleSubmit}
+          onClose={() => setShowKeypad(false)}
+        />
       )}
     </div>
   );
