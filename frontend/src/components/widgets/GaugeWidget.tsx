@@ -10,11 +10,12 @@ interface Props {
   units?: string;
   warning?: number;
   critical?: number;
+  decimalPlaces?: number;
   titleStyle?: TextStyle;
   valueStyle?: TextStyle;
 }
 
-export function GaugeWidget({ title, tag, tagValues, min = 0, max = 100, units = '', warning, critical, titleStyle, valueStyle }: Props) {
+export function GaugeWidget({ title, tag, tagValues, min = 0, max = 100, units = '', warning, critical, decimalPlaces = 1, titleStyle, valueStyle }: Props) {
   const tv = tagValues[tag];
   const value = Number(tv?.value ?? 0);
   const pct = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
@@ -28,7 +29,7 @@ export function GaugeWidget({ title, tag, tagValues, min = 0, max = 100, units =
       <div className="text-xs text-slate-400 mb-2 font-medium uppercase tracking-wider" style={textStyleToCSS(titleStyle)}>{title}</div>
       <div className="flex-1 flex flex-col justify-center">
         <div className="text-3xl font-bold mb-1" style={{ color, ...textStyleToCSS(valueStyle) }}>
-          {value.toFixed(1)}
+          {value.toFixed(decimalPlaces)}
           <span className="text-sm font-normal text-slate-400 ml-1">{units}</span>
         </div>
         {/* Bar gauge */}

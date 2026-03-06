@@ -11,11 +11,12 @@ interface Props {
   title: string;
   tags: TagEntry[];
   tagValues: Record<string, TagValue>;
+  decimalPlaces?: number;
   titleStyle?: TextStyle;
   valueStyle?: TextStyle;
 }
 
-export function MultiValueWidget({ title, tags = [], tagValues, titleStyle, valueStyle }: Props) {
+export function MultiValueWidget({ title, tags = [], tagValues, decimalPlaces = 1, titleStyle, valueStyle }: Props) {
   return (
     <div className="bg-slate-800 rounded-xl p-4 h-full flex flex-col border border-slate-700">
       <div className="text-xs text-slate-400 mb-2 font-medium uppercase tracking-wider" style={textStyleToCSS(titleStyle)}>{title}</div>
@@ -25,7 +26,7 @@ export function MultiValueWidget({ title, tags = [], tagValues, titleStyle, valu
             {tags.map((entry) => {
               const tv = tagValues[entry.tag];
               const val = tv?.value;
-              const display = val != null ? (typeof val === 'number' ? val.toFixed(1) : String(val)) : '—';
+              const display = val != null ? (typeof val === 'number' ? val.toFixed(decimalPlaces) : String(val)) : '—';
               return (
                 <tr key={entry.tag} className="border-b border-slate-700/50 last:border-0">
                   <td className="py-1 text-slate-400 pr-3">{entry.label}</td>

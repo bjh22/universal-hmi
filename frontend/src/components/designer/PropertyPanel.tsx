@@ -207,6 +207,11 @@ export function PropertyPanel({ widget, onUpdateProps, onUpdateWidget, onDelete,
               <input type="text" value={p.units || ''} onChange={e => setProp('units', e.target.value)}
                 className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
             </Field>
+            <Field label="Decimal Places">
+              <input type="number" value={p.decimalPlaces ?? 1} onChange={e => setProp('decimalPlaces', Number(e.target.value))}
+                min={0} max={6}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
+            </Field>
           </Section>
         )}
 
@@ -296,6 +301,11 @@ export function PropertyPanel({ widget, onUpdateProps, onUpdateWidget, onDelete,
               tags={(p.tags as Array<{ tag: string; label: string; units?: string }>) || []}
               onChange={tags => setProp('tags', tags)}
             />
+            <Field label="Decimal Places">
+              <input type="number" value={p.decimalPlaces ?? 1} onChange={e => setProp('decimalPlaces', Number(e.target.value))}
+                min={0} max={6}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
+            </Field>
           </Section>
         )}
 
@@ -323,6 +333,11 @@ export function PropertyPanel({ widget, onUpdateProps, onUpdateWidget, onDelete,
             </Field>
             <Field label="OEE Tag (optional)">
               <TagPicker value={p.oeeTag as string || ''} onChange={v => setProp('oeeTag', v)} />
+            </Field>
+            <Field label="Decimal Places">
+              <input type="number" value={p.decimalPlaces ?? 1} onChange={e => setProp('decimalPlaces', Number(e.target.value))}
+                min={0} max={6}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
             </Field>
           </Section>
         )}

@@ -8,11 +8,12 @@ interface Props {
   qualityTag?: string;
   oeeTag?: string;
   tagValues: Record<string, TagValue>;
+  decimalPlaces?: number;
   titleStyle?: TextStyle;
   valueStyle?: TextStyle;
 }
 
-export function OeeWidget({ title, availabilityTag, performanceTag, qualityTag, oeeTag, tagValues, titleStyle, valueStyle }: Props) {
+export function OeeWidget({ title, availabilityTag, performanceTag, qualityTag, oeeTag, tagValues, decimalPlaces = 1, titleStyle, valueStyle }: Props) {
   const getVal = (tag?: string) => {
     if (!tag) return null;
     const tv = tagValues[tag];
@@ -43,7 +44,7 @@ export function OeeWidget({ title, availabilityTag, performanceTag, qualityTag, 
     return '#ef4444';
   };
 
-  const formatVal = (val: number | null) => val != null ? `${val.toFixed(1)}%` : '\u2014';
+  const formatVal = (val: number | null) => val != null ? `${val.toFixed(decimalPlaces)}%` : '\u2014';
 
   const metrics = [
     { label: 'A', value: availability, name: 'Availability' },
