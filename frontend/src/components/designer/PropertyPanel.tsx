@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import type { Widget, TextStyle, Tag } from '../../types';
 import { api } from '../../lib/api';
 import { WIDGET_TYPES } from './WidgetPalette';
+import { GAUGE_DEFAULTS, type GaugeDisplayMode } from '../widgets/GaugeWidget';
 
 interface Props {
   widget: Widget | null;
@@ -237,6 +238,34 @@ export function PropertyPanel({ widget, onUpdateProps, onUpdateWidget, onDelete,
                   className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
               </Field>
             </div>
+            {(() => {
+              const mode = (p.displayMode as GaugeDisplayMode) || 'bar';
+              const defs = GAUGE_DEFAULTS[mode];
+              const isSvg = mode === 'radial' || mode === 'donut';
+              return (
+                <>
+                  <div className={`grid gap-2 ${isSvg ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                    <Field label="Value Size">
+                      <input type="number" value={p.valueFontSize ?? ''} onChange={e => setProp('valueFontSize', e.target.value ? Number(e.target.value) : undefined)}
+                        placeholder={String(defs.valueFontSize)} min={isSvg ? 6 : 12} max={isSvg ? 30 : 120}
+                        className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
+                    </Field>
+                    <Field label={mode === 'vertical' ? 'Bar Width' : 'Bar Thickness'}>
+                      <input type="number" value={p.barThickness ?? ''} onChange={e => setProp('barThickness', e.target.value ? Number(e.target.value) : undefined)}
+                        placeholder={String(defs.barThickness)} min={2} max={isSvg ? 20 : 60}
+                        className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
+                    </Field>
+                    {isSvg && (
+                      <Field label="Gauge Size %">
+                        <input type="number" value={p.gaugeSize ?? ''} onChange={e => setProp('gaugeSize', e.target.value ? Number(e.target.value) : undefined)}
+                          placeholder="100" min={20} max={100}
+                          className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
+                      </Field>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
           </Section>
         )}
 

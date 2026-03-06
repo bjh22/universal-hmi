@@ -25,7 +25,7 @@ export function WidgetRenderer({ widget, tagValues, alarms = [] }: Props) {
     case 'status_indicator':
       return <StatusIndicator title={p.title as string} tag={p.tag as string} tagValues={tagValues} mapping={p.mapping as Record<string, { label: string; color: string }>} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} />;
     case 'gauge':
-      return <GaugeWidget title={p.title as string} tag={p.tag as string} tagValues={tagValues} min={p.min as number} max={p.max as number} units={p.units as string} warning={p.warning as number} critical={p.critical as number} decimalPlaces={p.decimalPlaces as number} displayMode={p.displayMode as GaugeDisplayMode} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} />;
+      return <GaugeWidget title={p.title as string} tag={p.tag as string} tagValues={tagValues} min={p.min as number} max={p.max as number} units={p.units as string} warning={p.warning as number} critical={p.critical as number} decimalPlaces={p.decimalPlaces as number} displayMode={p.displayMode as GaugeDisplayMode} valueFontSize={p.valueFontSize as number} barThickness={p.barThickness as number} gaugeSize={p.gaugeSize as number} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} />;
     case 'counter':
       return <CounterWidget title={p.title as string} tag={p.tag as string} tagValues={tagValues} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} />;
     case 'toggle':

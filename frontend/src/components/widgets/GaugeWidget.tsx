@@ -14,6 +14,9 @@ interface Props {
   critical?: number;
   decimalPlaces?: number;
   displayMode?: GaugeDisplayMode;
+  valueFontSize?: number;
+  barThickness?: number;
+  gaugeSize?: number;
   titleStyle?: TextStyle;
   valueStyle?: TextStyle;
 }
@@ -24,23 +27,27 @@ function getColor(value: number, warning?: number, critical?: number): string {
   return '#3b82f6';
 }
 
-// ─── Horizontal bar (original) ───
-function BarGauge({ value, pct, color, min, max, units, decimalPlaces, valueStyle }: {
-  value: number; pct: number; color: string; min: number; max: number; units: string; decimalPlaces: number; valueStyle?: TextStyle;
+// ─── Horizontal bar ───
+function BarGauge({ value, pct, color, min, max, units, decimalPlaces, valueFontSize, barThickness, valueStyle }: {
+  value: number; pct: number; color: string; min: number; max: number; units: string; decimalPlaces: number;
+  valueFontSize: number; barThickness: number; valueStyle?: TextStyle;
 }) {
+  const unitSize = Math.max(10, Math.round(valueFontSize * 0.45));
+  const labelSize = Math.max(10, Math.round(valueFontSize * 0.4));
+
   return (
     <>
-      <div className="text-3xl font-bold mb-1" style={{ color, ...textStyleToCSS(valueStyle) }}>
+      <div className="font-bold mb-1" style={{ fontSize: `${valueFontSize}px`, color, ...textStyleToCSS(valueStyle) }}>
         {value.toFixed(decimalPlaces)}
-        <span className="text-sm font-normal text-slate-400 ml-1">{units}</span>
+        <span className="font-normal text-slate-400 ml-1" style={{ fontSize: `${unitSize}px` }}>{units}</span>
       </div>
-      <div className="w-full h-3 bg-slate-700 rounded-full overflow-hidden mt-2">
+      <div className="w-full bg-slate-700 rounded-full overflow-hidden mt-2" style={{ height: `${barThickness}px` }}>
         <div
           className="h-full rounded-full transition-all duration-300"
           style={{ width: `${pct}%`, backgroundColor: color }}
         />
       </div>
-      <div className="flex justify-between text-xs text-slate-500 mt-1">
+      <div className="flex justify-between text-slate-500 mt-1" style={{ fontSize: `${labelSize}px` }}>
         <span>{min}</span>
         <span>{max}</span>
       </div>
@@ -49,10 +56,10 @@ function BarGauge({ value, pct, color, min, max, units, decimalPlaces, valueStyl
 }
 
 // ─── Radial / dial gauge ───
-function RadialGauge({ value, pct, color, min, max, units, decimalPlaces, valueStyle }: {
-  value: number; pct: number; color: string; min: number; max: number; units: string; decimalPlaces: number; valueStyle?: TextStyle;
+function RadialGauge({ value, pct, color, min, max, units, decimalPlaces, valueFontSize, barThickness, gaugeSize, valueStyle }: {
+  value: number; pct: number; color: string; min: number; max: number; units: string; decimalPlaces: number;
+  valueFontSize: number; barThickness: number; gaugeSize: number; valueStyle?: TextStyle;
 }) {
-  // 240-degree arc from bottom-left to bottom-right
   const ARC_DEG = 240;
   const START_DEG = 150;
   const R = 44;
@@ -74,55 +81,52 @@ function RadialGauge({ value, pct, color, min, max, units, decimalPlaces, valueS
 
   const needleX = CX + (R - 8) * Math.cos(needleAngle);
   const needleY = CY + (R - 8) * Math.sin(needleAngle);
+  const unitSize = Math.max(4, Math.round(valueFontSize * 0.42));
+  const labelSize = Math.max(4, Math.round(valueFontSize * 0.36));
+  const dotR = Math.max(2, Math.round(barThickness * 0.5));
 
   return (
     <div className="flex flex-col items-center justify-center flex-1">
-      <svg viewBox="0 0 100 100" className="w-full max-w-[160px]">
-        {/* Background arc */}
-        <path d={arcPath(CX, CY, R, startAngle, endAngle)} fill="none" stroke="#334155" strokeWidth="6" strokeLinecap="round" />
-        {/* Filled arc */}
-        <path d={arcPath(CX, CY, R, startAngle, needleAngle)} fill="none" stroke={color} strokeWidth="6" strokeLinecap="round"
+      <svg viewBox="0 0 100 100" className="w-full" style={{ maxWidth: `${gaugeSize}%` }}>
+        <path d={arcPath(CX, CY, R, startAngle, endAngle)} fill="none" stroke="#334155" strokeWidth={barThickness} strokeLinecap="round" />
+        <path d={arcPath(CX, CY, R, startAngle, needleAngle)} fill="none" stroke={color} strokeWidth={barThickness} strokeLinecap="round"
           className="transition-all duration-300" />
-        {/* Needle dot */}
-        <circle cx={needleX} cy={needleY} r="3" fill={color} className="transition-all duration-300" />
-        {/* Center value */}
-        <text x={CX} y={CY + 2} textAnchor="middle" fill={color} fontSize="14" fontWeight="bold" style={textStyleToCSS(valueStyle)}>
+        <circle cx={needleX} cy={needleY} r={dotR} fill={color} className="transition-all duration-300" />
+        <text x={CX} y={CY + 2} textAnchor="middle" fill={color} fontSize={valueFontSize} fontWeight="bold" style={textStyleToCSS(valueStyle)}>
           {value.toFixed(decimalPlaces)}
         </text>
-        <text x={CX} y={CY + 12} textAnchor="middle" fill="#64748b" fontSize="6">
+        <text x={CX} y={CY + 2 + valueFontSize * 0.75} textAnchor="middle" fill="#64748b" fontSize={unitSize}>
           {units}
         </text>
-        {/* Min/Max labels */}
-        <text x={CX + R * Math.cos(startAngle) + 4} y={CY + R * Math.sin(startAngle) + 6} textAnchor="middle" fill="#475569" fontSize="5">{min}</text>
-        <text x={CX + R * Math.cos(endAngle) - 4} y={CY + R * Math.sin(endAngle) + 6} textAnchor="middle" fill="#475569" fontSize="5">{max}</text>
+        <text x={CX + R * Math.cos(startAngle) + 4} y={CY + R * Math.sin(startAngle) + 6} textAnchor="middle" fill="#475569" fontSize={labelSize}>{min}</text>
+        <text x={CX + R * Math.cos(endAngle) - 4} y={CY + R * Math.sin(endAngle) + 6} textAnchor="middle" fill="#475569" fontSize={labelSize}>{max}</text>
       </svg>
     </div>
   );
 }
 
 // ─── Donut / ring gauge ───
-function DonutGauge({ value, pct, color, units, decimalPlaces, valueStyle }: {
-  value: number; pct: number; color: string; units: string; decimalPlaces: number; valueStyle?: TextStyle;
+function DonutGauge({ value, pct, color, units, decimalPlaces, valueFontSize, barThickness, gaugeSize, valueStyle }: {
+  value: number; pct: number; color: string; units: string; decimalPlaces: number;
+  valueFontSize: number; barThickness: number; gaugeSize: number; valueStyle?: TextStyle;
 }) {
   const R = 40;
   const circumference = 2 * Math.PI * R;
   const offset = circumference - (circumference * pct) / 100;
+  const unitSize = Math.max(4, Math.round(valueFontSize * 0.42));
 
   return (
     <div className="flex flex-col items-center justify-center flex-1">
-      <svg viewBox="0 0 100 100" className="w-full max-w-[140px]">
-        {/* Background ring */}
-        <circle cx="50" cy="50" r={R} fill="none" stroke="#334155" strokeWidth="8" />
-        {/* Filled ring */}
-        <circle cx="50" cy="50" r={R} fill="none" stroke={color} strokeWidth="8" strokeLinecap="round"
+      <svg viewBox="0 0 100 100" className="w-full" style={{ maxWidth: `${gaugeSize}%` }}>
+        <circle cx="50" cy="50" r={R} fill="none" stroke="#334155" strokeWidth={barThickness} />
+        <circle cx="50" cy="50" r={R} fill="none" stroke={color} strokeWidth={barThickness} strokeLinecap="round"
           strokeDasharray={circumference} strokeDashoffset={offset}
           transform="rotate(-90 50 50)"
           className="transition-all duration-300" />
-        {/* Center value */}
-        <text x="50" y="48" textAnchor="middle" fill={color} fontSize="16" fontWeight="bold" style={textStyleToCSS(valueStyle)}>
+        <text x="50" y="48" textAnchor="middle" fill={color} fontSize={valueFontSize} fontWeight="bold" style={textStyleToCSS(valueStyle)}>
           {value.toFixed(decimalPlaces)}
         </text>
-        <text x="50" y="60" textAnchor="middle" fill="#64748b" fontSize="7">
+        <text x="50" y={48 + valueFontSize * 0.75} textAnchor="middle" fill="#64748b" fontSize={unitSize}>
           {units}
         </text>
       </svg>
@@ -131,30 +135,28 @@ function DonutGauge({ value, pct, color, units, decimalPlaces, valueStyle }: {
 }
 
 // ─── Vertical bar gauge ───
-function VerticalGauge({ value, pct, color, min, max, units, decimalPlaces, warning, critical, valueStyle }: {
+function VerticalGauge({ value, pct, color, min, max, units, decimalPlaces, warning, critical, valueFontSize, barThickness, valueStyle }: {
   value: number; pct: number; color: string; min: number; max: number; units: string; decimalPlaces: number;
-  warning?: number; critical?: number; valueStyle?: TextStyle;
+  warning?: number; critical?: number; valueFontSize: number; barThickness: number; valueStyle?: TextStyle;
 }) {
-  // Calculate threshold positions as percentages
   const range = max - min || 1;
   const warnPct = warning != null ? ((warning - min) / range) * 100 : null;
   const critPct = critical != null ? ((critical - min) / range) * 100 : null;
+  const unitSize = Math.max(10, Math.round(valueFontSize * 0.5));
+  const labelSize = Math.max(10, Math.round(valueFontSize * 0.5));
 
   return (
     <div className="flex items-end gap-3 flex-1">
       <div className="relative flex-1 flex flex-col items-center h-full">
-        {/* Value on top */}
-        <div className="text-2xl font-bold mb-2" style={{ color, ...textStyleToCSS(valueStyle) }}>
+        <div className="font-bold mb-2" style={{ fontSize: `${valueFontSize}px`, color, ...textStyleToCSS(valueStyle) }}>
           {value.toFixed(decimalPlaces)}
-          <span className="text-xs font-normal text-slate-400 ml-1">{units}</span>
+          <span className="font-normal text-slate-400 ml-1" style={{ fontSize: `${unitSize}px` }}>{units}</span>
         </div>
-        {/* Vertical bar container */}
-        <div className="relative w-8 flex-1 bg-slate-700 rounded-full overflow-hidden">
+        <div className="relative flex-1 bg-slate-700 rounded-full overflow-hidden" style={{ width: `${barThickness}px` }}>
           <div
             className="absolute bottom-0 left-0 right-0 rounded-full transition-all duration-300"
             style={{ height: `${pct}%`, backgroundColor: color }}
           />
-          {/* Threshold markers */}
           {warnPct != null && (
             <div className="absolute left-0 right-0 h-px bg-yellow-500/60" style={{ bottom: `${warnPct}%` }} />
           )}
@@ -162,8 +164,7 @@ function VerticalGauge({ value, pct, color, min, max, units, decimalPlaces, warn
             <div className="absolute left-0 right-0 h-px bg-red-500/60" style={{ bottom: `${critPct}%` }} />
           )}
         </div>
-        {/* Min / Max labels */}
-        <div className="flex justify-between w-full text-xs text-slate-500 mt-1 px-1">
+        <div className="flex justify-between w-full text-slate-500 mt-1 px-1" style={{ fontSize: `${labelSize}px` }}>
           <span>{min}</span>
           <span>{max}</span>
         </div>
@@ -173,32 +174,49 @@ function VerticalGauge({ value, pct, color, min, max, units, decimalPlaces, warn
 }
 
 // ─── Numeric-only card ───
-function NumericGauge({ value, color, units, decimalPlaces, valueStyle }: {
-  value: number; color: string; units: string; decimalPlaces: number; valueStyle?: TextStyle;
+function NumericGauge({ value, color, units, decimalPlaces, valueFontSize, valueStyle }: {
+  value: number; color: string; units: string; decimalPlaces: number; valueFontSize: number; valueStyle?: TextStyle;
 }) {
+  const unitSize = Math.max(10, Math.round(valueFontSize * 0.4));
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center">
-      <div className="text-4xl font-bold" style={{ color, ...textStyleToCSS(valueStyle) }}>
+      <div className="font-bold" style={{ fontSize: `${valueFontSize}px`, color, ...textStyleToCSS(valueStyle) }}>
         {value.toFixed(decimalPlaces)}
       </div>
       {units && (
-        <div className="text-sm text-slate-400 mt-1">{units}</div>
+        <div className="text-slate-400 mt-1" style={{ fontSize: `${unitSize}px` }}>{units}</div>
       )}
     </div>
   );
 }
 
+// ─── Default sizes per mode ───
+const DEFAULTS: Record<GaugeDisplayMode, { valueFontSize: number; barThickness: number; gaugeSize: number }> = {
+  bar:      { valueFontSize: 30, barThickness: 12, gaugeSize: 100 },
+  radial:   { valueFontSize: 14, barThickness: 6,  gaugeSize: 100 },
+  donut:    { valueFontSize: 16, barThickness: 8,  gaugeSize: 100 },
+  vertical: { valueFontSize: 24, barThickness: 32, gaugeSize: 100 },
+  numeric:  { valueFontSize: 36, barThickness: 12, gaugeSize: 100 },
+};
+
 // ─── Main component ───
 export function GaugeWidget({
   title, tag, tagValues, min = 0, max = 100, units = '', warning, critical,
-  decimalPlaces = 1, displayMode = 'bar', titleStyle, valueStyle,
+  decimalPlaces = 1, displayMode = 'bar', valueFontSize, barThickness, gaugeSize,
+  titleStyle, valueStyle,
 }: Props) {
   const tv = tagValues[tag];
   const value = Number(tv?.value ?? 0);
   const pct = Math.max(0, Math.min(100, ((value - min) / (max - min || 1)) * 100));
   const color = getColor(value, warning, critical);
 
-  const shared = { value, pct, color, min, max, units, decimalPlaces, valueStyle };
+  const defaults = DEFAULTS[displayMode] || DEFAULTS.bar;
+  const vfs = valueFontSize ?? defaults.valueFontSize;
+  const bt = barThickness ?? defaults.barThickness;
+  const gs = gaugeSize ?? defaults.gaugeSize;
+
+  const shared = { value, pct, color, min, max, units, decimalPlaces, valueFontSize: vfs, barThickness: bt, gaugeSize: gs, valueStyle };
 
   return (
     <div className="bg-slate-800 rounded-xl p-4 h-full flex flex-col border border-slate-700">
@@ -213,3 +231,5 @@ export function GaugeWidget({
     </div>
   );
 }
+
+export { DEFAULTS as GAUGE_DEFAULTS };
