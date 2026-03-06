@@ -22,8 +22,8 @@ export function LoginPage({ onLogin }: Props) {
       const res = await api.login(username, password);
       onLogin(res.access_token, res.user);
       navigate('/');
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -34,8 +34,8 @@ export function LoginPage({ onLogin }: Props) {
       const res = await api.pinLogin(pin);
       onLogin(res.access_token, res.user);
       navigate('/');
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
     }
   };
 

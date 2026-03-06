@@ -145,6 +145,7 @@ export function PropertyPanel({ widget, onUpdateProps, onUpdateWidget, onDelete,
   }
 
   const typeInfo = WIDGET_TYPES.find(t => t.type === widget.type);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const p = widget.props as Record<string, any>;
 
   const setProp = (key: string, value: unknown) => {
@@ -546,7 +547,7 @@ function ControlGroupEditor({ controls, onChange }: {
     if (type === 'button') { base.value = null; base.color = 'blue'; }
     if (type === 'input') { base.min = 0; base.max = 100; base.step = 1; }
     if (type === 'value') { base.decimalPlaces = 1; }
-    onChange([...controls, base as any]);
+    onChange([...controls, base as { type: string; tag: string; label: string; [k: string]: unknown }]);
   };
   const removeControl = (idx: number) => onChange(controls.filter((_, i) => i !== idx));
   const updateControl = (idx: number, patch: Record<string, unknown>) =>

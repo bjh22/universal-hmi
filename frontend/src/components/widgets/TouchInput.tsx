@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+// Hooks (useNumericInput, useAlphaInput) are in ./useTouchInput.ts
 import { createPortal } from 'react-dom';
 import { Delete, CornerDownLeft, X, ArrowUp } from 'lucide-react';
 
@@ -269,62 +270,3 @@ export function AlphaKeyboard({ value: initialValue, title, onSubmit, onClose }:
   );
 }
 
-// ─── Hook for easy integration ───
-
-export function useNumericInput() {
-  const [state, setState] = useState<{
-    value: string;
-    title?: string;
-    units?: string;
-    min?: number;
-    max?: number;
-    decimalPlaces?: number;
-    resolve: (val: string | null) => void;
-  } | null>(null);
-
-  const open = useCallback((opts: { value: string; title?: string; units?: string; min?: number; max?: number; decimalPlaces?: number }): Promise<string | null> => {
-    return new Promise(resolve => {
-      setState({ ...opts, resolve });
-    });
-  }, []);
-
-  const element = state ? (
-    <NumericKeypad
-      value={state.value}
-      title={state.title}
-      units={state.units}
-      min={state.min}
-      max={state.max}
-      decimalPlaces={state.decimalPlaces}
-      onSubmit={val => { state.resolve(val); setState(null); }}
-      onClose={() => { state.resolve(null); setState(null); }}
-    />
-  ) : null;
-
-  return { open, element };
-}
-
-export function useAlphaInput() {
-  const [state, setState] = useState<{
-    value: string;
-    title?: string;
-    resolve: (val: string | null) => void;
-  } | null>(null);
-
-  const open = useCallback((opts: { value: string; title?: string }): Promise<string | null> => {
-    return new Promise(resolve => {
-      setState({ ...opts, resolve });
-    });
-  }, []);
-
-  const element = state ? (
-    <AlphaKeyboard
-      value={state.value}
-      title={state.title}
-      onSubmit={val => { state.resolve(val); setState(null); }}
-      onClose={() => { state.resolve(null); setState(null); }}
-    />
-  ) : null;
-
-  return { open, element };
-}

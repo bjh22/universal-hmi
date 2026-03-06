@@ -46,7 +46,7 @@ export interface AlarmData {
   tag_name?: string;
   message: string;
   severity: 'info' | 'warning' | 'critical';
-  state: 'active_unacked' | 'active_acked' | 'inactive';
+  state: 'active_unacked' | 'active_acked' | 'inactive_unacked' | 'inactive';
   triggered_at: string;
   acknowledged_at: string | null;
   acknowledged_by: string | null;
@@ -145,6 +145,22 @@ export interface ProductionRun {
   quality: number | null;
   oee: number | null;
   shift: string | null;
+}
+
+export interface BrowsedTag {
+  name?: string;
+  display_name?: string;
+  node_id?: string;
+  address?: string;
+  data_type?: string;
+}
+
+export interface UserListEntry {
+  id: number;
+  username: string;
+  display_name: string;
+  role: string;
+  is_active: boolean;
 }
 
 export interface AuditEntry {

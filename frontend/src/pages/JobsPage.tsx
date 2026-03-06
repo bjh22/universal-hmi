@@ -32,7 +32,7 @@ function SetpointEditor({ value, onChange, tags }: {
     onChange({ ...value, '': '' });
   };
 
-  const updateKey = (oldKey: string, newKey: string, idx: number) => {
+  const updateKey = (_oldKey: string, newKey: string, idx: number) => {
     const newObj: Record<string, unknown> = {};
     Object.entries(value).forEach(([k, v], i) => {
       newObj[i === idx ? newKey : k] = v;
@@ -114,10 +114,9 @@ function SetpointEditor({ value, onChange, tags }: {
 }
 
 // ─── Download Conditions Editor ───
-function ConditionsEditor({ value, onChange, tags }: {
+function ConditionsEditor({ value, onChange }: {
   value: { guards: { tag: string; value: unknown }[] };
   onChange: (v: { guards: { tag: string; value: unknown }[] }) => void;
-  tags: Tag[];
 }) {
   const guards = value.guards || [];
   const [keypad, setKeypad] = useState<{ idx: number; kind: 'numeric' | 'alpha' } | null>(null);
@@ -314,8 +313,8 @@ function UploadDialog({ tags, onClose, onUploaded }: {
       await api.uploadJobFromMachine(name, Array.from(selectedTags));
       onUploaded();
       onClose();
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : String(err));
     } finally {
       setUploading(false);
     }
@@ -357,7 +356,7 @@ function UploadDialog({ tags, onClose, onUploaded }: {
                     checked={selectedTags.has(t.name)}
                     onChange={() => {
                       const next = new Set(selectedTags);
-                      next.has(t.name) ? next.delete(t.name) : next.add(t.name);
+                      if (next.has(t.name)) { next.delete(t.name); } else { next.add(t.name); }
                       setSelectedTags(next);
                     }}
                     className="accent-blue-500 w-5 h-5"
@@ -432,14 +431,14 @@ export function JobsPage({ user }: Props) {
     const conditions = job.download_conditions ? JSON.parse(job.download_conditions) : null;
     let msg = `Download job "${job.name}" to machine?\n\nSetpoints:\n${params || '(none)'}`;
     if (conditions?.guards?.length) {
-      msg += `\n\nPre-conditions:\n${conditions.guards.map((g: any) => `  ${g.tag} = ${g.value}`).join('\n')}`;
+      msg += `\n\nPre-conditions:\n${conditions.guards.map((g: { tag: string; value: unknown }) => `  ${g.tag} = ${g.value}`).join('\n')}`;
     }
     if (!window.confirm(msg)) return;
     try {
       await api.downloadJob(id);
       alert('Job downloaded successfully');
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -705,7 +704,7 @@ export function JobsPage({ user }: Props) {
                   />
                 </div>
                 <SetpointEditor value={editSetpoints} onChange={setEditSetpoints} tags={tags} />
-                <ConditionsEditor value={editConditions} onChange={setEditConditions} tags={tags} />
+                <ConditionsEditor value={editConditions} onChange={setEditConditions} />
                 <div className="flex gap-3 pt-2">
                   <button
                     onClick={handleSaveEdit}
@@ -766,7 +765,7 @@ export function JobsPage({ user }: Props) {
                       <div className="bg-slate-900 rounded-lg border border-slate-700 mb-3 overflow-hidden">
                         <table className="w-full text-sm">
                           <tbody>
-                            {guards.map((g: any, i: number) => (
+                            {guards.map((g: { tag: string; value: unknown }, i: number) => (
                               <tr key={i} className="border-b border-slate-700/50">
                                 <td className="px-4 py-3 text-slate-300 font-mono text-sm">{g.tag}</td>
                                 <td className="px-4 py-3 text-sm text-slate-500">=</td>
