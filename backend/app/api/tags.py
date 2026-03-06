@@ -17,6 +17,7 @@ router = APIRouter(prefix="/api/tags", tags=["tags"])
 class TagCreate(BaseModel):
     name: str
     description: str | None = None
+    long_description: str | None = None
     group_name: str | None = None
     data_source_id: int | None = None
     address: str | None = None
@@ -50,6 +51,7 @@ class TagOut(BaseModel):
     id: int
     name: str
     description: str | None
+    long_description: str | None
     group_name: str | None
     data_source_id: int | None
     address: str | None

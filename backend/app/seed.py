@@ -63,6 +63,7 @@ async def seed():
             Tag(
                 name="Machine.State",
                 description="Machine operating state",
+                long_description="Current operating state of the packaging machine. States: 0=Stopped (machine is idle and safe to access), 1=Running (machine is in automatic production mode), 2=Faulted (machine has stopped due to an error condition — check alarm log), 3=Idle (machine is powered on but waiting for a start command).",
                 group_name="Machine",
                 data_source_id=sim_ds.id,
                 data_type=TagDataType.INT,
@@ -75,6 +76,7 @@ async def seed():
             Tag(
                 name="Machine.Speed",
                 description="Machine speed in units/min",
+                long_description="Current actual speed of the packaging machine measured by the main drive encoder. This is a read-back value reflecting real-time production throughput, not the commanded setpoint. Normal operating range is 80–150 units/min. Values above 160 may indicate a control issue.",
                 group_name="Machine",
                 data_source_id=sim_ds.id,
                 data_type=TagDataType.FLOAT,
@@ -91,6 +93,7 @@ async def seed():
             Tag(
                 name="Machine.Temperature",
                 description="Sealing bar temperature",
+                long_description="Temperature of the main sealing bar measured by an embedded thermocouple. This temperature must remain within 100–180°C for proper seal integrity. Below 100°C seals will be weak or incomplete; above 180°C film may burn or deform. An alarm is triggered outside this range.",
                 group_name="Machine",
                 data_source_id=sim_ds.id,
                 data_type=TagDataType.FLOAT,
@@ -137,6 +140,7 @@ async def seed():
             Tag(
                 name="Machine.Pressure",
                 description="System pressure",
+                long_description="Pneumatic system supply pressure feeding the actuators, clamps, and sealing cylinders. Normal operating pressure is 4.5–6.5 bar. Below 3 bar the machine cannot operate safely and will fault. Above 7 bar indicates a regulator failure. A critical alarm is triggered outside the safe range.",
                 group_name="Machine",
                 data_source_id=sim_ds.id,
                 data_type=TagDataType.FLOAT,
@@ -172,6 +176,7 @@ async def seed():
             Tag(
                 name="Machine.TargetSpeed",
                 description="Target speed setpoint",
+                long_description="This setpoint sets the maximum speed of the packaging machine in automatic mode. The drive will ramp to this speed over approximately 5 seconds. Changing this value during production will take effect immediately. Job recipes may override this value when downloaded.",
                 group_name="Machine",
                 data_source_id=sim_ds.id,
                 data_type=TagDataType.FLOAT,
@@ -186,6 +191,7 @@ async def seed():
             Tag(
                 name="Machine.FilmWidth",
                 description="Film width setting",
+                long_description="Sets the film web width for the current product. This value controls the cross-seal knife position and film guide spacing. Must match the actual film roll width being used. Changing this value requires the machine to be stopped. Valid range: 50–500 mm.",
                 group_name="Machine",
                 data_source_id=sim_ds.id,
                 data_type=TagDataType.FLOAT,
@@ -200,6 +206,7 @@ async def seed():
             Tag(
                 name="Machine.SealTemp",
                 description="Seal temperature setpoint",
+                long_description="Sets the target temperature for the sealing bar heater. The PID controller will regulate the heater to maintain this temperature. Optimal seal temperature depends on the film material — typically 140–160°C for PE film, 170–190°C for laminated materials. Allow 2–3 minutes for temperature to stabilize after changing.",
                 group_name="Machine",
                 data_source_id=sim_ds.id,
                 data_type=TagDataType.FLOAT,

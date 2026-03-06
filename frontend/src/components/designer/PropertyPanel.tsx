@@ -448,6 +448,18 @@ export function PropertyPanel({ widget, onUpdateProps, onUpdateWidget, onDelete,
           </Field>
         </Section>
 
+        {/* Info Button */}
+        {widget.type !== 'text_label' && widget.type !== 'alarm_summary' && (
+          <Section title="Info Button">
+            <label className="flex items-center gap-1.5 text-xs text-slate-400">
+              <input type="checkbox" checked={widget.showInfo !== false}
+                onChange={e => onUpdateWidget(widget.id, { showInfo: e.target.checked })}
+                className="rounded bg-slate-700 border-slate-600" />
+              Show info icon when tag has a description
+            </label>
+          </Section>
+        )}
+
         {/* Delete */}
         <button
           onClick={onDelete}

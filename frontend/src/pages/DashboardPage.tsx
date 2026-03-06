@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { api } from '../lib/api';
 import { WidgetRenderer } from '../components/widgets/WidgetRenderer';
+import { InfoButton } from '../components/widgets/InfoButton';
 import { WidgetPalette } from '../components/designer/WidgetPalette';
 import { PropertyPanel } from '../components/designer/PropertyPanel';
 import { EditorToolbar } from '../components/designer/EditorToolbar';
@@ -315,6 +316,11 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
           const enabledByRole = !w.enabledRoles || w.enabledRoles.length === 0 || (userRole && w.enabledRoles.includes(userRole));
           const isEnabled = enabledByProp && enabledByTag && enabledByRole;
 
+          // Resolve tag info for the info button
+          const tagName = (w.props as Record<string, unknown>).tag as string | undefined;
+          const longDesc = tagName ? tagValues[tagName]?.long_description : undefined;
+          const showInfoBtn = w.showInfo !== false && !!longDesc;
+
           return (
             <div
               key={w.id}
@@ -322,8 +328,9 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
                 gridColumn: `${w.x + 1} / span ${w.w}`,
                 gridRow: `${w.y + 1} / span ${w.h}`,
               }}
-              className={isEnabled ? '' : 'opacity-50 pointer-events-none'}
+              className={`relative ${isEnabled ? '' : 'opacity-50 pointer-events-none'}`}
             >
+              {showInfoBtn && <InfoButton description={longDesc!} title={(w.props as Record<string, unknown>).title as string} />}
               <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} />
             </div>
           );

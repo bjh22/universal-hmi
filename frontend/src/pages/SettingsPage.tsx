@@ -10,6 +10,7 @@ interface Props {
 const EMPTY_TAG: Omit<Tag, 'id'> = {
   name: '',
   description: null,
+  long_description: null,
   group_name: null,
   data_source_id: null,
   address: null,
@@ -219,6 +220,15 @@ function TagDialog({ tag, dataSources, onSave, onClose }: {
           </div>
           <Field label="Description">
             <input value={form.description || ''} onChange={e => set('description', e.target.value || null)} className={inputCls} />
+          </Field>
+          <Field label="Long Description">
+            <textarea
+              value={form.long_description || ''}
+              onChange={e => set('long_description', e.target.value || null)}
+              className={inputCls}
+              rows={3}
+              placeholder="Detailed description shown to operators via the info button on widgets"
+            />
           </Field>
 
           {/* Data source & address */}

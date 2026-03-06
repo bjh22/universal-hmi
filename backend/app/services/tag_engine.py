@@ -19,24 +19,28 @@ from app.models.tag import SimulationBehavior, Tag
 
 
 class TagValue:
-    __slots__ = ("tag_id", "name", "value", "quality", "timestamp", "data_type")
+    __slots__ = ("tag_id", "name", "value", "quality", "timestamp", "data_type", "long_description")
 
-    def __init__(self, tag_id: int, name: str, value, data_type: str):
+    def __init__(self, tag_id: int, name: str, value, data_type: str, long_description: str | None = None):
         self.tag_id = tag_id
         self.name = name
         self.value = value
         self.quality = "good"
         self.timestamp = datetime.now(timezone.utc)
         self.data_type = data_type
+        self.long_description = long_description
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "tag_id": self.tag_id,
             "name": self.name,
             "value": self.value,
             "quality": self.quality,
             "timestamp": self.timestamp.isoformat(),
         }
+        if self.long_description:
+            d["long_description"] = self.long_description
+        return d
 
 
 class TagEngine:
@@ -59,7 +63,8 @@ class TagEngine:
             self._tags[tag.name] = tag
             initial_value = self._get_initial_value(tag)
             self._values[tag.name] = TagValue(
-                tag_id=tag.id, name=tag.name, value=initial_value, data_type=tag.data_type.value
+                tag_id=tag.id, name=tag.name, value=initial_value,
+                data_type=tag.data_type.value, long_description=tag.long_description,
             )
 
     def _get_initial_value(self, tag: Tag):

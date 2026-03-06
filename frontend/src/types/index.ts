@@ -4,6 +4,7 @@ export interface TagValue {
   value: unknown;
   quality: string;
   timestamp: string;
+  long_description?: string;
 }
 
 export interface TagLabel {
@@ -17,6 +18,7 @@ export interface Tag {
   id: number;
   name: string;
   description: string | null;
+  long_description: string | null;
   group_name: string | null;
   data_source_id: number | null;
   address: string | null;
@@ -83,6 +85,7 @@ export interface Widget {
   enabled?: boolean;       // runtime enabled state (default true)
   enabledTag?: string;     // tag-driven enabled: enabled when tag is truthy
   enabledRoles?: string[]; // role-based enabled: enabled only for these roles
+  showInfo?: boolean;      // show info icon when tag has long_description (default true)
 }
 
 export interface UserData {

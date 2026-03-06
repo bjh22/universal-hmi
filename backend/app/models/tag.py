@@ -47,6 +47,7 @@ class Tag(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(300), unique=True, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    long_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     group_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     data_source_id: Mapped[int | None] = mapped_column(
