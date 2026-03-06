@@ -149,12 +149,10 @@ class TagEngine:
         tag = self._tags.get(tag_name)
         if tag is None:
             return False
-        # Coerce value to match the tag's declared data type
-        try:
-            value = self._coerce_value(value, tag.data_type.value)
-        except (ValueError, TypeError):
-            pass
-        # If tag is backed by a data source, write through the driver
+        # If tag is backed by a data source, write the raw value through the
+        # driver — the driver reads the node's actual type (e.g. OPC-UA
+        # VariantType) and handles conversion itself.  Coercing to the HMI
+        # tag's data_type first would truncate (e.g. float→int loses decimals).
         if tag.data_source_id and tag.address and self._driver_manager:
             driver = self._driver_manager.get_driver(tag.data_source_id)
             if driver and driver.connected:
@@ -162,7 +160,11 @@ class TagEngine:
                     await driver.write_tag(tag.address, value)
                 except Exception as e:
                     logger.warning(f"Driver write failed for {tag_name}: {e}")
-        # Always update in-memory value
+        # Coerce for in-memory store only
+        try:
+            value = self._coerce_value(value, tag.data_type.value)
+        except (ValueError, TypeError):
+            pass
         return self.set_value(tag_name, value)
 
     def _notify_change(self, tag_name: str, tv: TagValue):
