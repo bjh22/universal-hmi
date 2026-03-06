@@ -7,7 +7,7 @@ interface Props {
   user: UserData | null;
 }
 
-const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white outline-none focus:border-blue-500';
+const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-3 text-sm text-white outline-none focus:border-blue-500 min-h-[44px]';
 
 // ─── Setpoint Editor (structured tag picker) ───
 function SetpointEditor({ value, onChange, tags }: {
@@ -44,7 +44,7 @@ function SetpointEditor({ value, onChange, tags }: {
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <label className="text-xs text-slate-400 font-medium">Setpoints</label>
-        <button type="button" onClick={addRow} className="text-xs text-blue-400 hover:text-blue-300">+ Add setpoint</button>
+        <button type="button" onClick={addRow} className="text-sm text-blue-400 hover:text-blue-300 min-h-[44px] px-2 active:scale-95 transition-transform">+ Add setpoint</button>
       </div>
       {entries.length === 0 && <p className="text-xs text-slate-500 italic">No setpoints defined</p>}
       {entries.map(([key, val], idx) => (
@@ -66,8 +66,8 @@ function SetpointEditor({ value, onChange, tags }: {
               className={inputCls + ' text-xs'}
             />
           </div>
-          <button type="button" onClick={() => removeRow(key)} className="p-1 text-slate-500 hover:text-red-400">
-            <X size={14} />
+          <button type="button" onClick={() => removeRow(key)} className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:text-red-400 active:scale-95 transition-transform">
+            <X size={18} />
           </button>
         </div>
       ))}
@@ -109,7 +109,7 @@ function ConditionsEditor({ value, onChange, tags }: {
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <label className="text-xs text-slate-400 font-medium">Download Conditions</label>
-        <button type="button" onClick={addGuard} className="text-xs text-blue-400 hover:text-blue-300">+ Add guard</button>
+        <button type="button" onClick={addGuard} className="text-sm text-blue-400 hover:text-blue-300 min-h-[44px] px-2 active:scale-95 transition-transform">+ Add guard</button>
       </div>
       <p className="text-[10px] text-slate-500">Tag must equal value before download is allowed</p>
       {guards.length === 0 && <p className="text-xs text-slate-500 italic">No conditions (always allowed)</p>}
@@ -133,8 +133,8 @@ function ConditionsEditor({ value, onChange, tags }: {
               className={inputCls + ' text-xs'}
             />
           </div>
-          <button type="button" onClick={() => removeGuard(idx)} className="p-1 text-slate-500 hover:text-red-400">
-            <X size={14} />
+          <button type="button" onClick={() => removeGuard(idx)} className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:text-red-400 active:scale-95 transition-transform">
+            <X size={18} />
           </button>
         </div>
       ))}
@@ -160,11 +160,11 @@ function HistoryDialog({ jobId, jobName, onRestore, onClose }: {
   }, [jobId]);
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-slate-800 rounded-t-2xl sm:rounded-xl border border-slate-700 w-full sm:max-w-2xl max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-slate-100">Version History: {jobName}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
+          <button onClick={onClose} className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-white active:scale-95 transition-transform"><X size={22} /></button>
         </div>
         {loading && <p className="text-slate-400 text-sm py-4 text-center">Loading...</p>}
         {!loading && history.length === 0 && (
@@ -175,9 +175,9 @@ function HistoryDialog({ jobId, jobName, onRestore, onClose }: {
             <div key={h.id} className="bg-slate-900 rounded-lg border border-slate-700">
               <button
                 onClick={() => setExpanded(expanded === h.id ? null : h.id)}
-                className="w-full flex items-center gap-3 px-4 py-3 text-left"
+                className="w-full flex items-center gap-3 px-4 py-3 min-h-[48px] text-left active:scale-[0.98] transition-transform"
               >
-                {expanded === h.id ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronRight size={14} className="text-slate-400" />}
+                {expanded === h.id ? <ChevronDown size={16} className="text-slate-400" /> : <ChevronRight size={16} className="text-slate-400" />}
                 <span className="text-sm text-slate-200 font-medium">v{h.version}</span>
                 <span className="text-xs text-slate-500">{h.job_name}</span>
                 <span className="text-xs text-slate-500 ml-auto">{h.changed_by || 'unknown'} &middot; {new Date(h.changed_at).toLocaleString()}</span>
@@ -189,7 +189,7 @@ function HistoryDialog({ jobId, jobName, onRestore, onClose }: {
                   </pre>
                   <button
                     onClick={() => { onRestore(h.setpoints); onClose(); }}
-                    className="text-xs px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded"
+                    className="px-4 py-3 min-h-[44px] bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm active:scale-95 transition-transform"
                   >
                     Restore this version
                   </button>
@@ -199,7 +199,7 @@ function HistoryDialog({ jobId, jobName, onRestore, onClose }: {
           ))}
         </div>
         <div className="flex justify-end mt-4">
-          <button onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300">Close</button>
+          <button onClick={onClose} className="px-5 py-3 min-h-[44px] bg-slate-700 rounded-lg text-sm text-slate-300 active:scale-95 transition-transform">Close</button>
         </div>
       </div>
     </div>
@@ -263,36 +263,36 @@ function UploadDialog({ tags, onClose, onUploaded }: {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-lg max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-slate-800 rounded-t-2xl sm:rounded-xl border border-slate-700 w-full sm:max-w-lg max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-slate-100">Capture from Machine</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
+          <button onClick={onClose} className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-white active:scale-95 transition-transform"><X size={22} /></button>
         </div>
         <div className="space-y-3">
           <div>
-            <label className="text-xs text-slate-400">Job Name *</label>
+            <label className="text-sm text-slate-400">Job Name *</label>
             <input value={name} onChange={e => setName(e.target.value)} className={inputCls + ' mt-1'} placeholder="e.g. Current Setup" />
           </div>
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-xs text-slate-400">Select tags to capture ({selectedTags.size} selected)</label>
-              <button type="button" onClick={toggleAll} className="text-xs text-blue-400 hover:text-blue-300">
+              <label className="text-sm text-slate-400">Select tags to capture ({selectedTags.size} selected)</label>
+              <button type="button" onClick={toggleAll} className="text-sm text-blue-400 hover:text-blue-300 min-h-[44px] px-2 active:scale-95 transition-transform">
                 {selectedTags.size === filteredTags.length ? 'Deselect all' : 'Select all'}
               </button>
             </div>
             <div className="relative mb-2">
-              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
               <input
                 value={tagSearch}
                 onChange={e => setTagSearch(e.target.value)}
                 placeholder="Filter tags..."
-                className="w-full bg-slate-700 border border-slate-600 rounded-md pl-7 pr-3 py-1.5 text-xs text-white outline-none"
+                className="w-full bg-slate-700 border border-slate-600 rounded-md pl-8 pr-3 py-3 text-sm text-white outline-none min-h-[44px]"
               />
             </div>
-            <div className="max-h-48 overflow-auto bg-slate-900 rounded-lg border border-slate-700 p-2 space-y-0.5">
+            <div className="max-h-60 overflow-auto bg-slate-900 rounded-lg border border-slate-700 p-2 space-y-0.5">
               {filteredTags.map(t => (
-                <label key={t.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-800 cursor-pointer text-xs">
+                <label key={t.id} className="flex items-center gap-3 px-3 py-2.5 rounded hover:bg-slate-800 cursor-pointer text-sm min-h-[44px] active:bg-slate-700 transition-colors select-none">
                   <input
                     type="checkbox"
                     checked={selectedTags.has(t.name)}
@@ -301,7 +301,7 @@ function UploadDialog({ tags, onClose, onUploaded }: {
                       next.has(t.name) ? next.delete(t.name) : next.add(t.name);
                       setSelectedTags(next);
                     }}
-                    className="accent-blue-500"
+                    className="accent-blue-500 w-5 h-5"
                   />
                   <span className="text-slate-300">{t.name}</span>
                   {t.labels?.map(l => (
@@ -313,12 +313,12 @@ function UploadDialog({ tags, onClose, onUploaded }: {
               {filteredTags.length === 0 && <p className="text-slate-600 text-center py-2">No writable tags found</p>}
             </div>
           </div>
-          <div className="flex justify-end gap-2 pt-1">
-            <button onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300">Cancel</button>
+          <div className="flex justify-end gap-3 pt-2">
+            <button onClick={onClose} className="px-5 py-3 min-h-[44px] bg-slate-700 rounded-lg text-sm text-slate-300 active:scale-95 transition-transform">Cancel</button>
             <button
               onClick={handleUpload}
               disabled={uploading || !name.trim() || selectedTags.size === 0}
-              className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg text-sm text-white"
+              className="px-5 py-3 min-h-[44px] bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg text-sm text-white active:scale-95 transition-transform"
             >
               {uploading ? 'Capturing...' : 'Capture'}
             </button>
@@ -485,15 +485,15 @@ export function JobsPage({ user }: Props) {
           <div className="flex gap-2">
             <button
               onClick={() => setShowUpload(true)}
-              className="flex items-center gap-1.5 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium"
+              className="flex items-center gap-2 px-4 py-3 min-h-[44px] bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium active:scale-95 transition-transform"
             >
-              <Upload size={16} /> Capture from Machine
+              <Upload size={18} /> Capture from Machine
             </button>
             <button
               onClick={() => setShowCreate(true)}
-              className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+              className="flex items-center gap-2 px-4 py-3 min-h-[44px] bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium active:scale-95 transition-transform"
             >
-              <Plus size={16} /> New Job
+              <Plus size={18} /> New Job
             </button>
           </div>
         )}
@@ -525,25 +525,25 @@ export function JobsPage({ user }: Props) {
                 </span>
               </div>
             )}
-            <div className="flex gap-2">
-              <button onClick={handleCreate} className="px-4 py-2 bg-blue-600 rounded-md text-sm text-white">Create</button>
-              <button onClick={() => setShowCreate(false)} className="px-4 py-2 bg-slate-700 rounded-md text-sm text-slate-300">Cancel</button>
+            <div className="flex gap-3">
+              <button onClick={handleCreate} className="px-5 py-3 min-h-[44px] bg-blue-600 rounded-lg text-sm text-white active:scale-95 transition-transform">Create</button>
+              <button onClick={() => setShowCreate(false)} className="px-5 py-3 min-h-[44px] bg-slate-700 rounded-lg text-sm text-slate-300 active:scale-95 transition-transform">Cancel</button>
             </div>
           </div>
         </div>
       )}
 
-      <div className="flex gap-4">
+      <div className="flex flex-col lg:flex-row gap-4">
         {/* Job list */}
-        <div className="w-80 flex-shrink-0">
+        <div className="w-full lg:w-96 flex-shrink-0">
           <div className="relative mb-3">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               type="text"
               placeholder="Search jobs..."
               value={jobSearch}
               onChange={e => setJobSearch(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-8 pr-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-3 py-3 min-h-[44px] text-sm text-white outline-none focus:border-blue-500"
             />
           </div>
           <div className="space-y-2">
@@ -551,7 +551,7 @@ export function JobsPage({ user }: Props) {
               <div
                 key={job.id}
                 onClick={() => { setSelectedJob(job); setEditMode(false); }}
-                className={`p-3 rounded-xl border cursor-pointer transition-colors ${
+                className={`p-4 rounded-xl border cursor-pointer transition-colors active:scale-[0.98] ${
                   selectedJob?.id === job.id
                     ? 'bg-blue-600/10 border-blue-500/30'
                     : 'bg-slate-800 border-slate-700 hover:border-slate-600'
@@ -564,27 +564,27 @@ export function JobsPage({ user }: Props) {
                 {job.description && (
                   <div className="text-xs text-slate-400 mt-1 truncate">{job.description}</div>
                 )}
-                <div className="flex gap-2 mt-2 flex-wrap">
+                <div className="flex gap-2 mt-3 flex-wrap">
                   <button
                     onClick={(e) => { e.stopPropagation(); handleDownload(job.id); }}
-                    className="flex items-center gap-1 px-2 py-1 bg-green-600/20 text-green-400 rounded text-xs hover:bg-green-600/30"
+                    className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-green-600/20 text-green-400 rounded-lg text-sm hover:bg-green-600/30 active:scale-95 transition-transform"
                   >
-                    <Download size={12} /> Download
+                    <Download size={16} /> Download
                   </button>
                   {canEdit && (
                     <button
                       onClick={(e) => { e.stopPropagation(); handleClone(job); }}
-                      className="flex items-center gap-1 px-2 py-1 bg-blue-600/20 text-blue-400 rounded text-xs hover:bg-blue-600/30"
+                      className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-blue-600/20 text-blue-400 rounded-lg text-sm hover:bg-blue-600/30 active:scale-95 transition-transform"
                     >
-                      <Copy size={12} /> Clone
+                      <Copy size={16} /> Clone
                     </button>
                   )}
                   {canDelete && (
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDelete(job.id); }}
-                      className="flex items-center gap-1 px-2 py-1 bg-red-600/20 text-red-400 rounded text-xs hover:bg-red-600/30"
+                      className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-red-600/20 text-red-400 rounded-lg text-sm hover:bg-red-600/30 active:scale-95 transition-transform"
                     >
-                      <Trash2 size={12} /> Delete
+                      <Trash2 size={16} /> Delete
                     </button>
                   )}
                 </div>
@@ -607,27 +607,27 @@ export function JobsPage({ user }: Props) {
           <div className="flex-1 bg-slate-800 rounded-xl p-4 border border-slate-700">
             <div className="flex items-center justify-between mb-1">
               <h2 className="text-lg font-bold text-slate-100">{selectedJob.name}</h2>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap justify-end">
                 <button
                   onClick={() => setShowHistory(true)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md text-xs text-slate-300"
+                  className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-300 active:scale-95 transition-transform"
                   title="Version history"
                 >
-                  <History size={14} /> History
+                  <History size={16} /> History
                 </button>
                 {canEdit && !editMode && (
                   <button
                     onClick={() => startEdit(selectedJob)}
-                    className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md text-xs text-slate-300"
+                    className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-300 active:scale-95 transition-transform"
                   >
-                    <Edit size={14} /> Edit
+                    <Edit size={16} /> Edit
                   </button>
                 )}
                 <button
                   onClick={handleExportJson}
-                  className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md text-xs text-slate-300"
+                  className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-300 active:scale-95 transition-transform"
                 >
-                  <Upload size={14} /> Export JSON
+                  <Upload size={16} /> Export JSON
                 </button>
               </div>
             </div>
@@ -647,18 +647,18 @@ export function JobsPage({ user }: Props) {
                 </div>
                 <SetpointEditor value={editSetpoints} onChange={setEditSetpoints} tags={tags} />
                 <ConditionsEditor value={editConditions} onChange={setEditConditions} tags={tags} />
-                <div className="flex gap-2 pt-2">
+                <div className="flex gap-3 pt-2">
                   <button
                     onClick={handleSaveEdit}
-                    className="flex items-center gap-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-sm text-white"
+                    className="flex items-center gap-1.5 px-5 py-3 min-h-[44px] bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white active:scale-95 transition-transform"
                   >
-                    <Save size={14} /> Save
+                    <Save size={16} /> Save
                   </button>
                   <button
                     onClick={() => setEditMode(false)}
-                    className="flex items-center gap-1 px-4 py-2 bg-slate-700 rounded-md text-sm text-slate-300"
+                    className="flex items-center gap-1.5 px-5 py-3 min-h-[44px] bg-slate-700 rounded-lg text-sm text-slate-300 active:scale-95 transition-transform"
                   >
-                    <X size={14} /> Cancel
+                    <X size={16} /> Cancel
                   </button>
                 </div>
               </div>
@@ -678,15 +678,15 @@ export function JobsPage({ user }: Props) {
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b border-slate-700 text-slate-500">
-                            <th className="text-left px-3 py-2 font-medium text-xs">Tag</th>
-                            <th className="text-right px-3 py-2 font-medium text-xs">Value</th>
+                            <th className="text-left px-4 py-3 font-medium text-xs">Tag</th>
+                            <th className="text-right px-4 py-3 font-medium text-xs">Value</th>
                           </tr>
                         </thead>
                         <tbody>
                           {entries.map(([k, v]) => (
                             <tr key={k} className="border-b border-slate-700/50">
-                              <td className="px-3 py-1.5 text-slate-300 font-mono text-xs">{k}</td>
-                              <td className="px-3 py-1.5 text-slate-200 text-right text-xs">{String(v)}</td>
+                              <td className="px-4 py-3 text-slate-300 font-mono text-sm">{k}</td>
+                              <td className="px-4 py-3 text-slate-200 text-right text-sm">{String(v)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -709,9 +709,9 @@ export function JobsPage({ user }: Props) {
                           <tbody>
                             {guards.map((g: any, i: number) => (
                               <tr key={i} className="border-b border-slate-700/50">
-                                <td className="px-3 py-1.5 text-slate-300 font-mono text-xs">{g.tag}</td>
-                                <td className="px-3 py-1.5 text-xs text-slate-500">=</td>
-                                <td className="px-3 py-1.5 text-slate-200 text-xs">{String(g.value)}</td>
+                                <td className="px-4 py-3 text-slate-300 font-mono text-sm">{g.tag}</td>
+                                <td className="px-4 py-3 text-sm text-slate-500">=</td>
+                                <td className="px-4 py-3 text-slate-200 text-sm">{String(g.value)}</td>
                               </tr>
                             ))}
                           </tbody>
