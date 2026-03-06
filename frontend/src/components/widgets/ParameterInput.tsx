@@ -48,11 +48,12 @@ export function ParameterInput({ title, tag, tagValues, min = 0, max = 100, step
       </div>
       {showKeypad && (
         <NumericKeypad
-          value={String(currentValue)}
+          value={currentValue.toFixed(decimalPlaces)}
           title={title}
           units={units}
           min={min}
           max={max}
+          decimalPlaces={decimalPlaces}
           onSubmit={handleSubmit}
           onClose={() => setShowKeypad(false)}
         />

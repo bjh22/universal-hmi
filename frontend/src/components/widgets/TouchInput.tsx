@@ -28,46 +28,64 @@ interface NumericKeypadProps {
   units?: string;
   min?: number;
   max?: number;
+  decimalPlaces?: number;
   onSubmit: (value: string) => void;
   onClose: () => void;
 }
 
-export function NumericKeypad({ value: initialValue, title, units, min, max, onSubmit, onClose }: NumericKeypadProps) {
-  const [value, setValue] = useState(initialValue);
+export function NumericKeypad({ value: initialValue, title, units, min, max, decimalPlaces, onSubmit, onClose }: NumericKeypadProps) {
+  const [value, setValue] = useState('');
+  const [hasTyped, setHasTyped] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Focus the hidden input to prevent system keyboard on some browsers
     inputRef.current?.focus();
   }, []);
 
+  const displayValue = hasTyped ? value : initialValue;
+
   const append = useCallback((ch: string) => {
     setValue(prev => {
-      if (ch === '.' && prev.includes('.')) return prev;
-      if (ch === '-') return prev.startsWith('-') ? prev.slice(1) : '-' + prev;
-      if (prev === '0' && ch !== '.') return ch;
-      if (prev === '-0' && ch !== '.') return '-' + ch;
-      return prev + ch;
+      const base = hasTyped ? prev : '';
+      if (ch === '.' && base.includes('.')) return base;
+      if (ch === '-') return base.startsWith('-') ? base.slice(1) : '-' + base;
+      // Enforce decimal places limit
+      if (decimalPlaces !== undefined && base.includes('.')) {
+        const afterDot = base.split('.')[1] || '';
+        if (afterDot.length >= decimalPlaces && ch !== '-') return base;
+      }
+      if (decimalPlaces === 0 && ch === '.') return base;
+      if (base === '' && ch === '.') return '0.';
+      if ((base === '0' || base === '') && ch !== '.') return ch;
+      if (base === '-' && ch !== '.') return '-' + ch;
+      if (base === '-0' && ch !== '.') return '-' + ch;
+      return base + ch;
     });
-  }, []);
+    setHasTyped(true);
+  }, [hasTyped, decimalPlaces]);
 
   const backspace = useCallback(() => {
+    if (!hasTyped) {
+      setValue('');
+      setHasTyped(true);
+      return;
+    }
     setValue(prev => {
-      if (prev.length <= 1) return '0';
+      if (prev.length <= 1) return '';
       return prev.slice(0, -1);
     });
-  }, []);
+  }, [hasTyped]);
 
-  const clear = useCallback(() => setValue('0'), []);
+  const clear = useCallback(() => { setValue(''); setHasTyped(true); }, []);
 
   const handleSubmit = useCallback(() => {
-    const num = Number(value);
+    const num = Number(displayValue);
     if (isNaN(num)) return;
-    onSubmit(value);
-  }, [value, onSubmit]);
+    onSubmit(displayValue);
+  }, [displayValue, onSubmit]);
 
-  const numVal = Number(value);
-  const isValid = !isNaN(numVal) && (min === undefined || numVal >= min) && (max === undefined || numVal <= max);
+  const numVal = Number(displayValue);
+  const isValid = displayValue !== '' && !isNaN(numVal) && (min === undefined || numVal >= min) && (max === undefined || numVal <= max);
 
   return (
     <Backdrop onClose={onClose}>
@@ -86,14 +104,14 @@ export function NumericKeypad({ value: initialValue, title, units, min, max, onS
               readOnly
               tabIndex={-1}
               className="bg-transparent text-3xl font-bold text-white outline-none w-full text-right tabular-nums caret-transparent"
-              value={value}
+              value={displayValue || '0'}
             />
             {units && <span className="text-sm text-slate-500 ml-2 flex-shrink-0">{units}</span>}
           </div>
           {min !== undefined && max !== undefined && (
             <div className="text-[10px] text-slate-500 text-right mt-1 px-1">
               Range: {min} – {max}
-              {!isValid && value !== '0' && value !== '' && (
+              {!isValid && displayValue !== '0' && displayValue !== '' && (
                 <span className="text-red-400 ml-2">Out of range</span>
               )}
             </div>
@@ -260,10 +278,11 @@ export function useNumericInput() {
     units?: string;
     min?: number;
     max?: number;
+    decimalPlaces?: number;
     resolve: (val: string | null) => void;
   } | null>(null);
 
-  const open = useCallback((opts: { value: string; title?: string; units?: string; min?: number; max?: number }): Promise<string | null> => {
+  const open = useCallback((opts: { value: string; title?: string; units?: string; min?: number; max?: number; decimalPlaces?: number }): Promise<string | null> => {
     return new Promise(resolve => {
       setState({ ...opts, resolve });
     });
@@ -276,6 +295,7 @@ export function useNumericInput() {
       units={state.units}
       min={state.min}
       max={state.max}
+      decimalPlaces={state.decimalPlaces}
       onSubmit={val => { state.resolve(val); setState(null); }}
       onClose={() => { state.resolve(null); setState(null); }}
     />
