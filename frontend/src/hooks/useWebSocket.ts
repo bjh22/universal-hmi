@@ -61,7 +61,11 @@ export function useWebSocket() {
 
   useEffect(() => {
     activeRef.current = true;
-    connect();
+    // Defer to the next event-loop tick. React StrictMode runs
+    // mount → cleanup → remount synchronously, so the cleanup
+    // clearTimeout cancels this timer before it fires — only the
+    // remount's timer survives, creating exactly one WebSocket.
+    reconnectTimer.current = window.setTimeout(connect, 0);
     return () => {
       activeRef.current = false;
       if (reconnectTimer.current) {
