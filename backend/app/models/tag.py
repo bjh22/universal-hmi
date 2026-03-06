@@ -41,6 +41,14 @@ class SimulationBehavior(str, enum.Enum):
     SCRIPT = "script"
 
 
+tag_label_assignments = Table(
+    "tag_label_assignments",
+    Base.metadata,
+    Column("tag_id", Integer, ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
+    Column("label_id", Integer, ForeignKey("tag_labels.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
 class Tag(Base):
     __tablename__ = "tags"
 
@@ -104,14 +112,6 @@ class Tag(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
-
-
-tag_label_assignments = Table(
-    "tag_label_assignments",
-    Base.metadata,
-    Column("tag_id", Integer, ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
-    Column("label_id", Integer, ForeignKey("tag_labels.id", ondelete="CASCADE"), primary_key=True),
-)
 
 
 class TagLabel(Base):
