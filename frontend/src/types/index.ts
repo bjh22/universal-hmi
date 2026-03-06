@@ -90,8 +90,19 @@ export interface JobData {
   description: string | null;
   version: number;
   setpoints: string;
+  download_conditions: string | null;
   created_by: string | null;
   created_at: string;
+}
+
+export interface JobHistoryEntry {
+  id: number;
+  job_id: number;
+  job_name: string;
+  version: number;
+  setpoints: string;
+  changed_by: string | null;
+  changed_at: string;
 }
 
 export type ProtocolType = 'opcua' | 'modbus_tcp' | 'ethernet_ip' | 'mqtt' | 'simulation';

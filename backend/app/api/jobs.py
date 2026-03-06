@@ -219,6 +219,7 @@ def _job_out(job: Job) -> dict:
         "description": job.description,
         "version": job.version,
         "setpoints": job.setpoints,
+        "download_conditions": job.download_conditions,
         "created_by": job.created_by,
         "created_at": job.created_at.isoformat() if job.created_at else "",
     }

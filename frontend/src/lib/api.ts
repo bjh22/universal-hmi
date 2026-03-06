@@ -82,6 +82,13 @@ export const api = {
     request(`/jobs/${id}`, { method: 'DELETE' }),
   downloadJob: (id: number) =>
     request(`/jobs/${id}/download`, { method: 'POST' }),
+  uploadJobFromMachine: (name: string, tagNames: string[]) =>
+    request('/jobs/upload-from-machine', {
+      method: 'POST',
+      body: JSON.stringify({ name, tag_names: tagNames }),
+    }),
+  getJobHistory: (id: number) =>
+    request<any[]>(`/jobs/${id}/history`),
 
   // Trends
   getTrendData: (tagId: number, hours = 1) =>
