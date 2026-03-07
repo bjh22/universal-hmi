@@ -44,8 +44,10 @@ export function TrendsPage() {
     if (selectedTags.length === 0) {
       return;
     }
-    const hours = useCustomRange ? undefined : timeRange;
-    Promise.all(selectedTags.map((id) => api.getTrendData(id, hours || timeRange)))
+    const fetchData = useCustomRange && customStart
+      ? (id: number) => api.getTrendData(id, timeRange, customStart, customEnd || undefined)
+      : (id: number) => api.getTrendData(id, timeRange);
+    Promise.all(selectedTags.map(fetchData))
       .then((results) => {
         const merged: Record<string, Record<string, unknown>> = {};
         results.forEach((data, i) => {
@@ -63,7 +65,7 @@ export function TrendsPage() {
         setChartData(sorted);
       })
       .catch(() => {});
-  }, [selectedTags, timeRange, useCustomRange, tags]);
+  }, [selectedTags, timeRange, useCustomRange, customStart, customEnd, tags]);
 
   // Clear chart data when no tags are selected
   const displayChartData = useMemo(
@@ -270,6 +272,7 @@ export function TrendsPage() {
                       stroke={COLORS[i % COLORS.length]}
                       dot={false}
                       strokeWidth={2}
+                      connectNulls
                     />
                   );
                 })}
