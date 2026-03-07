@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PY=""
 
 # --- Prerequisite checks ---
 
@@ -14,7 +15,6 @@ check_python() {
     echo "  Or download from https://www.python.org/downloads/"
     return 1
   fi
-  local PY
   PY=$(command -v python3 || command -v python)
   local VER
   VER=$($PY --version 2>&1 | awk '{print $2}')
