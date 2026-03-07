@@ -34,6 +34,14 @@ async def init_db():
         await _add_column_if_missing(conn, "screens", "layout_mode", "VARCHAR(20) NOT NULL DEFAULT 'grid'")
         await _add_column_if_missing(conn, "screens", "target_resolution", "TEXT")
         await _add_column_if_missing(conn, "screens", "sort_order", "INTEGER NOT NULL DEFAULT 0")
+        # Project foreign keys
+        await _add_column_if_missing(conn, "tags", "project_id", "INTEGER REFERENCES projects(id) ON DELETE SET NULL")
+        await _add_column_if_missing(conn, "tag_labels", "project_id", "INTEGER REFERENCES projects(id) ON DELETE SET NULL")
+        await _add_column_if_missing(conn, "tag_templates", "project_id", "INTEGER REFERENCES projects(id) ON DELETE SET NULL")
+        await _add_column_if_missing(conn, "screens", "project_id", "INTEGER REFERENCES projects(id) ON DELETE SET NULL")
+        await _add_column_if_missing(conn, "screen_templates", "project_id", "INTEGER REFERENCES projects(id) ON DELETE SET NULL")
+        await _add_column_if_missing(conn, "data_sources", "project_id", "INTEGER REFERENCES projects(id) ON DELETE SET NULL")
+        await _add_column_if_missing(conn, "jobs", "project_id", "INTEGER REFERENCES projects(id) ON DELETE SET NULL")
 
 
 async def _add_column_if_missing(conn, table: str, column: str, col_type: str):

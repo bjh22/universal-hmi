@@ -182,3 +182,20 @@ export interface AuditEntry {
   details: string | null;
   source_ip: string | null;
 }
+
+export interface ProjectData {
+  id: number;
+  name: string;
+  description: string | null;
+  version: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectDetail extends ProjectData {
+  tag_count: number;
+  screen_count: number;
+  data_source_count: number;
+  job_count: number;
+}

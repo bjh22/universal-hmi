@@ -99,6 +99,11 @@ class Tag(Base):
         ForeignKey("tag_templates.id"), nullable=True
     )
 
+    # Project reference
+    project_id: Mapped[int | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
+    )
+
     # Labels (many-to-many)
     labels: Mapped[list["TagLabel"]] = relationship(
         secondary=tag_label_assignments, back_populates="tags", lazy="selectin"
@@ -121,6 +126,9 @@ class TagLabel(Base):
     name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     color: Mapped[str | None] = mapped_column(String(20), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    project_id: Mapped[int | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
+    )
 
     tags: Mapped[list["Tag"]] = relationship(
         secondary=tag_label_assignments, back_populates="labels"
@@ -135,6 +143,9 @@ class TagTemplate(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     # JSON array of field definitions: [{"name": "Speed", "data_type": "float", ...}]
     fields: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    project_id: Mapped[int | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)
     )
