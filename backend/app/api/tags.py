@@ -62,9 +62,15 @@ class TagOut(BaseModel):
     display_format: str | None
     min_value: float | None
     max_value: float | None
+    deadband: float | None
     trending_enabled: bool
+    trending_sample_rate_ms: int | None
     alarm_enabled: bool
+    alarm_config: str | None
     simulation_enabled: bool
+    simulation_behavior: str | None
+    simulation_config: str | None
+    enum_mapping: str | None
     labels: list[TagLabelOut] = []
 
     model_config = {"from_attributes": True}
@@ -649,6 +655,149 @@ async def import_tags_rslogix500(
         await session.refresh(tag)
         tag_engine.register_tag(tag)
     return {"imported": len(created), "names": [t.name for t in created]}
+
+
+# ─── Import Preview Endpoints ───
+
+def _parse_codesys_xml(xml_str: str, prefix: str = "") -> list[dict]:
+    """Parse CODESYS XML and return list of tag dicts (no DB operations)."""
+    root = ET.fromstring(xml_str)
+    ns: dict[str, str] = CODESYS_NS
+    type_list = root.find("sc:TypeList", ns)
+    if type_list is None:
+        ns = {}
+        type_list = root.find("TypeList")
+
+    registry: dict[str, dict] = {}
+    if type_list is not None:
+        registry = _codesys_build_type_registry(type_list, ns if ns else {})
+
+    node_list = root.find("sc:NodeList", ns) or root.find("NodeList")
+    if node_list is None:
+        return []
+
+    parsed: list[dict] = []
+    for top_node in (node_list.findall("sc:Node", ns) if ns else node_list.findall("Node")):
+        parsed.extend(_codesys_parse_nodes(top_node, [], registry, ns if ns else {}))
+
+    result = []
+    for td in parsed:
+        tag_name = f"{prefix}.{td['name']}" if prefix else td["name"]
+        enum_mapping = td.get("enum_mapping")
+        result.append({
+            "name": tag_name,
+            "description": td.get("description"),
+            "group_name": td.get("group_name"),
+            "data_type": td["data_type"].value,
+            "access_mode": td["access_mode"].value,
+            "has_enum": bool(enum_mapping),
+            "enum_values": len(enum_mapping) if enum_mapping else 0,
+        })
+    return result
+
+
+def _parse_rslogix500_csv(csv_str: str, prefix: str = "") -> list[dict]:
+    """Parse RSLogix 500 CSV and return list of tag dicts (no DB operations)."""
+    lines = csv_str.strip().split("\n")
+    result: list[dict] = []
+    seen_names: set[str] = set()
+
+    group_map: dict[str, str] = {
+        "B": "Bits", "N": "Integers", "F": "Floats",
+        "T": "Timers", "C": "Counters", "R": "Control",
+        "O": "Outputs", "I": "Inputs", "S": "Status",
+        "ST": "Strings", "L": "Long Integers", "A": "ASCII",
+    }
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        fields: list[str] = []
+        current = ""
+        in_quotes = False
+        for ch in line:
+            if ch == '"':
+                in_quotes = not in_quotes
+            elif ch == ',' and not in_quotes:
+                fields.append(current)
+                current = ""
+                continue
+            current += ch
+        fields.append(current)
+
+        if len(fields) < 3:
+            continue
+        address = fields[0].strip()
+        if not address or address.startswith("DFILE") or address.startswith("PFILE"):
+            continue
+
+        symbol = fields[2].strip().strip('"')
+        description = _rslogix_build_description(fields[3:8]) if len(fields) > 3 else ""
+        file_letter, _ = _rslogix_parse_address(address)
+        data_type = RSLOGIX_FILE_TYPE_MAP.get(file_letter, TagDataType.INT)
+
+        tag_name = symbol if symbol else address
+        tag_name = tag_name.replace("/", "_").replace(":", "_").replace(".", "_")
+        if tag_name in seen_names:
+            continue
+        seen_names.add(tag_name)
+        if not symbol and not description:
+            continue
+
+        full_name = f"{prefix}.{tag_name}" if prefix else tag_name
+        result.append({
+            "name": full_name,
+            "description": description or None,
+            "group_name": group_map.get(file_letter, "Other"),
+            "data_type": data_type.value,
+            "access_mode": TagAccessMode.READ_WRITE.value,
+            "address": address,
+        })
+    return result
+
+
+@router.post("/import/codesys/preview")
+async def preview_codesys_import(
+    body: dict,
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    """Preview tags that would be imported from CODESYS XML without creating them."""
+    xml_str = body.get("xml", "")
+    prefix = body.get("prefix", "")
+    if not xml_str:
+        raise HTTPException(status_code=400, detail="Missing 'xml' in body")
+    try:
+        tags = _parse_codesys_xml(xml_str, prefix)
+    except ET.ParseError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid XML: {e}")
+    # Group summary
+    groups: dict[str, int] = {}
+    enum_count = 0
+    for t in tags:
+        g = t.get("group_name") or "Ungrouped"
+        groups[g] = groups.get(g, 0) + 1
+        if t.get("has_enum"):
+            enum_count += 1
+    return {"total": len(tags), "tags": tags, "groups": groups, "enum_count": enum_count}
+
+
+@router.post("/import/rslogix500/preview")
+async def preview_rslogix500_import(
+    body: dict,
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    """Preview tags that would be imported from RSLogix 500 CSV without creating them."""
+    csv_str = body.get("csv", "")
+    prefix = body.get("prefix", "")
+    if not csv_str:
+        raise HTTPException(status_code=400, detail="Missing 'csv' in body")
+    tags = _parse_rslogix500_csv(csv_str, prefix)
+    groups: dict[str, int] = {}
+    for t in tags:
+        g = t.get("group_name") or "Ungrouped"
+        groups[g] = groups.get(g, 0) + 1
+    return {"total": len(tags), "tags": tags, "groups": groups}
 
 
 # Tag Templates

@@ -15,6 +15,7 @@ import type {
   ProductionRun,
   ProjectData,
   ProjectDetail,
+  ImportPreviewTag,
 } from '../types/index';
 
 const BASE = '/api';
@@ -74,6 +75,16 @@ export const api = {
     }),
   importTagsRslogix500: (csv: string, prefix?: string) =>
     request<{ imported: number; names: string[] }>('/tags/import/rslogix500', {
+      method: 'POST',
+      body: JSON.stringify({ csv, prefix: prefix || '' }),
+    }),
+  previewCodesysImport: (xml: string, prefix?: string) =>
+    request<{ total: number; tags: ImportPreviewTag[]; groups: Record<string, number>; enum_count: number }>('/tags/import/codesys/preview', {
+      method: 'POST',
+      body: JSON.stringify({ xml, prefix: prefix || '' }),
+    }),
+  previewRslogix500Import: (csv: string, prefix?: string) =>
+    request<{ total: number; tags: ImportPreviewTag[]; groups: Record<string, number> }>('/tags/import/rslogix500/preview', {
       method: 'POST',
       body: JSON.stringify({ csv, prefix: prefix || '' }),
     }),

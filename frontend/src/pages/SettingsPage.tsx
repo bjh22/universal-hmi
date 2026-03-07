@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { Search, Download, UserPlus, Plus, Pencil, Trash2, Upload, X, Plug, Unplug, FolderSearch, Tag as TagIcon } from 'lucide-react';
 import { api } from '../lib/api';
-import type { Tag, TagLabel, DataSourceData, ProtocolType, AuditEntry, UserData, BrowsedTag, UserListEntry } from '../types';
+import type { Tag, TagLabel, DataSourceData, ProtocolType, AuditEntry, UserData, BrowsedTag, UserListEntry, ImportPreviewTag } from '../types';
 
 interface Props {
   user: UserData | null;
@@ -186,6 +186,70 @@ function DataSourceDialog({ ds, onSave, onClose }: {
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+// ─── Enum Mapping Editor ───
+function EnumMappingEditor({ mapping, onChange }: {
+  mapping: Record<string, string> | null;
+  onChange: (m: Record<string, string> | null) => void;
+}) {
+  const entries = useMemo(() => {
+    if (!mapping) return [];
+    return Object.entries(mapping)
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .map(([k, v]) => ({ key: k, label: v }));
+  }, [mapping]);
+
+  const update = useCallback((newEntries: { key: string; label: string }[]) => {
+    if (newEntries.length === 0) {
+      onChange(null);
+      return;
+    }
+    const m: Record<string, string> = {};
+    for (const e of newEntries) {
+      if (e.key.trim()) m[e.key.trim()] = e.label;
+    }
+    onChange(Object.keys(m).length > 0 ? m : null);
+  }, [onChange]);
+
+  const addEntry = useCallback(() => {
+    const nextKey = entries.length > 0 ? String(Math.max(...entries.map(e => Number(e.key) || 0)) + 1) : '0';
+    update([...entries, { key: nextKey, label: '' }]);
+  }, [entries, update]);
+
+  const removeEntry = useCallback((idx: number) => {
+    update(entries.filter((_, i) => i !== idx));
+  }, [entries, update]);
+
+  const updateEntry = useCallback((idx: number, field: 'key' | 'label', value: string) => {
+    update(entries.map((e, i) => i === idx ? { ...e, [field]: value } : e));
+  }, [entries, update]);
+
+  return (
+    <div className="space-y-1.5">
+      {entries.map((entry, i) => (
+        <div key={i} className="flex gap-1 items-center">
+          <input
+            type="number"
+            value={entry.key}
+            onChange={e => updateEntry(i, 'key', e.target.value)}
+            placeholder="Value"
+            className="w-16 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white"
+          />
+          <span className="text-slate-500 text-xs">=</span>
+          <input
+            type="text"
+            value={entry.label}
+            onChange={e => updateEntry(i, 'label', e.target.value)}
+            placeholder="Label"
+            className="flex-1 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white"
+          />
+          <button type="button" onClick={() => removeEntry(i)} className="text-red-400 hover:text-red-300 text-xs px-1">&times;</button>
+        </div>
+      ))}
+      <button type="button" onClick={addEntry} className="text-xs text-blue-400 hover:text-blue-300">+ Add value</button>
     </div>
   );
 }
@@ -393,6 +457,18 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
             </div>
           </fieldset>
 
+          {/* Enum Mapping */}
+          {(form.data_type === 'int' || form.enum_mapping) && (
+            <fieldset className="border border-slate-700 rounded-lg p-3">
+              <legend className="text-xs text-slate-400 px-2">Enum Mapping</legend>
+              <p className="text-xs text-slate-500 mb-2">Map integer values to display labels (e.g. 0=Stopped, 1=Running)</p>
+              <EnumMappingEditor
+                mapping={form.enum_mapping}
+                onChange={m => set('enum_mapping', m)}
+              />
+            </fieldset>
+          )}
+
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 hover:bg-slate-600">Cancel</button>
             <button type="submit" className="px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-700">{form.id != null ? 'Save' : 'Create'}</button>
@@ -416,17 +492,24 @@ function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClos
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [rawContent, setRawContent] = useState('');
-  const [fileName, setFileName] = useState('');
   const [prefix, setPrefix] = useState('');
-  const [previewLines, setPreviewLines] = useState<string[]>([]);
+  const [previewTags, setPreviewTags] = useState<ImportPreviewTag[]>([]);
+  const [previewGroups, setPreviewGroups] = useState<Record<string, number>>({});
+  const [previewEnumCount, setPreviewEnumCount] = useState(0);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState('');
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const fileRef = useRef<HTMLInputElement>(null);
 
   const resetState = useCallback(() => {
     setRows([]);
     setHeaders([]);
     setRawContent('');
-    setFileName('');
-    setPreviewLines([]);
+    setPreviewTags([]);
+    setPreviewGroups({});
+    setPreviewEnumCount(0);
+    setPreviewError('');
+    setExpandedGroups(new Set());
     if (fileRef.current) fileRef.current.value = '';
   }, []);
 
@@ -435,10 +518,34 @@ function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClos
     resetState();
   }, [resetState]);
 
+  const loadPreview = useCallback(async (content: string, fmt: ImportFormat, pfx: string) => {
+    setPreviewLoading(true);
+    setPreviewError('');
+    try {
+      if (fmt === 'codesys_xml') {
+        const result = await api.previewCodesysImport(content, pfx);
+        setPreviewTags(result.tags);
+        setPreviewGroups(result.groups);
+        setPreviewEnumCount(result.enum_count);
+      } else if (fmt === 'rslogix500') {
+        const result = await api.previewRslogix500Import(content, pfx);
+        setPreviewTags(result.tags);
+        setPreviewGroups(result.groups);
+        setPreviewEnumCount(0);
+      }
+    } catch (err) {
+      setPreviewError(err instanceof Error ? err.message : String(err));
+      setPreviewTags([]);
+      setPreviewGroups({});
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, []);
+
   const handleFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setFileName(file.name);
+
     const reader = new FileReader();
     reader.onload = () => {
       const text = reader.result as string;
@@ -456,12 +563,30 @@ function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClos
         setRows(parsed);
       } else {
         setRawContent(text);
-        const lines = text.split(/\r?\n/).filter(l => l.trim());
-        setPreviewLines(lines.slice(0, 20));
+        loadPreview(text, format, prefix);
       }
     };
     reader.readAsText(file);
-  }, [format]);
+  }, [format, prefix, loadPreview]);
+
+  // Re-preview when prefix changes for PLC formats
+  const prefixTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const handlePrefixChange = useCallback((val: string) => {
+    setPrefix(val);
+    if (rawContent && format !== 'hmi_csv') {
+      clearTimeout(prefixTimeoutRef.current);
+      prefixTimeoutRef.current = setTimeout(() => loadPreview(rawContent, format, val), 300);
+    }
+  }, [rawContent, format, loadPreview]);
+
+  const toggleGroup = useCallback((group: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(group)) next.delete(group);
+      else next.add(group);
+      return next;
+    });
+  }, []);
 
   const handleImport = useCallback(() => {
     if (format === 'hmi_csv') {
@@ -473,18 +598,22 @@ function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClos
     }
   }, [format, rows, rawContent, prefix, onImportCsv, onImportCodesys, onImportRslogix]);
 
-  const hasData = format === 'hmi_csv' ? rows.length > 0 : rawContent.length > 0;
+  const hasData = format === 'hmi_csv' ? rows.length > 0 : previewTags.length > 0;
   const fileAccept = format === 'codesys_xml' ? '.xml' : '.csv,.CSV';
 
   const formatInfo: Record<ImportFormat, { label: string; desc: string }> = {
     hmi_csv: { label: 'HMI CSV', desc: 'CSV with header row. Columns: name, description, group_name, data_type, access_mode, engineering_units, min_value, max_value, address' },
-    codesys_xml: { label: 'CODESYS XML', desc: 'CODESYS symbol configuration XML exported from the PLC IDE (Symbolconfiguration.xsd)' },
-    rslogix500: { label: 'RSLogix 500', desc: 'RSLogix 500 database CSV export with address, symbol, and description columns' },
+    codesys_xml: { label: 'CODESYS XML', desc: 'CODESYS symbol configuration XML exported from the PLC IDE. Structures, function blocks, enums, and arrays are expanded into flat tags.' },
+    rslogix500: { label: 'RSLogix 500', desc: 'RSLogix 500 database CSV export. Addresses are mapped to typed tags grouped by data file (B=Bits, N=Integers, F=Floats, T=Timers, C=Counters).' },
+  };
+
+  const typeBadgeColor: Record<string, string> = {
+    bool: 'bg-purple-600', int: 'bg-blue-600', float: 'bg-emerald-600', string: 'bg-amber-600',
   };
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-3xl max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-4xl max-h-[85vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-slate-100">Import Tags</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
@@ -515,7 +644,7 @@ function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClos
             <input
               type="text"
               value={prefix}
-              onChange={e => setPrefix(e.target.value)}
+              onChange={e => handlePrefixChange(e.target.value)}
               placeholder="e.g. PLC1"
               className="w-48 px-3 py-1.5 bg-slate-900 border border-slate-600 rounded-lg text-sm text-slate-200"
             />
@@ -548,15 +677,71 @@ function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClos
           </>
         )}
 
-        {/* PLC file preview */}
-        {format !== 'hmi_csv' && rawContent && (
+        {/* PLC import preview */}
+        {format !== 'hmi_csv' && previewLoading && (
+          <div className="text-sm text-slate-400 mb-4">Analyzing file...</div>
+        )}
+        {previewError && (
+          <div className="text-sm text-red-400 mb-4">{previewError}</div>
+        )}
+        {format !== 'hmi_csv' && previewTags.length > 0 && (
           <>
-            <div className="text-sm text-slate-300 mb-2">File loaded: {fileName}</div>
-            <div className="max-h-48 overflow-auto mb-4 bg-slate-900 rounded-lg p-3 font-mono text-xs text-slate-400">
-              {previewLines.map((line, i) => (
-                <div key={i} className="truncate">{line}</div>
-              ))}
-              {previewLines.length >= 20 && <div className="text-slate-500 mt-1">...</div>}
+            {/* Summary */}
+            <div className="flex flex-wrap gap-3 mb-3 text-sm">
+              <span className="text-slate-300">{previewTags.length} tags found</span>
+              <span className="text-slate-500">|</span>
+              <span className="text-slate-400">{Object.keys(previewGroups).length} groups</span>
+              {previewEnumCount > 0 && (
+                <>
+                  <span className="text-slate-500">|</span>
+                  <span className="text-amber-400">{previewEnumCount} enum tags</span>
+                </>
+              )}
+            </div>
+
+            {/* Grouped tree view */}
+            <div className="max-h-72 overflow-auto mb-4 border border-slate-700 rounded-lg">
+              {Object.entries(previewGroups)
+                .sort(([, a], [, b]) => b - a)
+                .map(([group, count]) => {
+                  const isExpanded = expandedGroups.has(group);
+                  const groupTags = previewTags.filter(t => (t.group_name || 'Ungrouped') === group);
+                  return (
+                    <div key={group}>
+                      <button
+                        onClick={() => toggleGroup(group)}
+                        className="w-full flex items-center justify-between px-3 py-1.5 bg-slate-750 hover:bg-slate-700 text-left border-b border-slate-700"
+                      >
+                        <span className="text-sm text-slate-200 font-medium">
+                          <span className="text-slate-500 mr-1">{isExpanded ? '\u25BC' : '\u25B6'}</span>
+                          {group}
+                        </span>
+                        <span className="text-xs text-slate-500">{count} tags</span>
+                      </button>
+                      {isExpanded && (
+                        <div className="bg-slate-900">
+                          {groupTags.slice(0, 100).map((tag, i) => (
+                            <div key={i} className="flex items-center gap-2 px-4 py-1 border-b border-slate-800 text-xs">
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium text-white ${typeBadgeColor[tag.data_type] || 'bg-slate-600'}`}>
+                                {tag.data_type}
+                              </span>
+                              {tag.has_enum && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium text-amber-300 bg-amber-900/40">enum</span>
+                              )}
+                              <span className="text-slate-300 font-mono truncate flex-1">{tag.name}</span>
+                              {tag.description && (
+                                <span className="text-slate-500 truncate max-w-48">{tag.description}</span>
+                              )}
+                            </div>
+                          ))}
+                          {groupTags.length > 100 && (
+                            <div className="px-4 py-1 text-xs text-slate-500">...and {groupTags.length - 100} more</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
             </div>
           </>
         )}
@@ -565,7 +750,7 @@ function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClos
           <div className="flex justify-end gap-2">
             <button onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300">Cancel</button>
             <button onClick={handleImport} className="px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-700">
-              Import{format === 'hmi_csv' ? ` ${rows.length} Tags` : ' Tags'}
+              Import {format === 'hmi_csv' ? rows.length : previewTags.length} Tags
             </button>
           </div>
         )}
