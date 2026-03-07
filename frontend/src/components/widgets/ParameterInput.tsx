@@ -17,7 +17,7 @@ interface Props {
   valueStyle?: TextStyle;
 }
 
-export function ParameterInput({ title, tag, tagValues, min = 0, max = 100, step = 1, units = '', decimalPlaces = 1, titleStyle, valueStyle }: Props) {
+export function ParameterInput({ title, tag, tagValues, min = 0, max = 100, units = '', decimalPlaces = 1, titleStyle, valueStyle }: Props) {
   const tv = tagValues[tag];
   const currentValue = Number(tv?.value ?? 0);
   const [showKeypad, setShowKeypad] = useState(false);

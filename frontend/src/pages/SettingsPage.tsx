@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { Search, Download, UserPlus, Plus, Pencil, Trash2, Upload, X, Plug, Unplug, FolderSearch, Tag as TagIcon } from 'lucide-react';
 import { api } from '../lib/api';
-import type { Tag, TagLabel, DataSourceData, ProtocolType, AuditEntry, UserData } from '../types';
+import type { Tag, TagLabel, DataSourceData, ProtocolType, AuditEntry, UserData, BrowsedTag, UserListEntry } from '../types';
 
 interface Props {
   user: UserData | null;
@@ -494,16 +494,17 @@ function BrowseTagsDialog({ dsId, dsName, existingTags, onCreateTag, onClose }: 
   onCreateTag: (tag: Omit<Tag, 'id'>) => void;
   onClose: () => void;
 }) {
-  const [browsedTags, setBrowsedTags] = useState<any[]>([]);
+  const [browsedTags, setBrowsedTags] = useState<BrowsedTag[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [createdAddresses, setCreatedAddresses] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    setLoading(true);
+    let cancelled = false;
     api.browseDataSource(dsId)
-      .then(r => { setBrowsedTags(r.tags || []); setLoading(false); })
-      .catch(err => { setError(err.message); setLoading(false); });
+      .then(r => { if (!cancelled) { setBrowsedTags(r.tags || []); setLoading(false); } })
+      .catch(err => { if (!cancelled) { setError(err instanceof Error ? err.message : String(err)); setLoading(false); } });
+    return () => { cancelled = true; };
   }, [dsId]);
 
   const existingAddresses = useMemo(() => {
@@ -514,7 +515,7 @@ function BrowseTagsDialog({ dsId, dsName, existingTags, onCreateTag, onClose }: 
     return set;
   }, [existingTags, dsId]);
 
-  const handleCreate = useCallback((t: any) => {
+  const handleCreate = useCallback((t: BrowsedTag) => {
     const address = t.node_id || t.address || '';
     const name = t.name || t.display_name || '';
     onCreateTag({
@@ -552,7 +553,7 @@ function BrowseTagsDialog({ dsId, dsName, existingTags, onCreateTag, onClose }: 
                 </tr>
               </thead>
               <tbody>
-                {browsedTags.map((t: any, i: number) => {
+                {browsedTags.map((t, i) => {
                   const address = t.node_id || t.address || '';
                   const alreadyExists = existingAddresses.has(address) || createdAddresses.has(address);
                   return (
@@ -592,7 +593,7 @@ export function SettingsPage({ user }: Props) {
   const [tab, setTab] = useState<'tags' | 'datasources' | 'users' | 'audit'>('tags');
   const [tags, setTags] = useState<Tag[]>([]);
   const [dataSources, setDataSources] = useState<DataSourceData[]>([]);
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<UserListEntry[]>([]);
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
 
   // Tag state
@@ -676,8 +677,8 @@ export function SettingsPage({ user }: Props) {
       }
       setEditTag(null);
       loadTags();
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
     }
   }, [loadTags]);
 
@@ -687,8 +688,8 @@ export function SettingsPage({ user }: Props) {
       await api.deleteTag(deleteTagTarget.id);
       setDeleteTagTarget(null);
       loadTags();
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
     }
   }, [deleteTagTarget, loadTags]);
 
@@ -698,8 +699,8 @@ export function SettingsPage({ user }: Props) {
       setShowCsvImport(false);
       alert(`Imported ${result.imported} tags`);
       loadTags();
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
     }
   }, [loadTags]);
 
@@ -713,8 +714,8 @@ export function SettingsPage({ user }: Props) {
       }
       setEditLabel(null);
       loadLabels();
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
     }
   }, [loadLabels]);
 
@@ -725,8 +726,8 @@ export function SettingsPage({ user }: Props) {
       setDeleteLabelTarget(null);
       loadLabels();
       loadTags(); // refresh tags to reflect removed labels
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
     }
   }, [deleteLabelTarget, loadLabels, loadTags]);
 
@@ -740,8 +741,8 @@ export function SettingsPage({ user }: Props) {
       }
       setEditDs(null);
       loadDataSources();
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
     }
   }, [loadDataSources]);
 
@@ -751,8 +752,8 @@ export function SettingsPage({ user }: Props) {
       await api.deleteDataSource(deleteDsTarget.id);
       setDeleteDsTarget(null);
       loadDataSources();
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
     }
   }, [deleteDsTarget, loadDataSources]);
 
@@ -761,8 +762,8 @@ export function SettingsPage({ user }: Props) {
     try {
       await api.connectDataSource(ds.id);
       loadDataSources();
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
     } finally {
       setConnectingId(null);
     }
@@ -800,8 +801,8 @@ export function SettingsPage({ user }: Props) {
       setShowCreateUser(false);
       setNewUser({ username: '', display_name: '', password: '', role: 'operator', login_mode: 'password' });
       api.getUsers().then(setUsers).catch(() => {});
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -1179,7 +1180,7 @@ export function SettingsPage({ user }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {users.map((u: any) => (
+                {users.map((u) => (
                   <tr key={u.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
                     <td className="px-4 py-2 text-slate-200">{u.username}</td>
                     <td className="px-4 py-2 text-slate-300">{u.display_name}</td>

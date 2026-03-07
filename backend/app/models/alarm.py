@@ -16,6 +16,7 @@ class AlarmSeverity(str, enum.Enum):
 class AlarmState(str, enum.Enum):
     ACTIVE_UNACKED = "active_unacked"
     ACTIVE_ACKED = "active_acked"
+    INACTIVE_UNACKED = "inactive_unacked"
     INACTIVE = "inactive"
 
 

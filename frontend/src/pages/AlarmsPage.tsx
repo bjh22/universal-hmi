@@ -29,19 +29,17 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
     }
   }, [tab]);
 
-  // Merge realtime alarms
-  const rawAlarms = tab === 'active'
-    ? [...realtimeAlarms.filter(a => a.state !== 'inactive'), ...activeAlarms]
-    : historyAlarms;
-
-  // Deduplicate by id
+  // Merge realtime alarms and deduplicate by id
   const deduped = useMemo(() => {
+    const rawAlarms = tab === 'active'
+      ? [...realtimeAlarms.filter(a => a.state !== 'inactive'), ...activeAlarms]
+      : historyAlarms;
     const map = new Map<number, AlarmData>();
     for (const a of rawAlarms) {
       if (a.id) map.set(a.id, a);
     }
     return Array.from(map.values());
-  }, [rawAlarms]);
+  }, [tab, realtimeAlarms, activeAlarms, historyAlarms]);
 
   // Filter
   const filtered = useMemo(() => {
@@ -80,17 +78,22 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
 
   const handleAck = async (id: number) => {
     await api.acknowledgeAlarm(id);
-    setActiveAlarms(prev => prev.map(a => a.id === id ? { ...a, state: 'active_acked' as const } : a));
+    setActiveAlarms(prev => prev.map(a => {
+      if (a.id !== id) return a;
+      return { ...a, state: a.state === 'inactive_unacked' ? 'inactive' as const : 'active_acked' as const };
+    }));
   };
 
   const handleAckAll = useCallback(async () => {
-    const unacked = displayAlarms.filter(a => a.state === 'active_unacked' && a.id);
+    const unacked = displayAlarms.filter(a => (a.state === 'active_unacked' || a.state === 'inactive_unacked') && a.id);
     if (unacked.length === 0) return;
     if (!window.confirm(`Acknowledge all ${unacked.length} unacknowledged alarm(s)?`)) return;
     await Promise.all(unacked.map(a => api.acknowledgeAlarm(a.id)));
-    setActiveAlarms(prev => prev.map(a =>
-      a.state === 'active_unacked' ? { ...a, state: 'active_acked' as const } : a
-    ));
+    setActiveAlarms(prev => prev.map(a => {
+      if (a.state === 'active_unacked') return { ...a, state: 'active_acked' as const };
+      if (a.state === 'inactive_unacked') return { ...a, state: 'inactive' as const };
+      return a;
+    }));
   }, [displayAlarms]);
 
   const handleSort = (field: SortField) => {
@@ -134,7 +137,7 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
     }
   };
 
-  const unackedCount = displayAlarms.filter(a => a.state === 'active_unacked').length;
+  const unackedCount = displayAlarms.filter(a => a.state === 'active_unacked' || a.state === 'inactive_unacked').length;
 
   return (
     <div>
@@ -233,13 +236,16 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {alarm.state === 'active_unacked' && (
+              {(alarm.state === 'active_unacked' || alarm.state === 'inactive_unacked') && (
                 <button
                   onClick={() => alarm.id && handleAck(alarm.id)}
                   className="flex items-center gap-1 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md text-xs text-slate-200"
                 >
                   <Check size={14} /> Acknowledge
                 </button>
+              )}
+              {alarm.state === 'inactive_unacked' && (
+                <span className="text-xs text-orange-400">Cleared</span>
               )}
               {alarm.state === 'active_acked' && (
                 <span className="text-xs text-green-400">Acknowledged</span>

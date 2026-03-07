@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Download, Save, FolderOpen } from 'lucide-react';
 import { api } from '../lib/api';
@@ -27,7 +27,7 @@ export function TrendsPage() {
   const [useCustomRange, setUseCustomRange] = useState(false);
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
-  const [chartData, setChartData] = useState<any[]>([]);
+  const [chartData, setChartData] = useState<Record<string, unknown>[]>([]);
   const [savedViews, setSavedViews] = useState<TrendView[]>([]);
   const [viewName, setViewName] = useState('');
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -37,18 +37,17 @@ export function TrendsPage() {
     api.getTags().then((all) => {
       setTags(all.filter((t: Tag) => t.trending_enabled));
     }).catch(() => {});
-    api.getTrendViews().then(setSavedViews).catch(() => {});
+    api.getTrendViews().then(views => setSavedViews(views as unknown as TrendView[])).catch(() => {});
   }, []);
 
   useEffect(() => {
     if (selectedTags.length === 0) {
-      setChartData([]);
       return;
     }
     const hours = useCustomRange ? undefined : timeRange;
     Promise.all(selectedTags.map((id) => api.getTrendData(id, hours || timeRange)))
       .then((results) => {
-        const merged: Record<string, any> = {};
+        const merged: Record<string, Record<string, unknown>> = {};
         results.forEach((data, i) => {
           const tag = tags.find((t) => t.id === selectedTags[i]);
           data.forEach((pt: TrendDataPoint) => {
@@ -58,12 +57,19 @@ export function TrendsPage() {
             merged[pt.timestamp][tag?.name || `tag_${i}`] = pt.value;
           });
         });
-        setChartData(Object.values(merged).sort((a, b) =>
-          new Date(a.fullTime).getTime() - new Date(b.fullTime).getTime()
-        ));
+        const sorted = Object.values(merged).sort((a, b) =>
+          new Date(String(a.fullTime)).getTime() - new Date(String(b.fullTime)).getTime()
+        );
+        setChartData(sorted);
       })
       .catch(() => {});
   }, [selectedTags, timeRange, useCustomRange, tags]);
+
+  // Clear chart data when no tags are selected
+  const displayChartData = useMemo(
+    () => selectedTags.length === 0 ? [] : chartData,
+    [selectedTags.length, chartData]
+  );
 
   const toggleTag = (id: number) => {
     setSelectedTags((prev) =>
@@ -72,10 +78,10 @@ export function TrendsPage() {
   };
 
   const exportCsv = useCallback(() => {
-    if (chartData.length === 0) return;
+    if (displayChartData.length === 0) return;
     const tagNames = selectedTags.map(id => tags.find(t => t.id === id)?.name || `tag_${id}`);
     const header = ['Timestamp', ...tagNames].join(',');
-    const rows = chartData.map(row =>
+    const rows = displayChartData.map(row =>
       [row.fullTime, ...tagNames.map(n => row[n] ?? '')].join(',')
     );
     const csv = [header, ...rows].join('\n');
@@ -86,7 +92,7 @@ export function TrendsPage() {
     link.download = `trends_${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
-  }, [chartData, selectedTags, tags]);
+  }, [displayChartData, selectedTags, tags]);
 
   const handleSaveView = useCallback(() => {
     if (!viewName.trim() || selectedTags.length === 0) return;
@@ -123,7 +129,7 @@ export function TrendsPage() {
           </button>
           <button
             onClick={exportCsv}
-            disabled={chartData.length === 0}
+            disabled={displayChartData.length === 0}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm disabled:opacity-50"
           >
             <Download size={16} /> Export CSV
@@ -243,9 +249,9 @@ export function TrendsPage() {
 
         {/* Chart */}
         <div className="flex-1 bg-slate-800 rounded-xl p-4 border border-slate-700 min-h-[400px]">
-          {chartData.length > 0 ? (
+          {displayChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={400}>
-              <LineChart data={chartData}>
+              <LineChart data={displayChartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis dataKey="time" stroke="#64748b" tick={{ fontSize: 11 }} />
                 <YAxis stroke="#64748b" tick={{ fontSize: 11 }} />

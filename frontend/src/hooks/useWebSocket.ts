@@ -20,7 +20,7 @@ export function useWebSocket() {
   // and on unmount so stale onclose handlers don't trigger reconnects.
   const activeRef = useRef(false);
 
-  const connect = useCallback(() => {
+  const connect = useCallback(function doConnect() {
     if (!activeRef.current) return;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -51,7 +51,7 @@ export function useWebSocket() {
       if (!activeRef.current) return; // unmounted — don't reconnect
       const delay = Math.min(RECONNECT_BASE_MS * 2 ** attemptRef.current, RECONNECT_MAX_MS);
       attemptRef.current += 1;
-      reconnectTimer.current = window.setTimeout(connect, delay);
+      reconnectTimer.current = window.setTimeout(doConnect, delay);
     };
 
     ws.onerror = () => {

@@ -55,12 +55,17 @@ class AlarmService:
 
     async def acknowledge(self, alarm_id: int, user: str, session: AsyncSession):
         alarm = await session.get(Alarm, alarm_id)
-        if alarm and alarm.state == AlarmState.ACTIVE_UNACKED:
-            alarm.state = AlarmState.ACTIVE_ACKED
-            alarm.acknowledged_at = datetime.now(timezone.utc)
+        if alarm and alarm.state in (AlarmState.ACTIVE_UNACKED, AlarmState.INACTIVE_UNACKED):
+            now = datetime.now(timezone.utc)
+            was_inactive = alarm.state == AlarmState.INACTIVE_UNACKED
+            alarm.state = AlarmState.INACTIVE if was_inactive else AlarmState.ACTIVE_ACKED
+            alarm.acknowledged_at = now
             alarm.acknowledged_by = user
             await session.commit()
-            if alarm.tag_id in self._active_alarms:
+            if was_inactive:
+                # Alarm already cleared, remove from active tracking
+                self._active_alarms.pop(alarm.tag_id, None)
+            elif alarm.tag_id in self._active_alarms:
                 self._active_alarms[alarm.tag_id] = alarm
         return alarm
 
@@ -74,11 +79,17 @@ class AlarmService:
                     continue
 
                 is_alarm = self._check_condition(config, tv.value)
-                currently_active = tag_id in self._active_alarms
+                current = self._active_alarms.get(tag_id)
 
-                if is_alarm and not currently_active:
+                if is_alarm and current is None:
                     await self._trigger_alarm(config, tv.value)
-                elif not is_alarm and currently_active:
+                elif is_alarm and current and current.state == AlarmState.INACTIVE_UNACKED:
+                    # Alarm re-triggered while waiting for ack — return to active
+                    current.state = AlarmState.ACTIVE_UNACKED
+                    current.cleared_at = None
+                elif not is_alarm and current and current.state in (
+                    AlarmState.ACTIVE_UNACKED, AlarmState.ACTIVE_ACKED
+                ):
                     await self._clear_alarm(tag_id, tv.value)
 
             await asyncio.sleep(1.0)
@@ -89,16 +100,19 @@ class AlarmService:
             trigger_on = config.get("trigger_on", True)
             return value == trigger_on
         elif alarm_type == "threshold":
-            high = config.get("high")
-            low = config.get("low")
             try:
                 val = float(value)
             except (TypeError, ValueError):
                 return False
-            if high is not None and val >= high:
-                return True
-            if low is not None and val <= low:
-                return True
+            # Support hi/hi_hi/lo/lo_lo thresholds (industry standard)
+            for key in ("hi_hi", "hi", "high"):
+                limit = config.get(key)
+                if limit is not None and val >= float(limit):
+                    return True
+            for key in ("lo_lo", "lo", "low"):
+                limit = config.get(key)
+                if limit is not None and val <= float(limit):
+                    return True
         return False
 
     async def _trigger_alarm(self, config: dict, value):
@@ -129,7 +143,13 @@ class AlarmService:
                 pass
 
     async def _clear_alarm(self, tag_id: int, value):
-        alarm = self._active_alarms.pop(tag_id, None)
+        alarm = self._active_alarms.get(tag_id)
         if alarm:
-            alarm.state = AlarmState.INACTIVE
             alarm.cleared_at = datetime.now(timezone.utc)
+            if alarm.state == AlarmState.ACTIVE_UNACKED:
+                # Alarm cleared before acknowledgment
+                alarm.state = AlarmState.INACTIVE_UNACKED
+            else:
+                # Alarm was already acknowledged
+                alarm.state = AlarmState.INACTIVE
+                self._active_alarms.pop(tag_id, None)

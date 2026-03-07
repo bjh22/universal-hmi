@@ -86,21 +86,23 @@ function RadialGauge({ value, pct, color, min, max, units, decimalPlaces, valueF
   const dotR = Math.max(2, Math.round(barThickness * 0.5));
 
   return (
-    <div className="flex flex-col items-center justify-center flex-1">
-      <svg viewBox="0 0 100 100" className="w-full" style={{ maxWidth: `${gaugeSize}%` }}>
-        <path d={arcPath(CX, CY, R, startAngle, endAngle)} fill="none" stroke="#334155" strokeWidth={barThickness} strokeLinecap="round" />
-        <path d={arcPath(CX, CY, R, startAngle, needleAngle)} fill="none" stroke={color} strokeWidth={barThickness} strokeLinecap="round"
-          className="transition-all duration-300" />
-        <circle cx={needleX} cy={needleY} r={dotR} fill={color} className="transition-all duration-300" />
-        <text x={CX} y={CY + 2} textAnchor="middle" fill={color} fontSize={valueFontSize} fontWeight="bold" style={textStyleToCSS(valueStyle)}>
-          {value.toFixed(decimalPlaces)}
-        </text>
-        <text x={CX} y={CY + 2 + valueFontSize * 0.75} textAnchor="middle" fill="#64748b" fontSize={unitSize}>
-          {units}
-        </text>
-        <text x={CX + R * Math.cos(startAngle) + 4} y={CY + R * Math.sin(startAngle) + 6} textAnchor="middle" fill="#475569" fontSize={labelSize}>{min}</text>
-        <text x={CX + R * Math.cos(endAngle) - 4} y={CY + R * Math.sin(endAngle) + 6} textAnchor="middle" fill="#475569" fontSize={labelSize}>{max}</text>
-      </svg>
+    <div className="flex-1 min-h-0 relative">
+      <div className="absolute inset-0 flex items-center justify-center">
+        <svg viewBox="0 0 100 100" style={{ height: '100%', width: 'auto', maxWidth: `${gaugeSize}%`, display: 'block' }}>
+          <path d={arcPath(CX, CY, R, startAngle, endAngle)} fill="none" stroke="#334155" strokeWidth={barThickness} strokeLinecap="round" />
+          <path d={arcPath(CX, CY, R, startAngle, needleAngle)} fill="none" stroke={color} strokeWidth={barThickness} strokeLinecap="round"
+            className="transition-all duration-300" />
+          <circle cx={needleX} cy={needleY} r={dotR} fill={color} className="transition-all duration-300" />
+          <text x={CX} y={CY + 2} textAnchor="middle" fill={color} fontSize={valueFontSize} fontWeight="bold" style={textStyleToCSS(valueStyle)}>
+            {value.toFixed(decimalPlaces)}
+          </text>
+          <text x={CX} y={CY + 2 + valueFontSize * 0.75} textAnchor="middle" fill="#64748b" fontSize={unitSize}>
+            {units}
+          </text>
+          <text x={CX + R * Math.cos(startAngle) + 4} y={CY + R * Math.sin(startAngle) + 6} textAnchor="middle" fill="#475569" fontSize={labelSize}>{min}</text>
+          <text x={CX + R * Math.cos(endAngle) - 4} y={CY + R * Math.sin(endAngle) + 6} textAnchor="middle" fill="#475569" fontSize={labelSize}>{max}</text>
+        </svg>
+      </div>
     </div>
   );
 }
@@ -116,20 +118,22 @@ function DonutGauge({ value, pct, color, units, decimalPlaces, valueFontSize, ba
   const unitSize = Math.max(4, Math.round(valueFontSize * 0.42));
 
   return (
-    <div className="flex flex-col items-center justify-center flex-1">
-      <svg viewBox="0 0 100 100" className="w-full" style={{ maxWidth: `${gaugeSize}%` }}>
-        <circle cx="50" cy="50" r={R} fill="none" stroke="#334155" strokeWidth={barThickness} />
-        <circle cx="50" cy="50" r={R} fill="none" stroke={color} strokeWidth={barThickness} strokeLinecap="round"
-          strokeDasharray={circumference} strokeDashoffset={offset}
-          transform="rotate(-90 50 50)"
-          className="transition-all duration-300" />
-        <text x="50" y="48" textAnchor="middle" fill={color} fontSize={valueFontSize} fontWeight="bold" style={textStyleToCSS(valueStyle)}>
-          {value.toFixed(decimalPlaces)}
-        </text>
-        <text x="50" y={48 + valueFontSize * 0.75} textAnchor="middle" fill="#64748b" fontSize={unitSize}>
-          {units}
-        </text>
-      </svg>
+    <div className="flex-1 min-h-0 relative">
+      <div className="absolute inset-0 flex items-center justify-center">
+        <svg viewBox="0 0 100 100" style={{ height: '100%', width: 'auto', maxWidth: `${gaugeSize}%`, display: 'block' }}>
+          <circle cx="50" cy="50" r={R} fill="none" stroke="#334155" strokeWidth={barThickness} />
+          <circle cx="50" cy="50" r={R} fill="none" stroke={color} strokeWidth={barThickness} strokeLinecap="round"
+            strokeDasharray={circumference} strokeDashoffset={offset}
+            transform="rotate(-90 50 50)"
+            className="transition-all duration-300" />
+          <text x="50" y="48" textAnchor="middle" fill={color} fontSize={valueFontSize} fontWeight="bold" style={textStyleToCSS(valueStyle)}>
+            {value.toFixed(decimalPlaces)}
+          </text>
+          <text x="50" y={48 + valueFontSize * 0.75} textAnchor="middle" fill="#64748b" fontSize={unitSize}>
+            {units}
+          </text>
+        </svg>
+      </div>
     </div>
   );
 }
