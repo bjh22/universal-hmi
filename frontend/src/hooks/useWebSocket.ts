@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TagValue, AlarmData } from '../types';
+import { api } from '../lib/api';
 
 interface WSMessage {
   type: 'snapshot' | 'tag_update' | 'alarm' | 'keepalive';
@@ -31,6 +32,18 @@ export function useWebSocket() {
       if (wsRef.current !== ws) return; // stale connection
       setConnected(true);
       attemptRef.current = 0;
+      // Fetch existing active alarms on connect
+      api.getActiveAlarms().then((active) => {
+        if (wsRef.current === ws) {
+          setAlarms((prev) => {
+            // Merge API alarms with any already received via WS, deduping by ID
+            const merged = new Map<number, AlarmData>();
+            for (const a of active) merged.set(a.id, a);
+            for (const a of prev) merged.set(a.id, a); // WS alarms take precedence
+            return Array.from(merged.values());
+          });
+        }
+      }).catch(() => { /* non-fatal */ });
     };
 
     ws.onmessage = (event) => {
