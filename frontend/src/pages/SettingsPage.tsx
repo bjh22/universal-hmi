@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { Search, Download, UserPlus, Plus, Pencil, Trash2, Upload, X, Plug, Unplug, FolderSearch, Tag as TagIcon } from 'lucide-react';
+import { Search, Download, UserPlus, Plus, Pencil, Trash2, Upload, X, Plug, Unplug, FolderSearch, Tag as TagIcon, CheckSquare, Square, MinusSquare, Filter } from 'lucide-react';
 import { api } from '../lib/api';
-import type { Tag, TagLabel, DataSourceData, ProtocolType, AuditEntry, UserData, BrowsedTag, UserListEntry } from '../types';
+import type { Tag, TagLabel, DataSourceData, ProtocolType, AuditEntry, UserData, BrowsedTag, UserListEntry, ImportPreviewTag } from '../types';
 
 interface Props {
   user: UserData | null;
@@ -186,6 +186,70 @@ function DataSourceDialog({ ds, onSave, onClose }: {
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+// ─── Enum Mapping Editor ───
+function EnumMappingEditor({ mapping, onChange }: {
+  mapping: Record<string, string> | null;
+  onChange: (m: Record<string, string> | null) => void;
+}) {
+  const entries = useMemo(() => {
+    if (!mapping) return [];
+    return Object.entries(mapping)
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .map(([k, v]) => ({ key: k, label: v }));
+  }, [mapping]);
+
+  const update = useCallback((newEntries: { key: string; label: string }[]) => {
+    if (newEntries.length === 0) {
+      onChange(null);
+      return;
+    }
+    const m: Record<string, string> = {};
+    for (const e of newEntries) {
+      if (e.key.trim()) m[e.key.trim()] = e.label;
+    }
+    onChange(Object.keys(m).length > 0 ? m : null);
+  }, [onChange]);
+
+  const addEntry = useCallback(() => {
+    const nextKey = entries.length > 0 ? String(Math.max(...entries.map(e => Number(e.key) || 0)) + 1) : '0';
+    update([...entries, { key: nextKey, label: '' }]);
+  }, [entries, update]);
+
+  const removeEntry = useCallback((idx: number) => {
+    update(entries.filter((_, i) => i !== idx));
+  }, [entries, update]);
+
+  const updateEntry = useCallback((idx: number, field: 'key' | 'label', value: string) => {
+    update(entries.map((e, i) => i === idx ? { ...e, [field]: value } : e));
+  }, [entries, update]);
+
+  return (
+    <div className="space-y-1.5">
+      {entries.map((entry, i) => (
+        <div key={i} className="flex gap-1 items-center">
+          <input
+            type="number"
+            value={entry.key}
+            onChange={e => updateEntry(i, 'key', e.target.value)}
+            placeholder="Value"
+            className="w-16 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white"
+          />
+          <span className="text-slate-500 text-xs">=</span>
+          <input
+            type="text"
+            value={entry.label}
+            onChange={e => updateEntry(i, 'label', e.target.value)}
+            placeholder="Label"
+            className="flex-1 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white"
+          />
+          <button type="button" onClick={() => removeEntry(i)} className="text-red-400 hover:text-red-300 text-xs px-1">&times;</button>
+        </div>
+      ))}
+      <button type="button" onClick={addEntry} className="text-xs text-blue-400 hover:text-blue-300">+ Add value</button>
     </div>
   );
 }
@@ -393,6 +457,18 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
             </div>
           </fieldset>
 
+          {/* Enum Mapping */}
+          {(form.data_type === 'int' || form.enum_mapping) && (
+            <fieldset className="border border-slate-700 rounded-lg p-3">
+              <legend className="text-xs text-slate-400 px-2">Enum Mapping</legend>
+              <p className="text-xs text-slate-500 mb-2">Map integer values to display labels (e.g. 0=Stopped, 1=Running)</p>
+              <EnumMappingEditor
+                mapping={form.enum_mapping}
+                onChange={m => set('enum_mapping', m)}
+              />
+            </fieldset>
+          )}
+
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 hover:bg-slate-600">Cancel</button>
             <button type="submit" className="px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-700">{form.id != null ? 'Save' : 'Create'}</button>
@@ -403,48 +479,425 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
   );
 }
 
-// ─── CSV Import Dialog ───
-function CsvImportDialog({ onImport, onClose }: {
-  onImport: (tags: Record<string, unknown>[]) => void;
+// ─── Bulk Edit Dialog ───
+type BulkFieldState = { enabled: boolean; value: unknown };
+
+function BulkEditDialog({ tagCount, dataSources, onApply, onClose }: {
+  tagCount: number;
+  dataSources: DataSourceData[];
+  onApply: (fields: Record<string, unknown>) => void;
   onClose: () => void;
 }) {
+  const [fields, setFields] = useState<Record<string, BulkFieldState>>({
+    group_name:          { enabled: false, value: '' },
+    data_type:           { enabled: false, value: 'float' },
+    access_mode:         { enabled: false, value: 'read_write' },
+    engineering_units:   { enabled: false, value: '' },
+    data_source_id:      { enabled: false, value: null },
+    trending_enabled:    { enabled: false, value: false },
+    alarm_enabled:       { enabled: false, value: false },
+    simulation_enabled:  { enabled: false, value: false },
+    simulation_behavior: { enabled: false, value: null },
+  });
+
+  const toggle = useCallback((key: string) =>
+    setFields(f => ({ ...f, [key]: { ...f[key], enabled: !f[key].enabled } })), []);
+  const setValue = useCallback((key: string, value: unknown) =>
+    setFields(f => ({ ...f, [key]: { ...f[key], value } })), []);
+
+  const handleApply = useCallback(() => {
+    const patch: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(fields)) {
+      if (v.enabled) patch[k] = v.value;
+    }
+    if (Object.keys(patch).length > 0) onApply(patch);
+    else onClose();
+  }, [fields, onApply, onClose]);
+
+  const enabledCount = Object.values(fields).filter(f => f.enabled).length;
+
+  const rowCls = 'flex items-center gap-3 py-2 border-b border-slate-700/50';
+  const checkCls = 'text-slate-500 hover:text-slate-300 flex-shrink-0';
+  const labelCls = 'text-sm text-slate-400 w-36 flex-shrink-0';
+  const ctrlCls = 'flex-1 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-white outline-none disabled:opacity-40';
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 w-full max-w-lg" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-lg font-semibold text-slate-100">Edit Fields</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
+        </div>
+        <p className="text-sm text-slate-500 mb-4">
+          Editing {tagCount} tag{tagCount !== 1 ? 's' : ''}. Check a field to change its value on all selected tags.
+        </p>
+
+        <div className="space-y-0 mb-5">
+          {/* Group Name */}
+          <div className={rowCls}>
+            <button onClick={() => toggle('group_name')} className={checkCls}>
+              {fields.group_name.enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+            </button>
+            <span className={labelCls}>Group</span>
+            <input type="text" value={fields.group_name.value as string}
+              onChange={e => setValue('group_name', e.target.value)}
+              disabled={!fields.group_name.enabled}
+              className={ctrlCls} placeholder="e.g. Pumps" />
+          </div>
+
+          {/* Data Type */}
+          <div className={rowCls}>
+            <button onClick={() => toggle('data_type')} className={checkCls}>
+              {fields.data_type.enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+            </button>
+            <span className={labelCls}>Data Type</span>
+            <select value={fields.data_type.value as string}
+              onChange={e => setValue('data_type', e.target.value)}
+              disabled={!fields.data_type.enabled} className={ctrlCls}>
+              <option value="bool">Bool</option>
+              <option value="int">Int</option>
+              <option value="float">Float</option>
+              <option value="string">String</option>
+            </select>
+          </div>
+
+          {/* Access Mode */}
+          <div className={rowCls}>
+            <button onClick={() => toggle('access_mode')} className={checkCls}>
+              {fields.access_mode.enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+            </button>
+            <span className={labelCls}>Access Mode</span>
+            <select value={fields.access_mode.value as string}
+              onChange={e => setValue('access_mode', e.target.value)}
+              disabled={!fields.access_mode.enabled} className={ctrlCls}>
+              <option value="read">Read</option>
+              <option value="write">Write</option>
+              <option value="read_write">Read/Write</option>
+            </select>
+          </div>
+
+          {/* Engineering Units */}
+          <div className={rowCls}>
+            <button onClick={() => toggle('engineering_units')} className={checkCls}>
+              {fields.engineering_units.enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+            </button>
+            <span className={labelCls}>Units</span>
+            <input type="text" value={fields.engineering_units.value as string}
+              onChange={e => setValue('engineering_units', e.target.value || null)}
+              disabled={!fields.engineering_units.enabled}
+              className={ctrlCls} placeholder="e.g. °C, bar, rpm" />
+          </div>
+
+          {/* Data Source */}
+          <div className={rowCls}>
+            <button onClick={() => toggle('data_source_id')} className={checkCls}>
+              {fields.data_source_id.enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+            </button>
+            <span className={labelCls}>Data Source</span>
+            <select
+              value={fields.data_source_id.value == null ? '' : String(fields.data_source_id.value)}
+              onChange={e => setValue('data_source_id', e.target.value ? Number(e.target.value) : null)}
+              disabled={!fields.data_source_id.enabled} className={ctrlCls}>
+              <option value="">None (simulation)</option>
+              {dataSources.map(ds => <option key={ds.id} value={ds.id}>{ds.name} ({ds.protocol})</option>)}
+            </select>
+          </div>
+
+          {/* Boolean flags */}
+          {([
+            ['trending_enabled', 'Trending'],
+            ['alarm_enabled', 'Alarm'],
+            ['simulation_enabled', 'Simulation'],
+          ] as [string, string][]).map(([key, label]) => (
+            <div key={key} className={rowCls}>
+              <button onClick={() => toggle(key)} className={checkCls}>
+                {fields[key].enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+              </button>
+              <span className={labelCls}>{label}</span>
+              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                <input type="checkbox"
+                  checked={fields[key].value as boolean}
+                  onChange={e => setValue(key, e.target.checked)}
+                  disabled={!fields[key].enabled}
+                  className="accent-blue-500 disabled:opacity-40" />
+                {(fields[key].value as boolean) ? 'Enabled' : 'Disabled'}
+              </label>
+            </div>
+          ))}
+
+          {/* Simulation Behavior */}
+          <div className={rowCls + ' border-b-0'}>
+            <button onClick={() => toggle('simulation_behavior')} className={checkCls}>
+              {fields.simulation_behavior.enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+            </button>
+            <span className={labelCls}>Sim Behavior</span>
+            <select
+              value={(fields.simulation_behavior.value as string) || ''}
+              onChange={e => setValue('simulation_behavior', e.target.value || null)}
+              disabled={!fields.simulation_behavior.enabled} className={ctrlCls}>
+              <option value="">None</option>
+              <option value="sine">Sine</option>
+              <option value="ramp">Ramp</option>
+              <option value="random">Random</option>
+              <option value="toggle">Toggle</option>
+              <option value="enum_cycle">Enum Cycle</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 hover:bg-slate-600">Cancel</button>
+          <button
+            onClick={handleApply}
+            disabled={enabledCount === 0}
+            className="px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Apply to {tagCount} Tag{tagCount !== 1 ? 's' : ''}{enabledCount > 0 ? ` (${enabledCount} field${enabledCount !== 1 ? 's' : ''})` : ''}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Bulk Label Dialog ───
+function BulkLabelDialog({ mode, tagCount, allLabels, onApply, onClose }: {
+  mode: 'add' | 'remove';
+  tagCount: number;
+  allLabels: TagLabel[];
+  onApply: (labelIds: number[]) => void;
+  onClose: () => void;
+}) {
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+
+  const toggleLabel = useCallback((id: number) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-slate-100">
+            {mode === 'add' ? 'Add' : 'Remove'} Labels
+          </h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
+        </div>
+        <p className="text-sm text-slate-400 mb-3">
+          {mode === 'add' ? 'Add labels to' : 'Remove labels from'} {tagCount} selected tag{tagCount !== 1 ? 's' : ''}
+        </p>
+        <div className="space-y-1 max-h-60 overflow-y-auto mb-4">
+          {allLabels.map(l => (
+            <button
+              key={l.id}
+              onClick={() => toggleLabel(l.id)}
+              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition-colors ${selected.has(l.id) ? 'bg-blue-600/20 border border-blue-500/40' : 'hover:bg-slate-700 border border-transparent'}`}
+            >
+              {selected.has(l.id)
+                ? <CheckSquare size={16} className="text-blue-400 flex-shrink-0" />
+                : <Square size={16} className="text-slate-500 flex-shrink-0" />}
+              <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: l.color || '#3b82f6' }} />
+              <span className="text-slate-200">{l.name}</span>
+              {l.description && <span className="text-slate-500 text-xs ml-auto truncate max-w-32">{l.description}</span>}
+            </button>
+          ))}
+          {allLabels.length === 0 && <p className="text-sm text-slate-500 text-center py-4">No labels created yet</p>}
+        </div>
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 hover:bg-slate-600">Cancel</button>
+          <button
+            onClick={() => onApply(Array.from(selected))}
+            disabled={selected.size === 0}
+            className="px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {mode === 'add' ? 'Add' : 'Remove'} {selected.size > 0 ? `${selected.size} Label${selected.size !== 1 ? 's' : ''}` : 'Labels'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Tag Import Dialog (HMI CSV, CODESYS XML, RSLogix 500) ───
+type ImportFormat = 'hmi_csv' | 'codesys_xml' | 'rslogix500';
+
+function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClose }: {
+  onImportCsv: (tags: Record<string, unknown>[]) => void;
+  onImportCodesys: (xml: string, prefix: string) => void;
+  onImportRslogix: (csv: string, prefix: string) => void;
+  onClose: () => void;
+}) {
+  const [format, setFormat] = useState<ImportFormat>('hmi_csv');
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
+  const [rawContent, setRawContent] = useState('');
+  const [prefix, setPrefix] = useState('');
+  const [previewTags, setPreviewTags] = useState<ImportPreviewTag[]>([]);
+  const [previewGroups, setPreviewGroups] = useState<Record<string, number>>({});
+  const [previewEnumCount, setPreviewEnumCount] = useState(0);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState('');
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const resetState = useCallback(() => {
+    setRows([]);
+    setHeaders([]);
+    setRawContent('');
+    setPreviewTags([]);
+    setPreviewGroups({});
+    setPreviewEnumCount(0);
+    setPreviewError('');
+    setExpandedGroups(new Set());
+    if (fileRef.current) fileRef.current.value = '';
+  }, []);
+
+  const handleFormatChange = useCallback((f: ImportFormat) => {
+    setFormat(f);
+    resetState();
+  }, [resetState]);
+
+  const loadPreview = useCallback(async (content: string, fmt: ImportFormat, pfx: string) => {
+    setPreviewLoading(true);
+    setPreviewError('');
+    try {
+      if (fmt === 'codesys_xml') {
+        const result = await api.previewCodesysImport(content, pfx);
+        setPreviewTags(result.tags);
+        setPreviewGroups(result.groups);
+        setPreviewEnumCount(result.enum_count);
+      } else if (fmt === 'rslogix500') {
+        const result = await api.previewRslogix500Import(content, pfx);
+        setPreviewTags(result.tags);
+        setPreviewGroups(result.groups);
+        setPreviewEnumCount(0);
+      }
+    } catch (err) {
+      setPreviewError(err instanceof Error ? err.message : String(err));
+      setPreviewTags([]);
+      setPreviewGroups({});
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, []);
+
+  const handleFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
     const reader = new FileReader();
     reader.onload = () => {
       const text = reader.result as string;
-      const lines = text.split(/\r?\n/).filter(l => l.trim());
-      if (lines.length < 2) return;
-      const hdr = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-      setHeaders(hdr);
-      const parsed = lines.slice(1).map(line => {
-        const vals = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
-        const row: Record<string, string> = {};
-        hdr.forEach((h, i) => { row[h] = vals[i] || ''; });
-        return row;
-      });
-      setRows(parsed);
+      if (format === 'hmi_csv') {
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        if (lines.length < 2) return;
+        const hdr = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+        setHeaders(hdr);
+        const parsed = lines.slice(1).map(line => {
+          const vals = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+          const row: Record<string, string> = {};
+          hdr.forEach((h, i) => { row[h] = vals[i] || ''; });
+          return row;
+        });
+        setRows(parsed);
+      } else {
+        setRawContent(text);
+        loadPreview(text, format, prefix);
+      }
     };
     reader.readAsText(file);
+  }, [format, prefix, loadPreview]);
+
+  // Re-preview when prefix changes for PLC formats
+  const prefixTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => () => clearTimeout(prefixTimeoutRef.current), []);
+  const handlePrefixChange = useCallback((val: string) => {
+    setPrefix(val);
+    if (rawContent && format !== 'hmi_csv') {
+      clearTimeout(prefixTimeoutRef.current);
+      prefixTimeoutRef.current = setTimeout(() => loadPreview(rawContent, format, val), 300);
+    }
+  }, [rawContent, format, loadPreview]);
+
+  const toggleGroup = useCallback((group: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(group)) next.delete(group);
+      else next.add(group);
+      return next;
+    });
+  }, []);
+
+  const handleImport = useCallback(() => {
+    if (format === 'hmi_csv') {
+      onImportCsv(rows);
+    } else if (format === 'codesys_xml') {
+      onImportCodesys(rawContent, prefix);
+    } else if (format === 'rslogix500') {
+      onImportRslogix(rawContent, prefix);
+    }
+  }, [format, rows, rawContent, prefix, onImportCsv, onImportCodesys, onImportRslogix]);
+
+  const hasData = format === 'hmi_csv' ? rows.length > 0 : previewTags.length > 0;
+  const fileAccept = format === 'codesys_xml' ? '.xml' : '.csv,.CSV';
+
+  const formatInfo: Record<ImportFormat, { label: string; desc: string }> = {
+    hmi_csv: { label: 'HMI CSV', desc: 'CSV with header row. Columns: name, description, group_name, data_type, access_mode, engineering_units, min_value, max_value, address' },
+    codesys_xml: { label: 'CODESYS XML', desc: 'CODESYS symbol configuration XML exported from the PLC IDE. Structures, function blocks, enums, and arrays are expanded into flat tags.' },
+    rslogix500: { label: 'RSLogix 500', desc: 'RSLogix 500 database CSV export. Addresses are mapped to typed tags grouped by data file (B=Bits, N=Integers, F=Floats, T=Timers, C=Counters).' },
+  };
+
+  const typeBadgeColor: Record<string, string> = {
+    bool: 'bg-purple-600', int: 'bg-blue-600', float: 'bg-emerald-600', string: 'bg-amber-600',
   };
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-3xl max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-4xl max-h-[85vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-slate-100">Import Tags from CSV</h2>
+          <h2 className="text-lg font-semibold text-slate-100">Import Tags</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
         </div>
-        <div className="mb-4">
-          <p className="text-xs text-slate-400 mb-2">CSV must have a header row. Supported columns: name, description, group_name, data_type, access_mode, engineering_units, min_value, max_value, address</p>
-          <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} className="text-sm text-slate-300" />
+
+        {/* Format selector */}
+        <div className="flex gap-2 mb-4">
+          {(Object.keys(formatInfo) as ImportFormat[]).map(f => (
+            <button
+              key={f}
+              onClick={() => handleFormatChange(f)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${format === f ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+            >
+              {formatInfo[f].label}
+            </button>
+          ))}
         </div>
-        {rows.length > 0 && (
+
+        <div className="mb-4">
+          <p className="text-xs text-slate-400 mb-2">{formatInfo[format].desc}</p>
+          <input ref={fileRef} type="file" accept={fileAccept} onChange={handleFile} className="text-sm text-slate-300" />
+        </div>
+
+        {/* Optional prefix for PLC imports */}
+        {format !== 'hmi_csv' && (
+          <div className="mb-4">
+            <label className="block text-xs text-slate-400 mb-1">Tag name prefix (optional)</label>
+            <input
+              type="text"
+              value={prefix}
+              onChange={e => handlePrefixChange(e.target.value)}
+              placeholder="e.g. PLC1"
+              className="w-48 px-3 py-1.5 bg-slate-900 border border-slate-600 rounded-lg text-sm text-slate-200"
+            />
+          </div>
+        )}
+
+        {/* HMI CSV preview */}
+        {format === 'hmi_csv' && rows.length > 0 && (
           <>
             <div className="text-sm text-slate-300 mb-2">{rows.length} tags to import</div>
             <div className="max-h-60 overflow-auto mb-4">
@@ -466,11 +919,85 @@ function CsvImportDialog({ onImport, onClose }: {
                 </tbody>
               </table>
             </div>
-            <div className="flex justify-end gap-2">
-              <button onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300">Cancel</button>
-              <button onClick={() => onImport(rows)} className="px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-700">Import {rows.length} Tags</button>
+          </>
+        )}
+
+        {/* PLC import preview */}
+        {format !== 'hmi_csv' && previewLoading && (
+          <div className="text-sm text-slate-400 mb-4">Analyzing file...</div>
+        )}
+        {previewError && (
+          <div className="text-sm text-red-400 mb-4">{previewError}</div>
+        )}
+        {format !== 'hmi_csv' && previewTags.length > 0 && (
+          <>
+            {/* Summary */}
+            <div className="flex flex-wrap gap-3 mb-3 text-sm">
+              <span className="text-slate-300">{previewTags.length} tags found</span>
+              <span className="text-slate-500">|</span>
+              <span className="text-slate-400">{Object.keys(previewGroups).length} groups</span>
+              {previewEnumCount > 0 && (
+                <>
+                  <span className="text-slate-500">|</span>
+                  <span className="text-amber-400">{previewEnumCount} enum tags</span>
+                </>
+              )}
+            </div>
+
+            {/* Grouped tree view */}
+            <div className="max-h-72 overflow-auto mb-4 border border-slate-700 rounded-lg">
+              {Object.entries(previewGroups)
+                .sort(([, a], [, b]) => b - a)
+                .map(([group, count]) => {
+                  const isExpanded = expandedGroups.has(group);
+                  const groupTags = previewTags.filter(t => (t.group_name || 'Ungrouped') === group);
+                  return (
+                    <div key={group}>
+                      <button
+                        onClick={() => toggleGroup(group)}
+                        className="w-full flex items-center justify-between px-3 py-1.5 bg-slate-750 hover:bg-slate-700 text-left border-b border-slate-700"
+                      >
+                        <span className="text-sm text-slate-200 font-medium">
+                          <span className="text-slate-500 mr-1">{isExpanded ? '\u25BC' : '\u25B6'}</span>
+                          {group}
+                        </span>
+                        <span className="text-xs text-slate-500">{count} tags</span>
+                      </button>
+                      {isExpanded && (
+                        <div className="bg-slate-900">
+                          {groupTags.slice(0, 100).map((tag, i) => (
+                            <div key={i} className="flex items-center gap-2 px-4 py-1 border-b border-slate-800 text-xs">
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium text-white ${typeBadgeColor[tag.data_type] || 'bg-slate-600'}`}>
+                                {tag.data_type}
+                              </span>
+                              {tag.has_enum && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium text-amber-300 bg-amber-900/40">enum</span>
+                              )}
+                              <span className="text-slate-300 font-mono truncate flex-1">{tag.name}</span>
+                              {tag.description && (
+                                <span className="text-slate-500 truncate max-w-48">{tag.description}</span>
+                              )}
+                            </div>
+                          ))}
+                          {groupTags.length > 100 && (
+                            <div className="px-4 py-1 text-xs text-slate-500">...and {groupTags.length - 100} more</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
             </div>
           </>
+        )}
+
+        {hasData && (
+          <div className="flex justify-end gap-2">
+            <button onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300">Cancel</button>
+            <button onClick={handleImport} className="px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-700">
+              Import {format === 'hmi_csv' ? rows.length : previewTags.length} Tags
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -599,12 +1126,22 @@ export function SettingsPage({ user }: Props) {
   // Tag state
   const [tagSearch, setTagSearch] = useState('');
   const [tagLabelFilter, setTagLabelFilter] = useState('all');
+  const [tagTypeFilter, setTagTypeFilter] = useState('all');
+  const [tagGroupFilter, setTagGroupFilter] = useState('all');
+  const [tagSourceFilter, setTagSourceFilter] = useState<number | 'all' | 'none'>('all');
+  const [showAdvFilters, setShowAdvFilters] = useState(false);
   const [allLabels, setAllLabels] = useState<TagLabel[]>([]);
   const [editTag, setEditTag] = useState<(Omit<Tag, 'id'> & { id?: number }) | null>(null);
   const [deleteTagTarget, setDeleteTagTarget] = useState<Tag | null>(null);
-  const [showCsvImport, setShowCsvImport] = useState(false);
+  const [showTagImport, setShowCsvImport] = useState(false);
   const [editLabel, setEditLabel] = useState<{ id?: number; name: string; color: string; description: string } | null>(null);
   const [deleteLabelTarget, setDeleteLabelTarget] = useState<TagLabel | null>(null);
+
+  // Multi-select state
+  const [selectedTagIds, setSelectedTagIds] = useState<Set<number>>(new Set());
+  const [bulkLabelDialog, setBulkLabelDialog] = useState<'add' | 'remove' | null>(null);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [showBulkEdit, setShowBulkEdit] = useState(false);
 
   // Data source state
   const [editDs, setEditDs] = useState<{ id?: number; name: string; protocol: ProtocolType; enabled: boolean; config: Record<string, unknown> } | null>(null);
@@ -640,21 +1177,40 @@ export function SettingsPage({ user }: Props) {
     }
   }, [tab, loadTags, loadLabels, loadDataSources]);
 
+  const tagGroups = useMemo(() => {
+    const groups = new Set<string>();
+    tags.forEach(t => { if (t.group_name) groups.add(t.group_name); });
+    return Array.from(groups).sort();
+  }, [tags]);
+
   const filteredTags = useMemo(() => {
     return tags.filter(t => {
       if (tagLabelFilter !== 'all') {
         const labelId = Number(tagLabelFilter);
         if (!(t.labels || []).some(l => l.id === labelId)) return false;
       }
+      if (tagTypeFilter !== 'all' && t.data_type !== tagTypeFilter) return false;
+      if (tagGroupFilter !== 'all' && (t.group_name || '') !== tagGroupFilter) return false;
+      if (tagSourceFilter !== 'all') {
+        if (tagSourceFilter === 'none' && t.data_source_id != null) return false;
+        if (tagSourceFilter !== 'none' && t.data_source_id !== tagSourceFilter) return false;
+      }
       if (tagSearch) {
         const q = tagSearch.toLowerCase();
         return t.name.toLowerCase().includes(q) ||
                (t.description || '').toLowerCase().includes(q) ||
+               (t.group_name || '').toLowerCase().includes(q) ||
+               (t.address || '').toLowerCase().includes(q) ||
                (t.labels || []).some(l => l.name.toLowerCase().includes(q));
       }
       return true;
     });
-  }, [tags, tagSearch, tagLabelFilter]);
+  }, [tags, tagSearch, tagLabelFilter, tagTypeFilter, tagGroupFilter, tagSourceFilter]);
+
+  // Clear selection when filters change
+  useEffect(() => {
+    setSelectedTagIds(new Set());
+  }, [tagSearch, tagLabelFilter, tagTypeFilter, tagGroupFilter, tagSourceFilter]);
 
   // Tag handlers
   const handleSaveTag = useCallback(async (data: Omit<Tag, 'id'> & { id?: number }) => {
@@ -693,11 +1249,85 @@ export function SettingsPage({ user }: Props) {
     }
   }, [deleteTagTarget, loadTags]);
 
+  // Bulk actions
+  const handleBulkDelete = useCallback(async () => {
+    try {
+      await api.bulkDeleteTags(Array.from(selectedTagIds));
+      setSelectedTagIds(new Set());
+      setBulkDeleteConfirm(false);
+      loadTags();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
+  }, [selectedTagIds, loadTags]);
+
+  const handleBulkLabels = useCallback(async (mode: 'add' | 'remove', labelIds: number[]) => {
+    try {
+      if (mode === 'add') {
+        await api.bulkAddLabels(Array.from(selectedTagIds), labelIds);
+      } else {
+        await api.bulkRemoveLabels(Array.from(selectedTagIds), labelIds);
+      }
+      setBulkLabelDialog(null);
+      loadTags();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
+  }, [selectedTagIds, loadTags]);
+
+  const handleBulkEdit = useCallback(async (fields: Record<string, unknown>) => {
+    try {
+      await api.bulkUpdateTags(Array.from(selectedTagIds), fields);
+      setShowBulkEdit(false);
+      loadTags();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
+  }, [selectedTagIds, loadTags]);
+
+  const toggleTagSelection = useCallback((id: number) => {
+    setSelectedTagIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedTagIds(prev => {
+      if (prev.size === filteredTags.length) return new Set();
+      return new Set(filteredTags.map(t => t.id));
+    });
+  }, [filteredTags]);
+
   const handleCsvImport = useCallback(async (rows: Record<string, unknown>[]) => {
     try {
       const result = await api.importTagsCsv(rows);
-      setShowCsvImport(false);
+      setShowTagImport(false);
       alert(`Imported ${result.imported} tags`);
+      loadTags();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
+  }, [loadTags]);
+
+  const handleCodesysImport = useCallback(async (xml: string, prefix: string) => {
+    try {
+      const result = await api.importTagsCodesys(xml, prefix);
+      setShowTagImport(false);
+      alert(`Imported ${result.imported} tags from CODESYS`);
+      loadTags();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
+  }, [loadTags]);
+
+  const handleRslogixImport = useCallback(async (csv: string, prefix: string) => {
+    try {
+      const result = await api.importTagsRslogix500(csv, prefix);
+      setShowTagImport(false);
+      alert(`Imported ${result.imported} tags from RSLogix 500`);
       loadTags();
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err));
@@ -849,12 +1479,13 @@ export function SettingsPage({ user }: Props) {
       {/* ═══ Tags ═══ */}
       {tab === 'tags' && (
         <div>
-          <div className="flex gap-3 mb-3 flex-wrap">
-            <div className="relative flex-1 max-w-xs">
+          {/* Search & Filter Bar */}
+          <div className="flex gap-3 mb-2 flex-wrap items-center">
+            <div className="relative flex-1 max-w-sm">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
               <input
                 type="text"
-                placeholder="Search tags..."
+                placeholder="Search name, description, group, address, labels..."
                 value={tagSearch}
                 onChange={e => setTagSearch(e.target.value)}
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-8 pr-3 py-2 text-sm text-white outline-none focus:border-blue-500"
@@ -868,6 +1499,17 @@ export function SettingsPage({ user }: Props) {
               <option value="all">All Labels</option>
               {allLabels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
+            <button
+              onClick={() => setShowAdvFilters(f => !f)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm ${showAdvFilters || tagTypeFilter !== 'all' || tagGroupFilter !== 'all' || tagSourceFilter !== 'all' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/40' : 'bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-300'}`}
+            >
+              <Filter size={14} /> Filters
+              {(tagTypeFilter !== 'all' || tagGroupFilter !== 'all' || tagSourceFilter !== 'all') && (
+                <span className="ml-1 px-1.5 py-0.5 bg-blue-600 text-white text-[10px] rounded-full font-medium">
+                  {[tagTypeFilter, tagGroupFilter, String(tagSourceFilter)].filter(f => f !== 'all').length}
+                </span>
+              )}
+            </button>
             <span className="self-center text-xs text-slate-500">{filteredTags.length} / {tags.length} tags</span>
             {canManage && (
               <div className="flex gap-2 ml-auto">
@@ -875,7 +1517,7 @@ export function SettingsPage({ user }: Props) {
                   onClick={() => setShowCsvImport(true)}
                   className="flex items-center gap-1.5 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm font-medium"
                 >
-                  <Upload size={16} /> Import CSV
+                  <Upload size={16} /> Import
                 </button>
                 <button
                   onClick={() => setEditTag({ ...EMPTY_TAG })}
@@ -886,10 +1528,108 @@ export function SettingsPage({ user }: Props) {
               </div>
             )}
           </div>
+
+          {/* Advanced Filters */}
+          {showAdvFilters && (
+            <div className="flex gap-3 mb-2 flex-wrap items-center bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2">
+              <select
+                value={tagTypeFilter}
+                onChange={e => setTagTypeFilter(e.target.value)}
+                className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-300 outline-none"
+              >
+                <option value="all">All Types</option>
+                <option value="bool">Bool</option>
+                <option value="int">Int</option>
+                <option value="float">Float</option>
+                <option value="string">String</option>
+              </select>
+              <select
+                value={tagGroupFilter}
+                onChange={e => setTagGroupFilter(e.target.value)}
+                className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-300 outline-none"
+              >
+                <option value="all">All Groups</option>
+                {tagGroups.map(g => <option key={g} value={g}>{g}</option>)}
+              </select>
+              <select
+                value={String(tagSourceFilter)}
+                onChange={e => {
+                  const v = e.target.value;
+                  setTagSourceFilter(v === 'all' || v === 'none' ? v : Number(v));
+                }}
+                className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-300 outline-none"
+              >
+                <option value="all">All Sources</option>
+                <option value="none">Simulation</option>
+                {dataSources.map(ds => <option key={ds.id} value={ds.id}>{ds.name}</option>)}
+              </select>
+              {(tagTypeFilter !== 'all' || tagGroupFilter !== 'all' || tagSourceFilter !== 'all') && (
+                <button
+                  onClick={() => { setTagTypeFilter('all'); setTagGroupFilter('all'); setTagSourceFilter('all'); }}
+                  className="text-xs text-slate-500 hover:text-slate-300"
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Bulk Action Bar */}
+          {canManage && selectedTagIds.size > 0 && (
+            <div className="flex items-center gap-3 mb-2 bg-blue-600/10 border border-blue-500/30 rounded-lg px-4 py-2">
+              <span className="text-sm text-blue-300 font-medium">{selectedTagIds.size} selected</span>
+              <div className="h-4 w-px bg-slate-600" />
+              <button
+                onClick={() => setBulkLabelDialog('add')}
+                className="text-sm text-slate-300 hover:text-white px-2 py-1 rounded hover:bg-slate-700"
+              >
+                Add Labels
+              </button>
+              <button
+                onClick={() => setBulkLabelDialog('remove')}
+                className="text-sm text-slate-300 hover:text-white px-2 py-1 rounded hover:bg-slate-700"
+              >
+                Remove Labels
+              </button>
+              <div className="h-4 w-px bg-slate-600" />
+              <button
+                onClick={() => setShowBulkEdit(true)}
+                className="text-sm text-slate-300 hover:text-white px-2 py-1 rounded hover:bg-slate-700"
+              >
+                Edit Fields
+              </button>
+              <div className="h-4 w-px bg-slate-600" />
+              <button
+                onClick={() => setBulkDeleteConfirm(true)}
+                className="text-sm text-red-400 hover:text-red-300 px-2 py-1 rounded hover:bg-red-900/30"
+              >
+                Delete
+              </button>
+              <button
+                onClick={() => setSelectedTagIds(new Set())}
+                className="ml-auto text-xs text-slate-500 hover:text-slate-300"
+              >
+                Clear selection
+              </button>
+            </div>
+          )}
+
+          {/* Tag Table */}
           <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-700 text-slate-400">
+                  {canManage && (
+                    <th className="w-10 px-3 py-3">
+                      <button onClick={toggleSelectAll} className="text-slate-500 hover:text-slate-300">
+                        {selectedTagIds.size === filteredTags.length && filteredTags.length > 0
+                          ? <CheckSquare size={16} />
+                          : selectedTagIds.size > 0
+                            ? <MinusSquare size={16} />
+                            : <Square size={16} />}
+                      </button>
+                    </th>
+                  )}
                   <th className="text-left px-4 py-3 font-medium">Name</th>
                   <th className="text-left px-4 py-3 font-medium">Labels</th>
                   <th className="text-left px-4 py-3 font-medium">Source</th>
@@ -904,7 +1644,17 @@ export function SettingsPage({ user }: Props) {
               </thead>
               <tbody>
                 {filteredTags.map((tag) => (
-                  <tr key={tag.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
+                  <tr
+                    key={tag.id}
+                    className={`border-b border-slate-700/50 hover:bg-slate-700/30 ${selectedTagIds.has(tag.id) ? 'bg-blue-600/10' : ''}`}
+                  >
+                    {canManage && (
+                      <td className="w-10 px-3 py-2">
+                        <button onClick={() => toggleTagSelection(tag.id)} className="text-slate-500 hover:text-slate-300">
+                          {selectedTagIds.has(tag.id) ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+                        </button>
+                      </td>
+                    )}
                     <td className="px-4 py-2">
                       <div className="text-slate-200">{tag.name}</div>
                       {tag.description && <div className="text-[10px] text-slate-500 truncate max-w-48">{tag.description}</div>}
@@ -945,7 +1695,7 @@ export function SettingsPage({ user }: Props) {
                   </tr>
                 ))}
                 {filteredTags.length === 0 && (
-                  <tr><td colSpan={canManage ? 10 : 9} className="px-4 py-8 text-center text-slate-500">No tags found</td></tr>
+                  <tr><td colSpan={canManage ? 11 : 10} className="px-4 py-8 text-center text-slate-500">No tags found</td></tr>
                 )}
               </tbody>
             </table>
@@ -953,7 +1703,36 @@ export function SettingsPage({ user }: Props) {
 
           {editTag && <TagDialog tag={editTag} dataSources={dataSources} allLabels={allLabels} onSave={handleSaveTag} onClose={() => setEditTag(null)} />}
           {deleteTagTarget && <DeleteConfirmDialog title="Delete Tag" name={deleteTagTarget.name} onConfirm={handleDeleteTag} onCancel={() => setDeleteTagTarget(null)} />}
-          {showCsvImport && <CsvImportDialog onImport={handleCsvImport} onClose={() => setShowCsvImport(false)} />}
+          {showTagImport && <TagImportDialog onImportCsv={handleCsvImport} onImportCodesys={handleCodesysImport} onImportRslogix={handleRslogixImport} onClose={() => setShowTagImport(false)} />}
+          {bulkDeleteConfirm && (
+            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setBulkDeleteConfirm(false)}>
+              <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 max-w-sm" onClick={e => e.stopPropagation()}>
+                <div className="text-slate-100 font-medium mb-2">Delete {selectedTagIds.size} Tags</div>
+                <p className="text-sm text-slate-400 mb-4">Are you sure you want to delete {selectedTagIds.size} selected tags? This cannot be undone.</p>
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => setBulkDeleteConfirm(false)} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300">Cancel</button>
+                  <button onClick={handleBulkDelete} className="px-4 py-2 bg-red-600 rounded-lg text-sm text-white hover:bg-red-700">Delete {selectedTagIds.size} Tags</button>
+                </div>
+              </div>
+            </div>
+          )}
+          {bulkLabelDialog && (
+            <BulkLabelDialog
+              mode={bulkLabelDialog}
+              tagCount={selectedTagIds.size}
+              allLabels={allLabels}
+              onApply={labelIds => handleBulkLabels(bulkLabelDialog, labelIds)}
+              onClose={() => setBulkLabelDialog(null)}
+            />
+          )}
+          {showBulkEdit && (
+            <BulkEditDialog
+              tagCount={selectedTagIds.size}
+              dataSources={dataSources}
+              onApply={handleBulkEdit}
+              onClose={() => setShowBulkEdit(false)}
+            />
+          )}
 
           {/* Label Management */}
           <div className="mt-6">

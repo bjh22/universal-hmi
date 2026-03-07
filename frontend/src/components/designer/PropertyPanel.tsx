@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Widget, TextStyle, Tag, LayoutMode } from '../../types';
 import { api } from '../../lib/api';
 import { WIDGET_TYPES } from './WidgetPalette';
@@ -401,6 +401,7 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
             <DropdownOptionsEditor
               options={(p.options as Array<{ label: string; value: unknown }>) || []}
               onChange={opts => setProp('options', opts)}
+              tagName={p.tag as string || ''}
             />
           </Section>
         )}
@@ -702,17 +703,36 @@ function ControlGroupEditor({ controls, onChange }: {
   );
 }
 
-function DropdownOptionsEditor({ options, onChange }: {
+function DropdownOptionsEditor({ options, onChange, tagName }: {
   options: Array<{ label: string; value: unknown }>;
   onChange: (opts: Array<{ label: string; value: unknown }>) => void;
+  tagName?: string;
 }) {
   const addOption = () => onChange([...options, { label: '', value: '' }]);
   const removeOption = (idx: number) => onChange(options.filter((_, i) => i !== idx));
   const updateOption = (idx: number, patch: Partial<{ label: string; value: unknown }>) =>
     onChange(options.map((o, i) => i === idx ? { ...o, ...patch } : o));
 
+  const populateFromEnum = useCallback(async () => {
+    if (!tagName) return;
+    try {
+      const tag = await api.getTagByName(tagName);
+      if (!tag?.enum_mapping) return;
+      const mapping = typeof tag.enum_mapping === 'string' ? JSON.parse(tag.enum_mapping) : tag.enum_mapping;
+      const opts = Object.entries(mapping as Record<string, string>)
+        .sort(([a], [b]) => Number(a) - Number(b))
+        .map(([value, label]) => ({ label: label as string, value: Number(value) }));
+      onChange(opts);
+    } catch { /* ignore */ }
+  }, [tagName, onChange]);
+
   return (
     <div className="space-y-1.5">
+      {tagName && (
+        <button onClick={populateFromEnum} className="text-xs text-emerald-400 hover:text-emerald-300 mb-1">
+          Populate from tag enum mapping
+        </button>
+      )}
       {options.map((opt, i) => (
         <div key={i} className="flex gap-1 items-center">
           <input type="text" value={opt.label} onChange={e => updateOption(i, { label: e.target.value })}

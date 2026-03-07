@@ -15,6 +15,7 @@ import type {
   ProductionRun,
   ProjectData,
   ProjectDetail,
+  ImportPreviewTag,
 } from '../types/index';
 
 const BASE = '/api';
@@ -56,16 +57,45 @@ export const api = {
 
   // Tags
   getTags: () => request<Tag[]>('/tags/'),
+  getTagByName: (name: string) => request<Tag>(`/tags/by-name/${encodeURIComponent(name)}`),
   createTag: (data: Partial<Tag>) =>
     request('/tags/', { method: 'POST', body: JSON.stringify(data) }),
   updateTag: (id: number, data: Partial<Tag>) =>
     request(`/tags/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteTag: (id: number) =>
     request(`/tags/${id}`, { method: 'DELETE' }),
+  bulkDeleteTags: (tagIds: number[]) =>
+    request<{ deleted: number }>('/tags/bulk/delete', { method: 'POST', body: JSON.stringify({ tag_ids: tagIds }) }),
+  bulkAddLabels: (tagIds: number[], labelIds: number[]) =>
+    request<{ updated: number }>('/tags/bulk/add-labels', { method: 'POST', body: JSON.stringify({ tag_ids: tagIds, label_ids: labelIds }) }),
+  bulkRemoveLabels: (tagIds: number[], labelIds: number[]) =>
+    request<{ updated: number }>('/tags/bulk/remove-labels', { method: 'POST', body: JSON.stringify({ tag_ids: tagIds, label_ids: labelIds }) }),
+  bulkUpdateTags: (tagIds: number[], fields: Record<string, unknown>) =>
+    request<{ updated: number }>('/tags/bulk/update', { method: 'POST', body: JSON.stringify({ tag_ids: tagIds, fields }) }),
   importTagsCsv: (tags: Partial<Tag>[]) =>
     request<{ imported: number; names: string[] }>('/tags/import/csv', {
       method: 'POST',
       body: JSON.stringify({ tags }),
+    }),
+  importTagsCodesys: (xml: string, prefix?: string) =>
+    request<{ imported: number; names: string[] }>('/tags/import/codesys', {
+      method: 'POST',
+      body: JSON.stringify({ xml, prefix: prefix || '' }),
+    }),
+  importTagsRslogix500: (csv: string, prefix?: string) =>
+    request<{ imported: number; names: string[] }>('/tags/import/rslogix500', {
+      method: 'POST',
+      body: JSON.stringify({ csv, prefix: prefix || '' }),
+    }),
+  previewCodesysImport: (xml: string, prefix?: string) =>
+    request<{ total: number; tags: ImportPreviewTag[]; groups: Record<string, number>; enum_count: number }>('/tags/import/codesys/preview', {
+      method: 'POST',
+      body: JSON.stringify({ xml, prefix: prefix || '' }),
+    }),
+  previewRslogix500Import: (csv: string, prefix?: string) =>
+    request<{ total: number; tags: ImportPreviewTag[]; groups: Record<string, number> }>('/tags/import/rslogix500/preview', {
+      method: 'POST',
+      body: JSON.stringify({ csv, prefix: prefix || '' }),
     }),
   getTagValues: () => request<Record<string, TagValue>>('/tags/values'),
   writeTag: (name: string, value: unknown) =>

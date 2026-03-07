@@ -40,6 +40,17 @@ export interface Tag {
   labels: TagLabel[];
 }
 
+export interface ImportPreviewTag {
+  name: string;
+  description: string | null;
+  group_name: string | null;
+  data_type: string;
+  access_mode: string;
+  has_enum?: boolean;
+  enum_values?: number;
+  address?: string;
+}
+
 export interface AlarmData {
   id: number;
   tag_id: number;
