@@ -26,6 +26,7 @@ class AlarmService:
         self._eval_task: asyncio.Task | None = None
         self._alarm_configs: list[dict] = []
         self._active_alarms: dict[int, Alarm] = {}  # tag_id -> active Alarm
+        self._tag_lookup: dict[int, dict] = {}  # tag_id -> {name, description} for O(1) lookups
 
     @property
     def active_alarms(self) -> list[Alarm]:
@@ -35,6 +36,7 @@ class AlarmService:
         result = await session.execute(select(Tag).where(Tag.alarm_enabled == True))  # noqa: E712
         tags = result.scalars().all()
         self._alarm_configs = []
+        self._tag_lookup = {}
         for tag in tags:
             if tag.alarm_config:
                 config = json.loads(tag.alarm_config)
@@ -42,6 +44,7 @@ class AlarmService:
                 config["tag_name"] = tag.name
                 config["tag_description"] = tag.description
                 self._alarm_configs.append(config)
+                self._tag_lookup[tag.id] = {"name": tag.name, "description": tag.description}
 
         # Restore active alarms from DB (survive restarts)
         result = await session.execute(
@@ -106,6 +109,11 @@ class AlarmService:
     async def _evaluate_loop(self):
         while self._running:
             try:
+                # Collect all state changes, then commit in a single batch
+                new_alarms: list[tuple[dict, object]] = []
+                retriggers: list[Alarm] = []
+                clears: list[tuple[int, object]] = []
+
                 for config in self._alarm_configs:
                     tag_name = config["tag_name"]
                     tag_id = config["tag_id"]
@@ -117,19 +125,74 @@ class AlarmService:
                     current = self._active_alarms.get(tag_id)
 
                     if is_alarm and current is None:
-                        await self._trigger_alarm(config, tv.value)
+                        new_alarms.append((config, tv.value))
                     elif is_alarm and current and current.state == AlarmState.INACTIVE_UNACKED:
-                        # Alarm re-triggered while waiting for ack — return to active
-                        await self._update_alarm_db(
-                            current, AlarmState.ACTIVE_UNACKED, cleared_at=None
-                        )
+                        retriggers.append(current)
                     elif not is_alarm and current and current.state in (
                         AlarmState.ACTIVE_UNACKED, AlarmState.ACTIVE_ACKED
                     ):
-                        await self._clear_alarm(tag_id, tv.value)
+                        clears.append((tag_id, tv.value))
+
+                if new_alarms or retriggers or clears:
+                    await self._apply_batch(new_alarms, retriggers, clears)
+
             except Exception:
                 logger.exception("Error in alarm evaluation loop")
             await asyncio.sleep(1.0)
+
+    async def _apply_batch(
+        self,
+        new_alarms: list[tuple[dict, object]],
+        retriggers: list[Alarm],
+        clears: list[tuple[int, object]],
+    ):
+        """Apply all alarm state changes in a single DB session."""
+        now = datetime.now(timezone.utc)
+        async with self._session_factory() as session:
+            # New alarms
+            for config, value in new_alarms:
+                alarm = Alarm(
+                    tag_id=config["tag_id"],
+                    message=config.get("message", f"Alarm on {config['tag_name']}"),
+                    severity=AlarmSeverity(config.get("severity", "warning")),
+                    state=AlarmState.ACTIVE_UNACKED,
+                    trigger_value=str(value),
+                )
+                session.add(alarm)
+                # Flush to get the ID for broadcasting
+                await session.flush()
+                await session.refresh(alarm)
+                self._active_alarms[config["tag_id"]] = alarm
+                self._broadcast_alarm(alarm, tag_name=config["tag_name"], tag_display_name=config.get("tag_description"))
+
+            # Retriggers
+            for alarm in retriggers:
+                db_alarm = await session.get(Alarm, alarm.id)
+                if db_alarm:
+                    db_alarm.state = AlarmState.ACTIVE_UNACKED
+                    db_alarm.cleared_at = None
+                alarm.state = AlarmState.ACTIVE_UNACKED
+                alarm.cleared_at = None
+
+            # Clears
+            for tag_id, value in clears:
+                alarm = self._active_alarms.get(tag_id)
+                if not alarm:
+                    continue
+                new_state = AlarmState.INACTIVE_UNACKED if alarm.state == AlarmState.ACTIVE_UNACKED else AlarmState.INACTIVE
+                db_alarm = await session.get(Alarm, alarm.id)
+                if db_alarm:
+                    db_alarm.state = new_state
+                    db_alarm.cleared_at = now
+                    if new_state == AlarmState.INACTIVE:
+                        self._record_history_obj(session, db_alarm, str(value))
+                alarm.state = new_state
+                alarm.cleared_at = now
+                if new_state == AlarmState.INACTIVE:
+                    self._active_alarms.pop(tag_id, None)
+                self._broadcast_alarm(alarm)
+
+            await session.commit()
 
     def _check_condition(self, config: dict, value) -> bool:
         alarm_type = config.get("type", "threshold")
@@ -225,16 +288,12 @@ class AlarmService:
     # ------------------------------------------------------------------
 
     def _get_tag_name(self, tag_id: int) -> str:
-        for config in self._alarm_configs:
-            if config["tag_id"] == tag_id:
-                return config["tag_name"]
-        return ""
+        entry = self._tag_lookup.get(tag_id)
+        return entry["name"] if entry else ""
 
     def _get_tag_description(self, tag_id: int) -> str | None:
-        for config in self._alarm_configs:
-            if config["tag_id"] == tag_id:
-                return config.get("tag_description")
-        return None
+        entry = self._tag_lookup.get(tag_id)
+        return entry["description"] if entry else None
 
     def _record_history_obj(
         self, session: AsyncSession, alarm: Alarm, clear_value: str | None = None

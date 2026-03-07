@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { Lock } from 'lucide-react';
 import type { Widget, TagValue, AlarmData, LayoutMode, ScreenResolution } from '../../types';
 import type { GridSettings } from '../../hooks/useDesignMode';
@@ -128,11 +128,18 @@ export function DesignCanvas({
     return () => window.removeEventListener('click', close);
   }, [contextMenu]);
 
-  // Drag/resize/marquee mouse events
+  // Drag/resize/marquee mouse events (throttled with requestAnimationFrame)
   useEffect(() => {
     if (!dragging && !resizing && !marquee) return;
 
-    const handleMouseMove = (e: MouseEvent) => {
+    let rafId: number | null = null;
+    let lastEvent: MouseEvent | null = null;
+
+    const processMouseMove = () => {
+      rafId = null;
+      const e = lastEvent;
+      if (!e) return;
+
       if (dragging) {
         if (isAbsolute) {
           const dx = (e.clientX - dragging.startX) / zoom;
@@ -193,7 +200,18 @@ export function DesignCanvas({
       }
     };
 
+    const handleMouseMove = (e: MouseEvent) => {
+      lastEvent = e;
+      if (rafId === null) {
+        rafId = requestAnimationFrame(processMouseMove);
+      }
+    };
+
     const handleMouseUp = () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
       if (marquee) {
         // Calculate which widgets intersect the marquee
         const mx1 = Math.min(marquee.startX, marquee.currentX);
@@ -233,12 +251,22 @@ export function DesignCanvas({
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
     return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
   }, [dragging, resizing, marquee, zoom, getColWidth, onMoveWidget, onResizeWidget, onSelectMultiple, widgets, isAbsolute, gridSettings]);
 
   const hasMultipleSelected = selectedIds.size > 1;
+
+  // Memoize grid overlay style to avoid recalculating CSS gradient on every render
+  const gridStyle = useMemo(() => ({
+    backgroundImage: `
+      linear-gradient(to right, #475569 1px, transparent 1px),
+      linear-gradient(to bottom, #475569 1px, transparent 1px)
+    `,
+    backgroundSize: `${gridSettings.cellSize}px ${gridSettings.cellSize}px`,
+  }), [gridSettings.cellSize]);
 
   return (
     <div className="flex-1 overflow-auto bg-slate-950 p-4 flex flex-col">
@@ -280,13 +308,7 @@ export function DesignCanvas({
           {gridSettings.visible && (
             <div
               className="absolute inset-0 pointer-events-none opacity-10"
-              style={{
-                backgroundImage: `
-                  linear-gradient(to right, #475569 1px, transparent 1px),
-                  linear-gradient(to bottom, #475569 1px, transparent 1px)
-                `,
-                backgroundSize: `${gridSettings.cellSize}px ${gridSettings.cellSize}px`,
-              }}
+              style={gridStyle}
             />
           )}
 

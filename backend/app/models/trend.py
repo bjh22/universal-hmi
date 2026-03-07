@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -8,6 +8,9 @@ from app.core.database import Base
 
 class TrendData(Base):
     __tablename__ = "trend_data"
+    __table_args__ = (
+        Index("ix_trend_data_tag_timestamp", "tag_id", "timestamp"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id"), nullable=False, index=True)
