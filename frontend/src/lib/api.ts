@@ -66,6 +66,11 @@ export const api = {
     request(`/tags/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteTag: (id: number) =>
     request(`/tags/${id}`, { method: 'DELETE' }),
+  renameTagReferences: (oldName: string, newName: string) =>
+    request<{ updated_screens: number }>('/tags/rename-references', {
+      method: 'POST',
+      body: JSON.stringify({ old_name: oldName, new_name: newName }),
+    }),
   bulkDeleteTags: (tagIds: number[]) =>
     request<{ deleted: number }>('/tags/bulk/delete', { method: 'POST', body: JSON.stringify({ tag_ids: tagIds }) }),
   bulkAddLabels: (tagIds: number[], labelIds: number[]) =>
@@ -79,15 +84,15 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ tags }),
     }),
-  importTagsCodesys: (xml: string, prefix?: string) =>
+  importTagsCodesys: (xml: string, prefix?: string, names?: string[]) =>
     request<{ imported: number; names: string[] }>('/tags/import/codesys', {
       method: 'POST',
-      body: JSON.stringify({ xml, prefix: prefix || '' }),
+      body: JSON.stringify({ xml, prefix: prefix || '', ...(names ? { names } : {}) }),
     }),
-  importTagsRslogix500: (csv: string, prefix?: string) =>
+  importTagsRslogix500: (csv: string, prefix?: string, names?: string[]) =>
     request<{ imported: number; names: string[] }>('/tags/import/rslogix500', {
       method: 'POST',
-      body: JSON.stringify({ csv, prefix: prefix || '' }),
+      body: JSON.stringify({ csv, prefix: prefix || '', ...(names ? { names } : {}) }),
     }),
   previewCodesysImport: (xml: string, prefix?: string) =>
     request<{ total: number; tags: ImportPreviewTag[]; groups: Record<string, number>; enum_count: number }>('/tags/import/codesys/preview', {
@@ -169,9 +174,9 @@ export const api = {
   deleteDataSource: (id: number) =>
     request(`/datasources/${id}`, { method: 'DELETE' }),
   connectDataSource: (id: number) =>
-    request<{ connected: boolean }>(`/datasources/${id}/connect`, { method: 'POST' }),
+    request<{ connected: boolean; address_prefix?: string }>(`/datasources/${id}/connect`, { method: 'POST' }),
   browseDataSource: (id: number) =>
-    request<{ tags: BrowsedTag[] }>(`/datasources/${id}/browse`, { method: 'POST' }),
+    request<{ tags: BrowsedTag[]; address_prefix?: string }>(`/datasources/${id}/browse`, { method: 'POST' }),
 
   // Users
   getUsers: () => request<UserListEntry[]>('/users/'),
