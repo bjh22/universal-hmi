@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { api } from '../lib/api';
 import { WidgetRenderer } from '../components/widgets/WidgetRenderer';
@@ -20,6 +20,7 @@ interface Props {
 
 export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
   const { slug } = useParams<{ slug?: string }>();
+  const navigate = useNavigate();
   const [screens, setScreens] = useState<ScreenData[]>([]);
   const [activeScreen, setActiveScreen] = useState<ScreenData | null>(null);
   const [runtimeWidgets, setRuntimeWidgets] = useState<Widget[]>([]);
@@ -150,7 +151,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
     setNewScreenMode('grid');
     setNewScreenResolution('1920x1080');
     refreshScreens();
-    window.location.href = `/screen/${screenSlug}`;
+    navigate(`/screen/${screenSlug}`);
   }, [newScreenName, screens.length, refreshScreens, newScreenMode, newScreenResolution, newScreenCustomW, newScreenCustomH]);
 
   // Delete current screen
@@ -159,7 +160,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
     if (!window.confirm(`Delete screen "${activeScreen.name}"? This cannot be undone.`)) return;
     await api.deleteScreen(activeScreen.id);
     refreshScreens();
-    window.location.href = '/';
+    navigate('/');
   }, [activeScreen, refreshScreens]);
 
   // Keyboard shortcuts
@@ -319,9 +320,9 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
         {screens.length > 1 && (
           <div className="flex gap-1 overflow-x-auto pb-1">
             {screens.map((s) => (
-              <a
+              <Link
                 key={s.id}
-                href={`/screen/${s.slug}`}
+                to={`/screen/${s.slug}`}
                 className={`px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
                   activeScreen?.id === s.id
                     ? 'bg-blue-600 text-white'
@@ -329,7 +330,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
                 }`}
               >
                 {s.name}
-              </a>
+              </Link>
             ))}
           </div>
         )}
