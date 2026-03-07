@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(npx vite build:*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(lsof:*)",
+      "Bash(xargs kill:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(kill 1531 2193)"
+    ]
+  }
+}
