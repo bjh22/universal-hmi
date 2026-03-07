@@ -1,5 +1,6 @@
 import type { TagValue, TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
+import { getContainerClasses, shouldShowTitle, getTitleClasses } from '../../lib/widgetChrome';
 
 export type GaugeDisplayMode = 'bar' | 'radial' | 'donut' | 'vertical' | 'numeric';
 
@@ -19,6 +20,7 @@ interface Props {
   gaugeSize?: number;
   titleStyle?: TextStyle;
   valueStyle?: TextStyle;
+  chrome?: 'full' | 'compact' | 'none';
 }
 
 function getColor(value: number, warning?: number, critical?: number): string {
@@ -208,7 +210,7 @@ const DEFAULTS: Record<GaugeDisplayMode, { valueFontSize: number; barThickness: 
 export function GaugeWidget({
   title, tag, tagValues, min = 0, max = 100, units = '', warning, critical,
   decimalPlaces = 1, displayMode = 'bar', valueFontSize, barThickness, gaugeSize,
-  titleStyle, valueStyle,
+  titleStyle, valueStyle, chrome = 'full',
 }: Props) {
   const tv = tagValues[tag];
   const value = Number(tv?.value ?? 0);
@@ -223,8 +225,8 @@ export function GaugeWidget({
   const shared = { value, pct, color, min, max, units, decimalPlaces, valueFontSize: vfs, barThickness: bt, gaugeSize: gs, valueStyle };
 
   return (
-    <div className="bg-slate-800 rounded-xl p-4 h-full flex flex-col border border-slate-700">
-      <div className="text-xs text-slate-400 mb-2 font-medium uppercase tracking-wider" style={textStyleToCSS(titleStyle)}>{title}</div>
+    <div className={`${getContainerClasses(chrome)} h-full flex flex-col`}>
+      {shouldShowTitle(chrome) && <div className={getTitleClasses(chrome)} style={textStyleToCSS(titleStyle)}>{title}</div>}
       <div className="flex-1 flex flex-col justify-center">
         {displayMode === 'radial' && <RadialGauge {...shared} />}
         {displayMode === 'donut' && <DonutGauge {...shared} />}

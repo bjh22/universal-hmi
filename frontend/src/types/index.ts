@@ -95,6 +95,8 @@ export interface Widget {
   enabledTag?: string;     // tag-driven enabled: enabled when tag is truthy
   enabledRoles?: string[]; // role-based enabled: enabled only for these roles
   showInfo?: boolean;      // show info icon when tag has long_description (default true)
+  chrome?: 'full' | 'compact' | 'none'; // display chrome level (default: full)
+  parentId?: string;   // links widget to a container widget for grouping
 }
 
 export interface UserData {

@@ -177,13 +177,32 @@ export function useDesignMode(): DesignModeState {
   }, [commitWidgets]);
 
   const deleteSelected = useCallback(() => {
-    commitWidgets(prev => prev.filter(w => !selectedIds.has(w.id) || lockedIds.has(w.id)), 'Delete widgets');
+    const deletingIds = new Set([...selectedIds].filter(id => !lockedIds.has(id)));
+    commitWidgets(prev => prev
+      // Remove selected (non-locked) widgets
+      .filter(w => !deletingIds.has(w.id))
+      // Ungroup children of deleted containers
+      .map(w => w.parentId && deletingIds.has(w.parentId) ? { ...w, parentId: undefined } : w),
+    'Delete widgets');
     setSelectedIds(new Set());
   }, [commitWidgets, selectedIds, lockedIds]);
 
   const moveWidget = useCallback((id: string, x: number, y: number) => {
     if (lockedIds.has(id)) return;
-    commitWidgets(prev => prev.map(w => w.id === id ? { ...w, x, y } : w), 'Move widget');
+    commitWidgets(prev => {
+      const target = prev.find(w => w.id === id);
+      if (!target) return prev;
+      const dx = x - target.x;
+      const dy = y - target.y;
+      return prev.map(w => {
+        if (w.id === id) return { ...w, x, y };
+        // Move children along with container
+        if (target.type === 'container' && w.parentId === id) {
+          return { ...w, x: w.x + dx, y: w.y + dy };
+        }
+        return w;
+      });
+    }, 'Move widget');
   }, [commitWidgets, lockedIds]);
 
   const resizeWidget = useCallback((id: string, w: number, h: number) => {

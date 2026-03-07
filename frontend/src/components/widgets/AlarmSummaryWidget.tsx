@@ -1,13 +1,15 @@
 import type { AlarmData, TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
+import { getContainerClasses, shouldShowTitle, getTitleClasses } from '../../lib/widgetChrome';
 
 interface Props {
   title: string;
   alarms: AlarmData[];
   titleStyle?: TextStyle;
+  chrome?: 'full' | 'compact' | 'none';
 }
 
-export function AlarmSummaryWidget({ title, alarms, titleStyle }: Props) {
+export function AlarmSummaryWidget({ title, alarms, titleStyle, chrome = 'full' }: Props) {
   const active = alarms.filter(a => a.state !== 'inactive');
   const critical = active.filter(a => a.severity === 'critical').length;
   const warning = active.filter(a => a.severity === 'warning').length;
@@ -15,11 +17,11 @@ export function AlarmSummaryWidget({ title, alarms, titleStyle }: Props) {
 
   return (
     <div
-      className="bg-slate-800 rounded-xl p-4 h-full flex flex-col border border-slate-700 cursor-pointer hover:border-slate-600 transition-colors"
+      className={`${getContainerClasses(chrome)} h-full flex flex-col cursor-pointer hover:border-slate-600 transition-colors`}
       onClick={() => window.location.href = '/alarms'}
       title="View all alarms"
     >
-      <div className="text-xs text-slate-400 mb-2 font-medium uppercase tracking-wider" style={textStyleToCSS(titleStyle)}>{title}</div>
+      {shouldShowTitle(chrome) && <div className={getTitleClasses(chrome)} style={textStyleToCSS(titleStyle)}>{title}</div>}
       <div className="flex-1 flex items-center gap-3">
         <Badge count={critical} color="bg-red-600" label="Critical" />
         <Badge count={warning} color="bg-yellow-600" label="Warning" />
