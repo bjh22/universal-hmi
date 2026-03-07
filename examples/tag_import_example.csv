@@ -1,0 +1,19 @@
+name,description,group_name,data_type,access_mode,engineering_units,min_value,max_value,address
+Tank1_Level,Tank 1 Level Sensor,Tanks,float,read,meters,0,10,ns=2;s=Tank1.Level
+Tank1_Temp,Tank 1 Temperature,Tanks,float,read,°C,0,150,ns=2;s=Tank1.Temp
+Tank1_Pressure,Tank 1 Pressure Sensor,Tanks,float,read,bar,0,25,ns=2;s=Tank1.Pressure
+Tank1_ValveOpen,Tank 1 Inlet Valve,Tanks,bool,read_write,,,,ns=2;s=Tank1.ValveOpen
+Tank2_Level,Tank 2 Level Sensor,Tanks,float,read,meters,0,10,ns=2;s=Tank2.Level
+Tank2_Temp,Tank 2 Temperature,Tanks,float,read,°C,0,150,ns=2;s=Tank2.Temp
+Pump1_Speed,Pump 1 Speed Setpoint,Pumps,float,read_write,RPM,0,3600,ns=2;s=Pump1.Speed
+Pump1_Running,Pump 1 Running Status,Pumps,bool,read,,,,ns=2;s=Pump1.Running
+Pump1_Current,Pump 1 Motor Current,Pumps,float,read,A,0,50,ns=2;s=Pump1.Current
+Conveyor1_Speed,Conveyor 1 Speed,Conveyors,float,read_write,m/min,0,30,ns=2;s=Conveyor1.Speed
+Conveyor1_Running,Conveyor 1 Status,Conveyors,bool,read,,,,ns=2;s=Conveyor1.Running
+Mixer1_Speed,Mixer 1 Speed,Mixers,float,read_write,RPM,0,1200,ns=2;s=Mixer1.Speed
+Mixer1_Torque,Mixer 1 Torque,Mixers,float,read,Nm,0,500,ns=2;s=Mixer1.Torque
+Ambient_Temp,Ambient Temperature,Environment,float,read,°C,-20,60,ns=2;s=Env.AmbientTemp
+Ambient_Humidity,Ambient Humidity,Environment,float,read,%RH,0,100,ns=2;s=Env.Humidity
+Production_Count,Production Counter,Production,int,read,pcs,0,999999,ns=2;s=Production.Count
+Batch_ID,Current Batch ID,Production,string,read,,,,ns=2;s=Production.BatchID
+Emergency_Stop,Emergency Stop Status,Safety,bool,read,,,,ns=2;s=Safety.EStop

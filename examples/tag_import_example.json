@@ -1,0 +1,187 @@
+{
+  "tags": [
+    {
+      "name": "Tank1_Level",
+      "description": "Tank 1 Level Sensor",
+      "group_name": "Tanks",
+      "data_type": "float",
+      "access_mode": "read",
+      "engineering_units": "meters",
+      "min_value": 0,
+      "max_value": 10,
+      "address": "ns=2;s=Tank1.Level"
+    },
+    {
+      "name": "Tank1_Temp",
+      "description": "Tank 1 Temperature",
+      "group_name": "Tanks",
+      "data_type": "float",
+      "access_mode": "read",
+      "engineering_units": "°C",
+      "min_value": 0,
+      "max_value": 150,
+      "address": "ns=2;s=Tank1.Temp"
+    },
+    {
+      "name": "Tank1_Pressure",
+      "description": "Tank 1 Pressure Sensor",
+      "group_name": "Tanks",
+      "data_type": "float",
+      "access_mode": "read",
+      "engineering_units": "bar",
+      "min_value": 0,
+      "max_value": 25,
+      "address": "ns=2;s=Tank1.Pressure"
+    },
+    {
+      "name": "Tank1_ValveOpen",
+      "description": "Tank 1 Inlet Valve",
+      "group_name": "Tanks",
+      "data_type": "bool",
+      "access_mode": "read_write",
+      "address": "ns=2;s=Tank1.ValveOpen"
+    },
+    {
+      "name": "Tank2_Level",
+      "description": "Tank 2 Level Sensor",
+      "group_name": "Tanks",
+      "data_type": "float",
+      "access_mode": "read",
+      "engineering_units": "meters",
+      "min_value": 0,
+      "max_value": 10,
+      "address": "ns=2;s=Tank2.Level"
+    },
+    {
+      "name": "Tank2_Temp",
+      "description": "Tank 2 Temperature",
+      "group_name": "Tanks",
+      "data_type": "float",
+      "access_mode": "read",
+      "engineering_units": "°C",
+      "min_value": 0,
+      "max_value": 150,
+      "address": "ns=2;s=Tank2.Temp"
+    },
+    {
+      "name": "Pump1_Speed",
+      "description": "Pump 1 Speed Setpoint",
+      "group_name": "Pumps",
+      "data_type": "float",
+      "access_mode": "read_write",
+      "engineering_units": "RPM",
+      "min_value": 0,
+      "max_value": 3600,
+      "address": "ns=2;s=Pump1.Speed"
+    },
+    {
+      "name": "Pump1_Running",
+      "description": "Pump 1 Running Status",
+      "group_name": "Pumps",
+      "data_type": "bool",
+      "access_mode": "read",
+      "address": "ns=2;s=Pump1.Running"
+    },
+    {
+      "name": "Pump1_Current",
+      "description": "Pump 1 Motor Current",
+      "group_name": "Pumps",
+      "data_type": "float",
+      "access_mode": "read",
+      "engineering_units": "A",
+      "min_value": 0,
+      "max_value": 50,
+      "address": "ns=2;s=Pump1.Current"
+    },
+    {
+      "name": "Conveyor1_Speed",
+      "description": "Conveyor 1 Speed",
+      "group_name": "Conveyors",
+      "data_type": "float",
+      "access_mode": "read_write",
+      "engineering_units": "m/min",
+      "min_value": 0,
+      "max_value": 30,
+      "address": "ns=2;s=Conveyor1.Speed"
+    },
+    {
+      "name": "Conveyor1_Running",
+      "description": "Conveyor 1 Status",
+      "group_name": "Conveyors",
+      "data_type": "bool",
+      "access_mode": "read",
+      "address": "ns=2;s=Conveyor1.Running"
+    },
+    {
+      "name": "Mixer1_Speed",
+      "description": "Mixer 1 Speed",
+      "group_name": "Mixers",
+      "data_type": "float",
+      "access_mode": "read_write",
+      "engineering_units": "RPM",
+      "min_value": 0,
+      "max_value": 1200,
+      "address": "ns=2;s=Mixer1.Speed"
+    },
+    {
+      "name": "Mixer1_Torque",
+      "description": "Mixer 1 Torque",
+      "group_name": "Mixers",
+      "data_type": "float",
+      "access_mode": "read",
+      "engineering_units": "Nm",
+      "min_value": 0,
+      "max_value": 500,
+      "address": "ns=2;s=Mixer1.Torque"
+    },
+    {
+      "name": "Ambient_Temp",
+      "description": "Ambient Temperature",
+      "group_name": "Environment",
+      "data_type": "float",
+      "access_mode": "read",
+      "engineering_units": "°C",
+      "min_value": -20,
+      "max_value": 60,
+      "address": "ns=2;s=Env.AmbientTemp"
+    },
+    {
+      "name": "Ambient_Humidity",
+      "description": "Ambient Humidity",
+      "group_name": "Environment",
+      "data_type": "float",
+      "access_mode": "read",
+      "engineering_units": "%RH",
+      "min_value": 0,
+      "max_value": 100,
+      "address": "ns=2;s=Env.Humidity"
+    },
+    {
+      "name": "Production_Count",
+      "description": "Production Counter",
+      "group_name": "Production",
+      "data_type": "int",
+      "access_mode": "read",
+      "engineering_units": "pcs",
+      "min_value": 0,
+      "max_value": 999999,
+      "address": "ns=2;s=Production.Count"
+    },
+    {
+      "name": "Batch_ID",
+      "description": "Current Batch ID",
+      "group_name": "Production",
+      "data_type": "string",
+      "access_mode": "read",
+      "address": "ns=2;s=Production.BatchID"
+    },
+    {
+      "name": "Emergency_Stop",
+      "description": "Emergency Stop Status",
+      "group_name": "Safety",
+      "data_type": "bool",
+      "access_mode": "read",
+      "address": "ns=2;s=Safety.EStop"
+    }
+  ]
+}
