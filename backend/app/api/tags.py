@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import require_role
 from app.core.database import get_db
@@ -798,6 +799,113 @@ async def preview_rslogix500_import(
         g = t.get("group_name") or "Ungrouped"
         groups[g] = groups.get(g, 0) + 1
     return {"total": len(tags), "tags": tags, "groups": groups}
+
+
+# ─── Bulk Tag Operations ───
+
+
+class BulkTagIds(BaseModel):
+    tag_ids: list[int]
+
+
+class BulkLabelOp(BaseModel):
+    tag_ids: list[int]
+    label_ids: list[int]
+
+
+class BulkFieldUpdate(BaseModel):
+    tag_ids: list[int]
+    fields: dict[str, object]
+
+
+@router.post("/bulk/delete", status_code=status.HTTP_200_OK)
+async def bulk_delete_tags(
+    body: BulkTagIds,
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    if not body.tag_ids:
+        return {"deleted": 0}
+    result = await session.execute(select(Tag).where(Tag.id.in_(body.tag_ids)))
+    tags_to_delete = result.scalars().all()
+    for tag in tags_to_delete:
+        await session.delete(tag)
+    await session.flush()
+    return {"deleted": len(tags_to_delete)}
+
+
+@router.post("/bulk/add-labels", status_code=status.HTTP_200_OK)
+async def bulk_add_labels(
+    body: BulkLabelOp,
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    if not body.tag_ids or not body.label_ids:
+        return {"updated": 0}
+    result = await session.execute(
+        select(Tag).options(selectinload(Tag.labels)).where(Tag.id.in_(body.tag_ids))
+    )
+    tags = result.scalars().all()
+    label_result = await session.execute(select(TagLabel).where(TagLabel.id.in_(body.label_ids)))
+    labels = label_result.scalars().all()
+    count = 0
+    for tag in tags:
+        for label in labels:
+            if label not in tag.labels:
+                tag.labels.append(label)
+                count += 1
+    await session.flush()
+    return {"updated": count}
+
+
+@router.post("/bulk/remove-labels", status_code=status.HTTP_200_OK)
+async def bulk_remove_labels(
+    body: BulkLabelOp,
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    if not body.tag_ids or not body.label_ids:
+        return {"updated": 0}
+    result = await session.execute(
+        select(Tag).options(selectinload(Tag.labels)).where(Tag.id.in_(body.tag_ids))
+    )
+    tags = result.scalars().all()
+    label_result = await session.execute(select(TagLabel).where(TagLabel.id.in_(body.label_ids)))
+    labels = label_result.scalars().all()
+    count = 0
+    for tag in tags:
+        for label in labels:
+            if label in tag.labels:
+                tag.labels.remove(label)
+                count += 1
+    await session.flush()
+    return {"updated": count}
+
+
+@router.post("/bulk/update", status_code=status.HTTP_200_OK)
+async def bulk_update_tags(
+    body: BulkFieldUpdate,
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    if not body.tag_ids or not body.fields:
+        return {"updated": 0}
+    allowed = {
+        "group_name", "data_type", "access_mode", "engineering_units",
+        "trending_enabled", "alarm_enabled", "simulation_enabled",
+        "simulation_behavior", "data_source_id",
+    }
+    fields = {k: v for k, v in body.fields.items() if k in allowed}
+    if not fields:
+        return {"updated": 0}
+    result = await session.execute(select(Tag).where(Tag.id.in_(body.tag_ids)))
+    tags = result.scalars().all()
+    for tag in tags:
+        for key, val in fields.items():
+            setattr(tag, key, val)
+        tag_engine.register_tag(tag)
+    await session.flush()
+    return {"updated": len(tags)}
 
 
 # Tag Templates

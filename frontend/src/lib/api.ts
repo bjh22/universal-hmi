@@ -63,6 +63,14 @@ export const api = {
     request(`/tags/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteTag: (id: number) =>
     request(`/tags/${id}`, { method: 'DELETE' }),
+  bulkDeleteTags: (tagIds: number[]) =>
+    request<{ deleted: number }>('/tags/bulk/delete', { method: 'POST', body: JSON.stringify({ tag_ids: tagIds }) }),
+  bulkAddLabels: (tagIds: number[], labelIds: number[]) =>
+    request<{ updated: number }>('/tags/bulk/add-labels', { method: 'POST', body: JSON.stringify({ tag_ids: tagIds, label_ids: labelIds }) }),
+  bulkRemoveLabels: (tagIds: number[], labelIds: number[]) =>
+    request<{ updated: number }>('/tags/bulk/remove-labels', { method: 'POST', body: JSON.stringify({ tag_ids: tagIds, label_ids: labelIds }) }),
+  bulkUpdateTags: (tagIds: number[], fields: Record<string, unknown>) =>
+    request<{ updated: number }>('/tags/bulk/update', { method: 'POST', body: JSON.stringify({ tag_ids: tagIds, fields }) }),
   importTagsCsv: (tags: Partial<Tag>[]) =>
     request<{ imported: number; names: string[] }>('/tags/import/csv', {
       method: 'POST',

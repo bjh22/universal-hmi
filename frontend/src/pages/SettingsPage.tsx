@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { Search, Download, UserPlus, Plus, Pencil, Trash2, Upload, X, Plug, Unplug, FolderSearch, Tag as TagIcon } from 'lucide-react';
+import { Search, Download, UserPlus, Plus, Pencil, Trash2, Upload, X, Plug, Unplug, FolderSearch, Tag as TagIcon, CheckSquare, Square, MinusSquare, Filter } from 'lucide-react';
 import { api } from '../lib/api';
 import type { Tag, TagLabel, DataSourceData, ProtocolType, AuditEntry, UserData, BrowsedTag, UserListEntry, ImportPreviewTag } from '../types';
 
@@ -479,6 +479,69 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
   );
 }
 
+// ─── Bulk Label Dialog ───
+function BulkLabelDialog({ mode, tagCount, allLabels, onApply, onClose }: {
+  mode: 'add' | 'remove';
+  tagCount: number;
+  allLabels: TagLabel[];
+  onApply: (labelIds: number[]) => void;
+  onClose: () => void;
+}) {
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+
+  const toggleLabel = useCallback((id: number) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-slate-100">
+            {mode === 'add' ? 'Add' : 'Remove'} Labels
+          </h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
+        </div>
+        <p className="text-sm text-slate-400 mb-3">
+          {mode === 'add' ? 'Add labels to' : 'Remove labels from'} {tagCount} selected tag{tagCount !== 1 ? 's' : ''}
+        </p>
+        <div className="space-y-1 max-h-60 overflow-y-auto mb-4">
+          {allLabels.map(l => (
+            <button
+              key={l.id}
+              onClick={() => toggleLabel(l.id)}
+              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition-colors ${selected.has(l.id) ? 'bg-blue-600/20 border border-blue-500/40' : 'hover:bg-slate-700 border border-transparent'}`}
+            >
+              {selected.has(l.id)
+                ? <CheckSquare size={16} className="text-blue-400 flex-shrink-0" />
+                : <Square size={16} className="text-slate-500 flex-shrink-0" />}
+              <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: l.color || '#3b82f6' }} />
+              <span className="text-slate-200">{l.name}</span>
+              {l.description && <span className="text-slate-500 text-xs ml-auto truncate max-w-32">{l.description}</span>}
+            </button>
+          ))}
+          {allLabels.length === 0 && <p className="text-sm text-slate-500 text-center py-4">No labels created yet</p>}
+        </div>
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 hover:bg-slate-600">Cancel</button>
+          <button
+            onClick={() => onApply(Array.from(selected))}
+            disabled={selected.size === 0}
+            className="px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {mode === 'add' ? 'Add' : 'Remove'} {selected.size > 0 ? `${selected.size} Label${selected.size !== 1 ? 's' : ''}` : 'Labels'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Tag Import Dialog (HMI CSV, CODESYS XML, RSLogix 500) ───
 type ImportFormat = 'hmi_csv' | 'codesys_xml' | 'rslogix500';
 
@@ -881,12 +944,21 @@ export function SettingsPage({ user }: Props) {
   // Tag state
   const [tagSearch, setTagSearch] = useState('');
   const [tagLabelFilter, setTagLabelFilter] = useState('all');
+  const [tagTypeFilter, setTagTypeFilter] = useState('all');
+  const [tagGroupFilter, setTagGroupFilter] = useState('all');
+  const [tagSourceFilter, setTagSourceFilter] = useState('all');
+  const [showAdvFilters, setShowAdvFilters] = useState(false);
   const [allLabels, setAllLabels] = useState<TagLabel[]>([]);
   const [editTag, setEditTag] = useState<(Omit<Tag, 'id'> & { id?: number }) | null>(null);
   const [deleteTagTarget, setDeleteTagTarget] = useState<Tag | null>(null);
   const [showTagImport, setShowCsvImport] = useState(false);
   const [editLabel, setEditLabel] = useState<{ id?: number; name: string; color: string; description: string } | null>(null);
   const [deleteLabelTarget, setDeleteLabelTarget] = useState<TagLabel | null>(null);
+
+  // Multi-select state
+  const [selectedTagIds, setSelectedTagIds] = useState<Set<number>>(new Set());
+  const [bulkLabelDialog, setBulkLabelDialog] = useState<'add' | 'remove' | null>(null);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
 
   // Data source state
   const [editDs, setEditDs] = useState<{ id?: number; name: string; protocol: ProtocolType; enabled: boolean; config: Record<string, unknown> } | null>(null);
@@ -922,21 +994,40 @@ export function SettingsPage({ user }: Props) {
     }
   }, [tab, loadTags, loadLabels, loadDataSources]);
 
+  const tagGroups = useMemo(() => {
+    const groups = new Set<string>();
+    tags.forEach(t => { if (t.group_name) groups.add(t.group_name); });
+    return Array.from(groups).sort();
+  }, [tags]);
+
   const filteredTags = useMemo(() => {
     return tags.filter(t => {
       if (tagLabelFilter !== 'all') {
         const labelId = Number(tagLabelFilter);
         if (!(t.labels || []).some(l => l.id === labelId)) return false;
       }
+      if (tagTypeFilter !== 'all' && t.data_type !== tagTypeFilter) return false;
+      if (tagGroupFilter !== 'all' && (t.group_name || '') !== tagGroupFilter) return false;
+      if (tagSourceFilter !== 'all') {
+        if (tagSourceFilter === 'none' && t.data_source_id != null) return false;
+        if (tagSourceFilter !== 'none' && t.data_source_id !== Number(tagSourceFilter)) return false;
+      }
       if (tagSearch) {
         const q = tagSearch.toLowerCase();
         return t.name.toLowerCase().includes(q) ||
                (t.description || '').toLowerCase().includes(q) ||
+               (t.group_name || '').toLowerCase().includes(q) ||
+               (t.address || '').toLowerCase().includes(q) ||
                (t.labels || []).some(l => l.name.toLowerCase().includes(q));
       }
       return true;
     });
-  }, [tags, tagSearch, tagLabelFilter]);
+  }, [tags, tagSearch, tagLabelFilter, tagTypeFilter, tagGroupFilter, tagSourceFilter]);
+
+  // Clear selection when filters change
+  useEffect(() => {
+    setSelectedTagIds(new Set());
+  }, [tagSearch, tagLabelFilter, tagTypeFilter, tagGroupFilter, tagSourceFilter]);
 
   // Tag handlers
   const handleSaveTag = useCallback(async (data: Omit<Tag, 'id'> & { id?: number }) => {
@@ -974,6 +1065,48 @@ export function SettingsPage({ user }: Props) {
       alert(err instanceof Error ? err.message : String(err));
     }
   }, [deleteTagTarget, loadTags]);
+
+  // Bulk actions
+  const handleBulkDelete = useCallback(async () => {
+    try {
+      await api.bulkDeleteTags(Array.from(selectedTagIds));
+      setSelectedTagIds(new Set());
+      setBulkDeleteConfirm(false);
+      loadTags();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
+  }, [selectedTagIds, loadTags]);
+
+  const handleBulkLabels = useCallback(async (mode: 'add' | 'remove', labelIds: number[]) => {
+    try {
+      if (mode === 'add') {
+        await api.bulkAddLabels(Array.from(selectedTagIds), labelIds);
+      } else {
+        await api.bulkRemoveLabels(Array.from(selectedTagIds), labelIds);
+      }
+      setBulkLabelDialog(null);
+      loadTags();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
+  }, [selectedTagIds, loadTags]);
+
+  const toggleTagSelection = useCallback((id: number) => {
+    setSelectedTagIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedTagIds(prev => {
+      if (prev.size === filteredTags.length) return new Set();
+      return new Set(filteredTags.map(t => t.id));
+    });
+  }, [filteredTags]);
 
   const handleCsvImport = useCallback(async (rows: Record<string, unknown>[]) => {
     try {
@@ -1153,12 +1286,13 @@ export function SettingsPage({ user }: Props) {
       {/* ═══ Tags ═══ */}
       {tab === 'tags' && (
         <div>
-          <div className="flex gap-3 mb-3 flex-wrap">
-            <div className="relative flex-1 max-w-xs">
+          {/* Search & Filter Bar */}
+          <div className="flex gap-3 mb-2 flex-wrap items-center">
+            <div className="relative flex-1 max-w-sm">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
               <input
                 type="text"
-                placeholder="Search tags..."
+                placeholder="Search name, description, group, address, labels..."
                 value={tagSearch}
                 onChange={e => setTagSearch(e.target.value)}
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-8 pr-3 py-2 text-sm text-white outline-none focus:border-blue-500"
@@ -1172,6 +1306,17 @@ export function SettingsPage({ user }: Props) {
               <option value="all">All Labels</option>
               {allLabels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
+            <button
+              onClick={() => setShowAdvFilters(f => !f)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm ${showAdvFilters || tagTypeFilter !== 'all' || tagGroupFilter !== 'all' || tagSourceFilter !== 'all' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/40' : 'bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-300'}`}
+            >
+              <Filter size={14} /> Filters
+              {(tagTypeFilter !== 'all' || tagGroupFilter !== 'all' || tagSourceFilter !== 'all') && (
+                <span className="ml-1 px-1.5 py-0.5 bg-blue-600 text-white text-[10px] rounded-full font-medium">
+                  {[tagTypeFilter, tagGroupFilter, tagSourceFilter].filter(f => f !== 'all').length}
+                </span>
+              )}
+            </button>
             <span className="self-center text-xs text-slate-500">{filteredTags.length} / {tags.length} tags</span>
             {canManage && (
               <div className="flex gap-2 ml-auto">
@@ -1179,7 +1324,7 @@ export function SettingsPage({ user }: Props) {
                   onClick={() => setShowCsvImport(true)}
                   className="flex items-center gap-1.5 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm font-medium"
                 >
-                  <Upload size={16} /> Import Tags
+                  <Upload size={16} /> Import
                 </button>
                 <button
                   onClick={() => setEditTag({ ...EMPTY_TAG })}
@@ -1190,10 +1335,98 @@ export function SettingsPage({ user }: Props) {
               </div>
             )}
           </div>
+
+          {/* Advanced Filters */}
+          {showAdvFilters && (
+            <div className="flex gap-3 mb-2 flex-wrap items-center bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2">
+              <select
+                value={tagTypeFilter}
+                onChange={e => setTagTypeFilter(e.target.value)}
+                className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-300 outline-none"
+              >
+                <option value="all">All Types</option>
+                <option value="bool">Bool</option>
+                <option value="int">Int</option>
+                <option value="float">Float</option>
+                <option value="string">String</option>
+              </select>
+              <select
+                value={tagGroupFilter}
+                onChange={e => setTagGroupFilter(e.target.value)}
+                className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-300 outline-none"
+              >
+                <option value="all">All Groups</option>
+                {tagGroups.map(g => <option key={g} value={g}>{g}</option>)}
+              </select>
+              <select
+                value={tagSourceFilter}
+                onChange={e => setTagSourceFilter(e.target.value)}
+                className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-300 outline-none"
+              >
+                <option value="all">All Sources</option>
+                <option value="none">Simulation</option>
+                {dataSources.map(ds => <option key={ds.id} value={ds.id}>{ds.name}</option>)}
+              </select>
+              {(tagTypeFilter !== 'all' || tagGroupFilter !== 'all' || tagSourceFilter !== 'all') && (
+                <button
+                  onClick={() => { setTagTypeFilter('all'); setTagGroupFilter('all'); setTagSourceFilter('all'); }}
+                  className="text-xs text-slate-500 hover:text-slate-300"
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Bulk Action Bar */}
+          {canManage && selectedTagIds.size > 0 && (
+            <div className="flex items-center gap-3 mb-2 bg-blue-600/10 border border-blue-500/30 rounded-lg px-4 py-2">
+              <span className="text-sm text-blue-300 font-medium">{selectedTagIds.size} selected</span>
+              <div className="h-4 w-px bg-slate-600" />
+              <button
+                onClick={() => setBulkLabelDialog('add')}
+                className="text-sm text-slate-300 hover:text-white px-2 py-1 rounded hover:bg-slate-700"
+              >
+                Add Labels
+              </button>
+              <button
+                onClick={() => setBulkLabelDialog('remove')}
+                className="text-sm text-slate-300 hover:text-white px-2 py-1 rounded hover:bg-slate-700"
+              >
+                Remove Labels
+              </button>
+              <div className="h-4 w-px bg-slate-600" />
+              <button
+                onClick={() => setBulkDeleteConfirm(true)}
+                className="text-sm text-red-400 hover:text-red-300 px-2 py-1 rounded hover:bg-red-900/30"
+              >
+                Delete
+              </button>
+              <button
+                onClick={() => setSelectedTagIds(new Set())}
+                className="ml-auto text-xs text-slate-500 hover:text-slate-300"
+              >
+                Clear selection
+              </button>
+            </div>
+          )}
+
+          {/* Tag Table */}
           <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-700 text-slate-400">
+                  {canManage && (
+                    <th className="w-10 px-3 py-3">
+                      <button onClick={toggleSelectAll} className="text-slate-500 hover:text-slate-300">
+                        {selectedTagIds.size === filteredTags.length && filteredTags.length > 0
+                          ? <CheckSquare size={16} />
+                          : selectedTagIds.size > 0
+                            ? <MinusSquare size={16} />
+                            : <Square size={16} />}
+                      </button>
+                    </th>
+                  )}
                   <th className="text-left px-4 py-3 font-medium">Name</th>
                   <th className="text-left px-4 py-3 font-medium">Labels</th>
                   <th className="text-left px-4 py-3 font-medium">Source</th>
@@ -1208,7 +1441,17 @@ export function SettingsPage({ user }: Props) {
               </thead>
               <tbody>
                 {filteredTags.map((tag) => (
-                  <tr key={tag.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
+                  <tr
+                    key={tag.id}
+                    className={`border-b border-slate-700/50 hover:bg-slate-700/30 ${selectedTagIds.has(tag.id) ? 'bg-blue-600/10' : ''}`}
+                  >
+                    {canManage && (
+                      <td className="w-10 px-3 py-2">
+                        <button onClick={() => toggleTagSelection(tag.id)} className="text-slate-500 hover:text-slate-300">
+                          {selectedTagIds.has(tag.id) ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+                        </button>
+                      </td>
+                    )}
                     <td className="px-4 py-2">
                       <div className="text-slate-200">{tag.name}</div>
                       {tag.description && <div className="text-[10px] text-slate-500 truncate max-w-48">{tag.description}</div>}
@@ -1249,7 +1492,7 @@ export function SettingsPage({ user }: Props) {
                   </tr>
                 ))}
                 {filteredTags.length === 0 && (
-                  <tr><td colSpan={canManage ? 10 : 9} className="px-4 py-8 text-center text-slate-500">No tags found</td></tr>
+                  <tr><td colSpan={canManage ? 11 : 10} className="px-4 py-8 text-center text-slate-500">No tags found</td></tr>
                 )}
               </tbody>
             </table>
@@ -1258,6 +1501,27 @@ export function SettingsPage({ user }: Props) {
           {editTag && <TagDialog tag={editTag} dataSources={dataSources} allLabels={allLabels} onSave={handleSaveTag} onClose={() => setEditTag(null)} />}
           {deleteTagTarget && <DeleteConfirmDialog title="Delete Tag" name={deleteTagTarget.name} onConfirm={handleDeleteTag} onCancel={() => setDeleteTagTarget(null)} />}
           {showTagImport && <TagImportDialog onImportCsv={handleCsvImport} onImportCodesys={handleCodesysImport} onImportRslogix={handleRslogixImport} onClose={() => setShowTagImport(false)} />}
+          {bulkDeleteConfirm && (
+            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setBulkDeleteConfirm(false)}>
+              <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 max-w-sm" onClick={e => e.stopPropagation()}>
+                <div className="text-slate-100 font-medium mb-2">Delete {selectedTagIds.size} Tags</div>
+                <p className="text-sm text-slate-400 mb-4">Are you sure you want to delete {selectedTagIds.size} selected tags? This cannot be undone.</p>
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => setBulkDeleteConfirm(false)} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300">Cancel</button>
+                  <button onClick={handleBulkDelete} className="px-4 py-2 bg-red-600 rounded-lg text-sm text-white hover:bg-red-700">Delete {selectedTagIds.size} Tags</button>
+                </div>
+              </div>
+            </div>
+          )}
+          {bulkLabelDialog && (
+            <BulkLabelDialog
+              mode={bulkLabelDialog}
+              tagCount={selectedTagIds.size}
+              allLabels={allLabels}
+              onApply={labelIds => handleBulkLabels(bulkLabelDialog, labelIds)}
+              onClose={() => setBulkLabelDialog(null)}
+            />
+          )}
 
           {/* Label Management */}
           <div className="mt-6">
