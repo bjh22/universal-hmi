@@ -224,29 +224,186 @@ CODESYS_TYPE_MAP: dict[str, TagDataType] = {
 CODESYS_NS = {"sc": "http://www.3s-software.com/schemas/Symbolconfiguration.xsd"}
 
 
-def _codesys_resolve_typeclass(type_name: str, type_map: dict[str, dict]) -> str | None:
-    """Resolve a CODESYS type name to its typeclass via the TypeList."""
-    info = type_map.get(type_name)
-    if not info:
+def _codesys_build_type_registry(type_list: ET.Element, ns: dict[str, str]) -> dict[str, dict]:
+    """Build a rich type registry from the CODESYS TypeList.
+
+    Stores typeclass, iecname, basetype, pouclass, and for structs/FBs
+    the list of UserDefElement children. For enums, stores the value mapping.
+    """
+    ns_prefix = "{" + ns["sc"] + "}" if ns.get("sc") else ""
+    registry: dict[str, dict] = {}
+    for tel in type_list:
+        tname = tel.get("name", "")
+        info: dict = {
+            "typeclass": tel.get("typeclass", ""),
+            "iecname": tel.get("iecname", ""),
+            "basetype": tel.get("basetype", ""),
+            "pouclass": tel.get("pouclass", ""),
+        }
+        # Collect struct/FB/enum fields (try namespaced first, then bare)
+        elements = tel.findall(f"{ns_prefix}UserDefElement") if ns_prefix else tel.findall("UserDefElement")
+        if not elements:
+            elements = tel.findall("UserDefElement")
+        if elements:
+            info["elements"] = []
+            for el in elements:
+                elem: dict = {
+                    "iecname": el.get("iecname", ""),
+                    "type": el.get("type", ""),
+                    "access": el.get("access", "ReadWrite"),
+                    "vartype": el.get("vartype", ""),
+                }
+                # Enum value entries have enumvalue attribute
+                ev = el.get("enumvalue")
+                if ev is not None:
+                    elem["enumvalue"] = ev
+                info["elements"].append(elem)
+        registry[tname] = info
+    return registry
+
+
+def _codesys_get_enum_mapping(type_name: str, registry: dict[str, dict]) -> dict[str, str] | None:
+    """Extract enum value-to-label mapping from the type registry."""
+    info = registry.get(type_name)
+    if not info or info.get("typeclass") != "Enum":
         return None
-    tc = info.get("typeclass")
-    if tc and tc != "Enum":
-        return tc
-    # Enums map to their base type
+    elements = info.get("elements", [])
+    if not elements:
+        return None
+    mapping: dict[str, str] = {}
+    for el in elements:
+        ev = el.get("enumvalue")
+        label = el.get("iecname", "")
+        if ev is not None and label:
+            mapping[str(ev)] = label
+    return mapping if mapping else None
+
+
+def _codesys_resolve_type(
+    type_name: str,
+    registry: dict[str, dict],
+    _depth: int = 0,
+) -> TagDataType:
+    """Resolve a CODESYS type name to an HMI TagDataType."""
+    if _depth > 10:
+        return TagDataType.FLOAT
+    info = registry.get(type_name)
+    if not info:
+        return TagDataType.FLOAT
+    tc = info.get("typeclass", "")
+    # Direct primitive mapping
+    if tc in CODESYS_TYPE_MAP:
+        return CODESYS_TYPE_MAP[tc]
+    # Enum -> resolve base type (always int-backed)
     if tc == "Enum":
-        base = info.get("basetype")
-        if base:
-            return _codesys_resolve_typeclass(base, type_map)
-    return tc
+        return TagDataType.INT
+    return TagDataType.FLOAT
+
+
+def _codesys_expand_type(
+    type_name: str,
+    path_parts: list[str],
+    access: str,
+    registry: dict[str, dict],
+    group: str | None,
+    _depth: int = 0,
+) -> list[dict]:
+    """Expand a complex CODESYS type (struct/FB) into flattened tag dicts.
+
+    For primitive types and enums, returns a single tag entry.
+    For structs/FBs, recursively expands each UserDefElement field.
+    Arrays are expanded element-by-element up to a reasonable limit.
+    """
+    if _depth > 10:
+        return []
+
+    info = registry.get(type_name, {})
+    tc = info.get("typeclass", "")
+    pouclass = info.get("pouclass", "")
+
+    # Structs and Function Blocks: expand each field
+    if tc == "Userdef" and pouclass in ("STRUCTURE", "FUNCTION_BLOCK"):
+        elements = info.get("elements", [])
+        if not elements:
+            return []
+        tags: list[dict] = []
+        for el in elements:
+            field_name = el.get("iecname", "")
+            field_type = el.get("type", "")
+            field_access = el.get("access", access)
+            if not field_name or not field_type:
+                continue
+            child_path = path_parts + [field_name]
+            tags.extend(_codesys_expand_type(
+                field_type, child_path, field_access, registry, group, _depth + 1
+            ))
+        return tags
+
+    # Arrays: expand with index suffixes
+    if tc == "Array":
+        base = info.get("basetype", "")
+        iecname = info.get("iecname", "")
+        # Parse array bounds from iecname like "ARRAY [0..10] OF TIME"
+        import re
+        m = re.search(r"\[(\d+)\.\.(\d+)\]", iecname)
+        if m and base:
+            lo, hi = int(m.group(1)), int(m.group(2))
+            # Cap expansion to avoid huge arrays
+            if (hi - lo) > 50:
+                return []
+            tags = []
+            for idx in range(lo, hi + 1):
+                child_path = path_parts[:-1] + [f"{path_parts[-1]}[{idx}]"] if path_parts else [f"[{idx}]"]
+                tags.extend(_codesys_expand_type(
+                    base, child_path, access, registry, group, _depth + 1
+                ))
+            return tags
+        return []
+
+    # Enum: single tag with enum_mapping
+    if tc == "Enum":
+        access_mode = TagAccessMode.READ_WRITE
+        if access == "Read":
+            access_mode = TagAccessMode.READ
+        elif access == "Write":
+            access_mode = TagAccessMode.WRITE
+        return [{
+            "name": ".".join(path_parts),
+            "description": None,
+            "group_name": group,
+            "data_type": TagDataType.INT,
+            "access_mode": access_mode,
+            "enum_mapping": _codesys_get_enum_mapping(type_name, registry),
+        }]
+
+    # Primitive: single tag
+    data_type = _codesys_resolve_type(type_name, registry)
+    access_mode = TagAccessMode.READ_WRITE
+    if access == "Read":
+        access_mode = TagAccessMode.READ
+    elif access == "Write":
+        access_mode = TagAccessMode.WRITE
+    return [{
+        "name": ".".join(path_parts),
+        "description": None,
+        "group_name": group,
+        "data_type": data_type,
+        "access_mode": access_mode,
+    }]
 
 
 def _codesys_parse_nodes(
     node_el: ET.Element,
     path_parts: list[str],
-    type_map: dict[str, dict],
+    registry: dict[str, dict],
     ns: dict[str, str],
 ) -> list[dict]:
-    """Recursively walk CODESYS Node elements, collecting leaf tags."""
+    """Recursively walk CODESYS Node elements, collecting leaf tags.
+
+    Nodes with child <Node> elements are containers (programs, GVLs).
+    Leaf nodes reference a type which may be primitive, enum, struct, or FB — all
+    are expanded into flattened dot-path tags via _codesys_expand_type.
+    """
     tags: list[dict] = []
     name = node_el.get("name", "")
     current_path = path_parts + [name] if name else path_parts
@@ -254,44 +411,31 @@ def _codesys_parse_nodes(
     access = node_el.get("access", "ReadWrite")
 
     children = node_el.findall("sc:Node", ns) if ns else node_el.findall("Node")
-    if not children and type_attr:
-        # Check if this is a struct with child fields via type_map
-        type_info = type_map.get(type_attr, {})
-        typeclass = type_info.get("typeclass")
-
-        # Skip complex FB types and arrays
-        if typeclass in ("Array",) or (
-            typeclass == "Userdef"
-            and type_info.get("pouclass") == "STRUCTURE"
-        ):
-            return tags
-
-        resolved = _codesys_resolve_typeclass(type_attr, type_map)
-        data_type = CODESYS_TYPE_MAP.get(resolved or "", TagDataType.FLOAT)
-
-        access_mode = TagAccessMode.READ_WRITE
-        if access == "Read":
-            access_mode = TagAccessMode.READ
-        elif access == "Write":
-            access_mode = TagAccessMode.WRITE
-
-        tag_name = ".".join(current_path)
-        comment_el = node_el.find("sc:Comment", ns) if ns else node_el.find("Comment")
-        description = comment_el.text.strip() if comment_el is not None and comment_el.text else None
-
+    if children:
+        # Container node — recurse into children
+        for child in children:
+            tags.extend(_codesys_parse_nodes(child, current_path, registry, ns))
+    elif type_attr:
+        # Leaf node — expand its type
         # Use second path part as group (first is usually "Application")
         group = current_path[1] if len(current_path) > 2 else None
 
-        tags.append({
-            "name": tag_name,
-            "description": description,
-            "group_name": group,
-            "data_type": data_type,
-            "access_mode": access_mode,
-        })
-    else:
-        for child in children:
-            tags.extend(_codesys_parse_nodes(child, current_path, type_map, ns))
+        comment_el = node_el.find("sc:Comment", ns) if ns else node_el.find("Comment")
+        description = comment_el.text.strip() if comment_el is not None and comment_el.text else None
+
+        expanded = _codesys_expand_type(
+            type_attr, current_path, access, registry, group
+        )
+
+        # Apply the node-level comment as description to all expanded tags
+        # (only if they don't already have one, and only for single-expansion)
+        if description and len(expanded) == 1:
+            expanded[0]["description"] = description
+        elif description and expanded:
+            # For struct expansion, set description on the first field
+            expanded[0]["description"] = description
+
+        tags.extend(expanded)
 
     return tags
 
@@ -316,8 +460,7 @@ async def import_tags_codesys(
     except ET.ParseError as e:
         raise HTTPException(status_code=400, detail=f"Invalid XML: {e}")
 
-    # Build type lookup from TypeList
-    type_map: dict[str, dict] = {}
+    # Build type registry from TypeList
     ns = CODESYS_NS
     type_list = root.find("sc:TypeList", ns)
     if type_list is None:
@@ -325,15 +468,9 @@ async def import_tags_codesys(
         ns = {}
         type_list = root.find("TypeList")
 
+    registry: dict[str, dict] = {}
     if type_list is not None:
-        for tel in type_list:
-            tname = tel.get("name", "")
-            type_map[tname] = {
-                "typeclass": tel.get("typeclass", ""),
-                "iecname": tel.get("iecname", ""),
-                "basetype": tel.get("basetype", ""),
-                "pouclass": tel.get("pouclass", ""),
-            }
+        registry = _codesys_build_type_registry(type_list, ns if ns else {})
 
     # Walk NodeList
     node_list = root.find("sc:NodeList", ns) or root.find("NodeList")
@@ -342,17 +479,19 @@ async def import_tags_codesys(
 
     parsed_tags: list[dict] = []
     for top_node in (node_list.findall("sc:Node", ns) if ns else node_list.findall("Node")):
-        parsed_tags.extend(_codesys_parse_nodes(top_node, [], type_map, ns if ns else {}))
+        parsed_tags.extend(_codesys_parse_nodes(top_node, [], registry, ns if ns else {}))
 
     created = []
     for td in parsed_tags:
         tag_name = f"{prefix}.{td['name']}" if prefix else td["name"]
+        enum_mapping = td.get("enum_mapping")
         tag = Tag(
             name=tag_name,
             description=td.get("description"),
             group_name=td.get("group_name"),
             data_type=td["data_type"],
             access_mode=td["access_mode"],
+            enum_mapping=json.dumps(enum_mapping) if enum_mapping else None,
         )
         session.add(tag)
         created.append(tag)
