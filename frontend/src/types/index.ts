@@ -209,4 +209,16 @@ export interface ProjectDetail extends ProjectData {
   screen_count: number;
   data_source_count: number;
   job_count: number;
+  profile_count: number;
+}
+
+export interface MachineProfile {
+  id: number;
+  project_id: number;
+  name: string;
+  description: string | null;
+  data_source_overrides: Record<string, { config?: Record<string, unknown> }>;
+  tag_overrides: Record<string, { address?: string }>;
+  created_at: string;
+  updated_at: string;
 }

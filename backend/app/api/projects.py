@@ -4,13 +4,14 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_role
 from app.core.database import get_db
 from app.models.datasource import DataSource
 from app.models.job import Job
+from app.models.machine_profile import MachineProfile
 from app.models.project import Project
 from app.models.screen import Screen, ScreenTemplate
 from app.models.tag import Tag, TagLabel, TagTemplate, tag_label_assignments
@@ -53,6 +54,7 @@ class ProjectDetail(ProjectOut):
     screen_count: int = 0
     data_source_count: int = 0
     job_count: int = 0
+    profile_count: int = 0
 
 
 class ImportOptions(BaseModel):
@@ -108,6 +110,9 @@ async def get_project(project_id: int, session: AsyncSession = Depends(get_db)):
     job_count = len((await session.execute(
         select(Job.id).where(Job.project_id == project_id)
     )).all())
+    profile_count = len((await session.execute(
+        select(MachineProfile.id).where(MachineProfile.project_id == project_id)
+    )).all())
 
     return ProjectDetail(
         id=project.id,
@@ -121,6 +126,7 @@ async def get_project(project_id: int, session: AsyncSession = Depends(get_db)):
         screen_count=screen_count,
         data_source_count=ds_count,
         job_count=job_count,
+        profile_count=profile_count,
     )
 
 
@@ -154,6 +160,10 @@ async def delete_project(
         await session.execute(
             update(model).where(model.project_id == project_id).values(project_id=None)
         )
+    # Delete machine profiles (CASCADE handles this, but be explicit)
+    await session.execute(
+        delete(MachineProfile).where(MachineProfile.project_id == project_id)
+    )
     await session.delete(project)
 
 
@@ -220,6 +230,7 @@ def _safe_json_parse(val: str | None, default=None):
 @router.get("/{project_id}/export")
 async def export_project(
     project_id: int,
+    profile_id: int | None = None,
     session: AsyncSession = Depends(get_db),
     _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
 ):
@@ -343,13 +354,39 @@ async def export_project(
             "download_conditions": _safe_json_parse(job.download_conditions),
         })
 
+    # Handle machine profile overrides for deployment export
+    profile_name = None
+    if profile_id is not None:
+        profile = await session.get(MachineProfile, profile_id)
+        if not profile or profile.project_id != project_id:
+            raise HTTPException(status_code=404, detail="Machine profile not found")
+        profile_name = profile.name
+
+        # Apply data source overrides
+        ds_overrides = _safe_json_parse(profile.data_source_overrides, {})
+        for ds in data_sources:
+            override = ds_overrides.get(ds["name"])
+            if override and "config" in override:
+                ds["config"] = {**ds["config"], **override["config"]}
+
+        # Apply tag address overrides
+        tag_overrides = _safe_json_parse(profile.tag_overrides, {})
+        for tag in tags:
+            override = tag_overrides.get(tag["name"])
+            if override and "address" in override:
+                tag["address"] = override["address"]
+
+    project_meta = {
+        "name": project.name,
+        "description": project.description,
+        "version": project.version,
+    }
+    if profile_name:
+        project_meta["deployed_for"] = profile_name
+
     export_data = {
         "format_version": EXPORT_FORMAT_VERSION,
-        "project": {
-            "name": project.name,
-            "description": project.description,
-            "version": project.version,
-        },
+        "project": project_meta,
         "exported_at": datetime.now(timezone.utc).isoformat(),
         "data_sources": data_sources,
         "tag_labels": tag_labels,
@@ -360,10 +397,29 @@ async def export_project(
         "jobs": jobs,
     }
 
+    # Include machine profiles in full export (not deployment export)
+    if profile_id is None:
+        mp_result = await session.execute(
+            select(MachineProfile)
+            .where(MachineProfile.project_id == project_id)
+            .order_by(MachineProfile.name)
+        )
+        machine_profiles = []
+        for mp in mp_result.scalars().all():
+            machine_profiles.append({
+                "name": mp.name,
+                "description": mp.description,
+                "data_source_overrides": _safe_json_parse(mp.data_source_overrides, {}),
+                "tag_overrides": _safe_json_parse(mp.tag_overrides, {}),
+            })
+        export_data["machine_profiles"] = machine_profiles
+
+    filename = f"{project.name}-{profile_name}.hmi.json" if profile_name else f"{project.name}.hmi.json"
+
     return JSONResponse(
         content=export_data,
         headers={
-            "Content-Disposition": f'attachment; filename="{project.name}.hmi.json"',
+            "Content-Disposition": f'attachment; filename="{filename}"',
         },
     )
 
@@ -520,6 +576,17 @@ async def import_project(
             project_id=pid,
         )
         session.add(job)
+
+    # Import machine profiles
+    for mp_data in body.get("machine_profiles", []):
+        mp = MachineProfile(
+            name=mp_data["name"],
+            description=mp_data.get("description"),
+            data_source_overrides=json.dumps(mp_data.get("data_source_overrides", {})),
+            tag_overrides=json.dumps(mp_data.get("tag_overrides", {})),
+            project_id=pid,
+        )
+        session.add(mp)
 
     await session.flush()
     await session.refresh(project)

@@ -40,8 +40,14 @@ class DataSourceOut(BaseModel):
 
 
 @router.get("/", response_model=list[DataSourceOut])
-async def list_datasources(session: AsyncSession = Depends(get_db)):
-    result = await session.execute(select(DataSource).order_by(DataSource.name))
+async def list_datasources(
+    project_id: int | None = None,
+    session: AsyncSession = Depends(get_db),
+):
+    query = select(DataSource).order_by(DataSource.name)
+    if project_id is not None:
+        query = query.where(DataSource.project_id == project_id)
+    result = await session.execute(query)
     sources = result.scalars().all()
     # Update connected status from driver manager
     for ds in sources:

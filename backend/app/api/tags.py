@@ -88,11 +88,14 @@ class TagValueOut(BaseModel):
 @router.get("/", response_model=list[TagOut])
 async def list_tags(
     group: str | None = None,
+    project_id: int | None = None,
     session: AsyncSession = Depends(get_db),
 ):
     query = select(Tag).order_by(Tag.group_name, Tag.name)
     if group:
         query = query.where(Tag.group_name == group)
+    if project_id is not None:
+        query = query.where(Tag.project_id == project_id)
     result = await session.execute(query)
     return result.scalars().all()
 
