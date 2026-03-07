@@ -264,17 +264,19 @@ async def seed():
             if machine_label not in db_tag.labels:
                 db_tag.labels.append(machine_label)
 
-        # Default dashboard screen
+        # Default dashboard screen (absolute mode, 1920x1080)
         dashboard = Screen(
             name="Dashboard",
             slug="dashboard",
             is_default=True,
             sort_order=0,
+            layout_mode="absolute",
+            target_resolution=json.dumps({"width": 1920, "height": 1080}),
             layout=json.dumps([
                 {
                     "id": "w1",
                     "type": "status_indicator",
-                    "x": 0, "y": 0, "w": 4, "h": 2,
+                    "x": 20, "y": 20, "w": 600, "h": 300,
                     "props": {
                         "title": "Machine State",
                         "tag": "Machine.State",
@@ -284,7 +286,7 @@ async def seed():
                 {
                     "id": "w2",
                     "type": "gauge",
-                    "x": 4, "y": 0, "w": 4, "h": 3,
+                    "x": 640, "y": 20, "w": 620, "h": 360,
                     "props": {
                         "title": "Speed",
                         "tag": "Machine.Speed",
@@ -296,7 +298,7 @@ async def seed():
                 {
                     "id": "w3",
                     "type": "gauge",
-                    "x": 8, "y": 0, "w": 4, "h": 3,
+                    "x": 1280, "y": 20, "w": 620, "h": 360,
                     "props": {
                         "title": "Temperature",
                         "tag": "Machine.Temperature",
@@ -308,19 +310,19 @@ async def seed():
                 {
                     "id": "w4",
                     "type": "counter",
-                    "x": 0, "y": 3, "w": 3, "h": 2,
+                    "x": 20, "y": 400, "w": 460, "h": 260,
                     "props": {"title": "Good Count", "tag": "Machine.GoodCount"},
                 },
                 {
                     "id": "w5",
                     "type": "counter",
-                    "x": 3, "y": 3, "w": 3, "h": 2,
+                    "x": 500, "y": 400, "w": 460, "h": 260,
                     "props": {"title": "Reject Count", "tag": "Machine.RejectCount"},
                 },
                 {
                     "id": "w6",
                     "type": "gauge",
-                    "x": 6, "y": 3, "w": 3, "h": 3,
+                    "x": 980, "y": 400, "w": 460, "h": 340,
                     "props": {
                         "title": "Pressure",
                         "tag": "Machine.Pressure",
@@ -332,7 +334,7 @@ async def seed():
                 {
                     "id": "w7",
                     "type": "toggle",
-                    "x": 9, "y": 3, "w": 3, "h": 2,
+                    "x": 1460, "y": 400, "w": 440, "h": 260,
                     "props": {"title": "Machine Running", "tag": "Machine.Running"},
                 },
             ]),
@@ -343,16 +345,18 @@ async def seed():
         if result.scalar_one_or_none() is None:
             session.add(dashboard)
 
-        # Control panel screen
+        # Control panel screen (absolute mode, 1920x1080)
         controls = Screen(
             name="Control Panel",
             slug="controls",
             sort_order=1,
+            layout_mode="absolute",
+            target_resolution=json.dumps({"width": 1920, "height": 1080}),
             layout=json.dumps([
                 {
                     "id": "c1",
                     "type": "parameter_input",
-                    "x": 0, "y": 0, "w": 4, "h": 2,
+                    "x": 20, "y": 20, "w": 600, "h": 260,
                     "props": {
                         "title": "Target Speed",
                         "tag": "Machine.TargetSpeed",
@@ -363,7 +367,7 @@ async def seed():
                 {
                     "id": "c2",
                     "type": "parameter_input",
-                    "x": 4, "y": 0, "w": 4, "h": 2,
+                    "x": 640, "y": 20, "w": 620, "h": 260,
                     "props": {
                         "title": "Film Width",
                         "tag": "Machine.FilmWidth",
@@ -374,7 +378,7 @@ async def seed():
                 {
                     "id": "c3",
                     "type": "parameter_input",
-                    "x": 8, "y": 0, "w": 4, "h": 2,
+                    "x": 1280, "y": 20, "w": 620, "h": 260,
                     "props": {
                         "title": "Seal Temperature",
                         "tag": "Machine.SealTemp",
@@ -385,7 +389,7 @@ async def seed():
                 {
                     "id": "c4",
                     "type": "command_button",
-                    "x": 0, "y": 2, "w": 3, "h": 2,
+                    "x": 20, "y": 300, "w": 460, "h": 260,
                     "props": {
                         "title": "Start Machine",
                         "tag": "Machine.Running",
@@ -397,7 +401,7 @@ async def seed():
                 {
                     "id": "c5",
                     "type": "command_button",
-                    "x": 3, "y": 2, "w": 3, "h": 2,
+                    "x": 500, "y": 300, "w": 460, "h": 260,
                     "props": {
                         "title": "Stop Machine",
                         "tag": "Machine.Running",
@@ -409,7 +413,7 @@ async def seed():
                 {
                     "id": "c6",
                     "type": "command_button",
-                    "x": 6, "y": 2, "w": 3, "h": 2,
+                    "x": 980, "y": 300, "w": 460, "h": 260,
                     "props": {
                         "title": "Reset Counts",
                         "script": "write_tag('Machine.GoodCount', 0)\nwrite_tag('Machine.RejectCount', 0)\nlog('Counts reset')",

@@ -16,7 +16,7 @@ class Screen(Base):
     layout: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     version: Mapped[int] = mapped_column(Integer, default=1)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
-    layout_mode: Mapped[str] = mapped_column(String(20), nullable=False, default="grid")
+    layout_mode: Mapped[str] = mapped_column(String(20), nullable=False, default="absolute")
     # JSON: {"width": 1920, "height": 1080} or null for grid mode
     target_resolution: Mapped[str | None] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
