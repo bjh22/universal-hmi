@@ -8,6 +8,7 @@ import { TrendsPage } from './pages/TrendsPage';
 import { JobsPage } from './pages/JobsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { ProjectsPage } from './pages/ProjectsPage';
 import { LoginPage } from './pages/LoginPage';
 
 export default function App() {
@@ -37,6 +38,7 @@ export default function App() {
                 <Route path="/trends" element={<TrendsPage />} />
                 <Route path="/jobs" element={<JobsPage user={auth.user} />} />
                 <Route path="/reports" element={<ReportsPage />} />
+                <Route path="/projects" element={<ProjectsPage user={auth.user} />} />
                 <Route path="/settings" element={<SettingsPage user={auth.user} />} />
               </Routes>
             </AppShell>

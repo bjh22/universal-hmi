@@ -13,6 +13,8 @@ import type {
   TrendDataPoint,
   AuditEntry,
   ProductionRun,
+  ProjectData,
+  ProjectDetail,
 } from '../types/index';
 
 const BASE = '/api';
@@ -155,6 +157,27 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ script }),
     }),
+
+  // Projects
+  getProjects: () => request<ProjectData[]>('/projects/'),
+  getProject: (id: number) => request<ProjectDetail>(`/projects/${id}`),
+  getActiveProject: () => request<ProjectData | null>('/projects/active'),
+  createProject: (data: { name: string; description?: string; version?: string }) =>
+    request<ProjectData>('/projects/', { method: 'POST', body: JSON.stringify(data) }),
+  updateProject: (id: number, data: { name?: string; description?: string; version?: string }) =>
+    request<ProjectData>(`/projects/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteProject: (id: number) =>
+    request(`/projects/${id}`, { method: 'DELETE' }),
+  activateProject: (id: number) =>
+    request<ProjectData>(`/projects/${id}/activate`, { method: 'POST' }),
+  deactivateProject: (id: number) =>
+    request<ProjectData>(`/projects/${id}/deactivate`, { method: 'POST' }),
+  assignAllToProject: (id: number) =>
+    request<ProjectData>(`/projects/${id}/assign-all`, { method: 'POST' }),
+  exportProject: (id: number) =>
+    request<Record<string, unknown>>(`/projects/${id}/export`),
+  importProject: (data: Record<string, unknown>) =>
+    request<ProjectData>('/projects/import', { method: 'POST', body: JSON.stringify(data) }),
 
   // Health
   health: () => request<Record<string, unknown>>('/health'),

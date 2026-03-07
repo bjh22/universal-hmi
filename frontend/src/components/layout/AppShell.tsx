@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, TrendingUp, Bell, ClipboardList, BarChart3,
-  Settings, User, Menu, X, Wifi, WifiOff,
+  Settings, User, Menu, X, Wifi, WifiOff, FolderOpen,
 } from 'lucide-react';
 import type { UserData } from '../../types';
 
@@ -20,6 +20,7 @@ const NAV_ITEMS = [
   { to: '/alarms', icon: Bell, label: 'Alarms', roles: null },
   { to: '/jobs', icon: ClipboardList, label: 'Jobs', roles: null },
   { to: '/reports', icon: BarChart3, label: 'Reports', roles: null },
+  { to: '/projects', icon: FolderOpen, label: 'Projects', roles: ['engineer', 'designer'] as string[] },
   { to: '/settings', icon: Settings, label: 'Settings', roles: ['engineer', 'designer'] as string[] },
 ];
 
