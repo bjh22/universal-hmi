@@ -28,7 +28,7 @@ export default function App() {
             <AppShell
               user={auth.user}
               wsConnected={connected}
-              activeAlarmCount={alarms.filter(a => a.state === 'active_unacked' || a.state === 'inactive_unacked').length}
+              alarms={alarms}
               onLogout={auth.logout}
             >
               <Routes>

@@ -1,16 +1,18 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, TrendingUp, Bell, ClipboardList, BarChart3,
-  Settings, User, Menu, X, Wifi, WifiOff, FolderOpen,
+  Settings, User, Menu, X, Wifi, WifiOff, FolderOpen, CheckCheck,
+  AlertTriangle, AlertCircle, Info,
 } from 'lucide-react';
-import type { UserData } from '../../types';
+import type { UserData, AlarmData } from '../../types';
+import { api } from '../../lib/api';
 
 interface AppShellProps {
   children: React.ReactNode;
   user: UserData | null;
   wsConnected: boolean;
-  activeAlarmCount: number;
+  alarms: AlarmData[];
   onLogout: () => void;
 }
 
@@ -24,9 +26,37 @@ const NAV_ITEMS = [
   { to: '/settings', icon: Settings, label: 'Settings', roles: ['engineer', 'designer'] as string[] },
 ];
 
-export function AppShell({ children, user, wsConnected, activeAlarmCount, onLogout }: AppShellProps) {
+function SeverityIcon({ severity }: { severity: AlarmData['severity'] }) {
+  switch (severity) {
+    case 'critical':
+      return <AlertCircle size={16} className="text-red-400 shrink-0" />;
+    case 'warning':
+      return <AlertTriangle size={16} className="text-yellow-400 shrink-0" />;
+    default:
+      return <Info size={16} className="text-blue-400 shrink-0" />;
+  }
+}
+
+export function AppShell({ children, user, wsConnected, alarms, onLogout }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [ackingAll, setAckingAll] = useState(false);
   const location = useLocation();
+
+  const activeAlarms = alarms.filter(a => a.state === 'active_unacked' || a.state === 'active_acked' || a.state === 'inactive_unacked');
+  const unackedAlarms = alarms.filter(a => a.state === 'active_unacked' || a.state === 'inactive_unacked');
+  const activeAlarmCount = unackedAlarms.length;
+
+  const handleAcknowledgeAll = useCallback(async () => {
+    if (ackingAll || unackedAlarms.length === 0) return;
+    setAckingAll(true);
+    try {
+      await Promise.all(unackedAlarms.map(a => api.acknowledgeAlarm(a.id)));
+    } catch {
+      // Errors are non-fatal — some may already be acked
+    } finally {
+      setAckingAll(false);
+    }
+  }, [ackingAll, unackedAlarms]);
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -123,6 +153,53 @@ export function AppShell({ children, user, wsConnected, activeAlarmCount, onLogo
             </Link>
           )}
         </header>
+
+        {/* Active alarm banner */}
+        {activeAlarms.length > 0 && (
+          <div className="bg-slate-900/80 border-b border-red-500/30 flex items-center shrink-0">
+            {/* Scrolling alarm list */}
+            <div className="min-w-0 flex-1 overflow-x-auto flex items-center gap-2 px-3 py-1.5 scrollbar-thin">
+              {activeAlarms.map((alarm) => (
+                <Link
+                  key={alarm.id}
+                  to="/alarms"
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-sm font-medium whitespace-nowrap shrink-0 transition-colors ${
+                    alarm.state === 'active_unacked'
+                      ? alarm.severity === 'critical'
+                        ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
+                        : alarm.severity === 'warning'
+                          ? 'bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30'
+                          : 'bg-blue-500/20 text-blue-300 hover:bg-blue-500/30'
+                      : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700/70'
+                  }`}
+                >
+                  <SeverityIcon severity={alarm.severity} />
+                  <span>{alarm.tag_name ?? `Tag ${alarm.tag_id}`}</span>
+                  <span className="text-xs opacity-70">—</span>
+                  <span className="opacity-80">{alarm.message}</span>
+                  {alarm.state === 'active_acked' && (
+                    <span className="text-xs opacity-60 ml-1">(Acked)</span>
+                  )}
+                  {alarm.state === 'inactive_unacked' && (
+                    <span className="text-xs opacity-60 ml-1">(Cleared)</span>
+                  )}
+                </Link>
+              ))}
+            </div>
+
+            {/* Acknowledge All button */}
+            <div className="px-3 py-1.5 border-l border-slate-700/50 shrink-0">
+              <button
+                onClick={handleAcknowledgeAll}
+                disabled={ackingAll || unackedAlarms.length === 0}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
+              >
+                <CheckCheck size={14} />
+                {ackingAll ? 'Acknowledging...' : 'Ack All'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Connection lost banner */}
         {!wsConnected && (
