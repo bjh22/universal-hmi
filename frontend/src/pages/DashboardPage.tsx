@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { api } from '../lib/api';
@@ -10,7 +10,7 @@ import { EditorToolbar } from '../components/designer/EditorToolbar';
 import { DesignCanvas } from '../components/designer/DesignCanvas';
 import { useDesignMode, generateWidgetId } from '../hooks/useDesignMode';
 import type { WidgetTypeInfo } from '../components/designer/WidgetPalette';
-import type { ScreenData, Widget, TagValue, AlarmData } from '../types';
+import type { ScreenData, Widget, TagValue, AlarmData, LayoutMode, ScreenResolution } from '../types';
 
 interface Props {
   tagValues: Record<string, TagValue>;
@@ -26,9 +26,23 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
   const [paletteCollapsed, setPaletteCollapsed] = useState(false);
   const [showNewScreenDialog, setShowNewScreenDialog] = useState(false);
   const [newScreenName, setNewScreenName] = useState('');
+  const [newScreenMode, setNewScreenMode] = useState<LayoutMode>('grid');
+  const [newScreenResolution, setNewScreenResolution] = useState('1920x1080');
+  const [newScreenCustomW, setNewScreenCustomW] = useState(1920);
+  const [newScreenCustomH, setNewScreenCustomH] = useState(1080);
+  const absContainerRef = useRef<HTMLDivElement>(null);
+  const [absScale, setAbsScale] = useState(1);
+  const [absOffset, setAbsOffset] = useState({ x: 0, y: 0 });
+
+  const [absPlacementOffset, setAbsPlacementOffset] = useState(0);
 
   const dm = useDesignMode();
   const isDesigner = userRole === 'designer';
+
+  // Parse screen layout mode and resolution
+  const screenLayoutMode: LayoutMode = activeScreen?.layout_mode || 'grid';
+  const screenResolution: ScreenResolution | null = activeScreen?.target_resolution
+    ? JSON.parse(activeScreen.target_resolution) : null;
 
   const refreshScreens = useCallback(() => {
     api.getScreens().then(setScreens).catch(() => {});
@@ -56,8 +70,9 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
   // Enter edit mode
   const handleEnterEdit = useCallback(() => {
     if (!activeScreen) return;
-    dm.enterEditMode(runtimeWidgets);
-  }, [activeScreen, runtimeWidgets, dm]);
+    dm.enterEditMode(runtimeWidgets, screenLayoutMode);
+    setAbsPlacementOffset(0);
+  }, [activeScreen, runtimeWidgets, dm, screenLayoutMode]);
 
   // Save
   const handleSave = useCallback(async () => {
@@ -66,11 +81,13 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
       name: activeScreen.name,
       slug: activeScreen.slug,
       layout: dm.widgets,
+      layout_mode: screenLayoutMode,
+      target_resolution: activeScreen.target_resolution,
       is_default: activeScreen.is_default,
       sort_order: activeScreen.sort_order,
     });
     setRuntimeWidgets(dm.widgets);
-  }, [activeScreen, dm.widgets]);
+  }, [activeScreen, dm.widgets, screenLayoutMode]);
 
   // Save & exit
   const handleSaveAndExit = useCallback(async () => {
@@ -86,36 +103,54 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
 
   // Add widget from palette
   const handleAddWidget = useCallback((typeInfo: WidgetTypeInfo) => {
+    const isAbs = dm.layoutMode === 'absolute';
     const widget: Widget = {
       id: generateWidgetId(),
       type: typeInfo.type,
-      x: 0,
-      y: 0,
-      w: typeInfo.defaultW,
-      h: typeInfo.defaultH,
+      x: isAbs ? absPlacementOffset : 0,
+      y: isAbs ? absPlacementOffset : 0,
+      w: isAbs ? typeInfo.defaultAbsW : typeInfo.defaultW,
+      h: isAbs ? typeInfo.defaultAbsH : typeInfo.defaultH,
       props: { ...typeInfo.defaultProps },
     };
     dm.addWidget(widget);
     dm.select(widget.id);
-  }, [dm]);
+    if (isAbs) setAbsPlacementOffset(prev => prev + 20);
+  }, [dm, absPlacementOffset]);
 
   // Create new screen
   const handleCreateScreen = useCallback(async () => {
     if (!newScreenName.trim()) return;
     const screenSlug = newScreenName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    let targetRes: string | null = null;
+    if (newScreenMode === 'absolute') {
+      let w: number, h: number;
+      if (newScreenResolution === 'custom') {
+        w = newScreenCustomW;
+        h = newScreenCustomH;
+      } else {
+        const [rw, rh] = newScreenResolution.split('x').map(Number);
+        w = rw;
+        h = rh;
+      }
+      targetRes = JSON.stringify({ width: w, height: h });
+    }
     await api.createScreen({
       name: newScreenName.trim(),
       slug: screenSlug,
       layout: [],
+      layout_mode: newScreenMode,
+      target_resolution: targetRes,
       is_default: screens.length === 0,
       sort_order: screens.length,
     });
     setShowNewScreenDialog(false);
     setNewScreenName('');
+    setNewScreenMode('grid');
+    setNewScreenResolution('1920x1080');
     refreshScreens();
-    // Navigate to the new screen
     window.location.href = `/screen/${screenSlug}`;
-  }, [newScreenName, screens.length, refreshScreens]);
+  }, [newScreenName, screens.length, refreshScreens, newScreenMode, newScreenResolution, newScreenCustomW, newScreenCustomH]);
 
   // Delete current screen
   const handleDeleteScreen = useCallback(async () => {
@@ -175,6 +210,29 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [dm, handleSave, handleDiscard, handleEnterEdit, isDesigner]);
 
+  // Viewport scaling for absolute mode runtime rendering
+  useEffect(() => {
+    if (dm.editing || screenLayoutMode !== 'absolute' || !screenResolution || !absContainerRef.current) return;
+    const updateScale = () => {
+      const container = absContainerRef.current;
+      if (!container) return;
+      const availW = container.clientWidth;
+      const availH = container.clientHeight;
+      const scaleX = availW / screenResolution.width;
+      const scaleY = availH / screenResolution.height;
+      const s = Math.min(scaleX, scaleY);
+      setAbsScale(s);
+      setAbsOffset({
+        x: (availW - screenResolution.width * s) / 2,
+        y: (availH - screenResolution.height * s) / 2,
+      });
+    };
+    updateScale();
+    const observer = new ResizeObserver(updateScale);
+    observer.observe(absContainerRef.current);
+    return () => observer.disconnect();
+  }, [dm.editing, screenLayoutMode, screenResolution]);
+
   const selectedWidget = dm.selectedIds.size === 1
     ? dm.widgets.find(w => dm.selectedIds.has(w.id)) || null
     : null;
@@ -190,6 +248,8 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
           canRedo={dm.canRedo}
           gridSettings={dm.gridSettings}
           zoom={dm.zoom}
+          layoutMode={dm.layoutMode}
+          targetResolution={screenResolution}
           onUndo={dm.undo}
           onRedo={dm.redo}
           onSave={handleSave}
@@ -212,6 +272,8 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
             lockedIds={dm.lockedIds}
             gridSettings={dm.gridSettings}
             zoom={dm.zoom}
+            layoutMode={dm.layoutMode}
+            targetResolution={screenResolution}
             onSelect={dm.select}
             onSelectMultiple={dm.selectMultiple}
             onClearSelection={dm.clearSelection}
@@ -233,6 +295,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
           />
           <PropertyPanel
             widget={selectedWidget}
+            layoutMode={dm.layoutMode}
             onUpdateProps={dm.updateWidgetProps}
             onUpdateWidget={dm.updateWidget}
             onDelete={dm.deleteSelected}
@@ -299,43 +362,93 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
         )}
       </div>
 
-      {/* Widget grid */}
-      <div
-        className="grid gap-4"
-        style={{ gridTemplateColumns: 'repeat(12, 1fr)', gridAutoRows: '80px' }}
-      >
-        {runtimeWidgets.map((w) => {
-          // Runtime visibility check
-          const visibleByProp = w.visible !== false;
-          const visibleByTag = w.visibleTag ? !!tagValues[w.visibleTag]?.value : true;
-          const visibleByRole = !w.visibleRoles || w.visibleRoles.length === 0 || (userRole && w.visibleRoles.includes(userRole));
-          if (!visibleByProp || !visibleByTag || !visibleByRole) return null;
+      {/* Widget rendering */}
+      {screenLayoutMode === 'absolute' && screenResolution ? (
+        /* Absolute mode: scaled canvas with letterboxing */
+        <div ref={absContainerRef} className="flex-1 relative bg-black overflow-hidden" style={{ minHeight: 400 }}>
+          <div
+            style={{
+              width: screenResolution.width,
+              height: screenResolution.height,
+              transform: `translate(${absOffset.x}px, ${absOffset.y}px) scale(${absScale})`,
+              transformOrigin: 'top left',
+              position: 'relative',
+              background: '#0f172a',
+            }}
+          >
+            {runtimeWidgets.map((w, index) => {
+              const visibleByProp = w.visible !== false;
+              const visibleByTag = w.visibleTag ? !!tagValues[w.visibleTag]?.value : true;
+              const visibleByRole = !w.visibleRoles || w.visibleRoles.length === 0 || (userRole && w.visibleRoles.includes(userRole));
+              if (!visibleByProp || !visibleByTag || !visibleByRole) return null;
 
-          const enabledByProp = w.enabled !== false;
-          const enabledByTag = w.enabledTag ? !!tagValues[w.enabledTag]?.value : true;
-          const enabledByRole = !w.enabledRoles || w.enabledRoles.length === 0 || (userRole && w.enabledRoles.includes(userRole));
-          const isEnabled = enabledByProp && enabledByTag && enabledByRole;
+              const enabledByProp = w.enabled !== false;
+              const enabledByTag = w.enabledTag ? !!tagValues[w.enabledTag]?.value : true;
+              const enabledByRole = !w.enabledRoles || w.enabledRoles.length === 0 || (userRole && w.enabledRoles.includes(userRole));
+              const isEnabled = enabledByProp && enabledByTag && enabledByRole;
 
-          // Resolve tag info for the info button
-          const tagName = (w.props as Record<string, unknown>).tag as string | undefined;
-          const longDesc = tagName ? tagValues[tagName]?.long_description : undefined;
-          const showInfoBtn = w.showInfo !== false && !!longDesc;
+              const tagName = (w.props as Record<string, unknown>).tag as string | undefined;
+              const longDesc = tagName ? tagValues[tagName]?.long_description : undefined;
+              const showInfoBtn = w.showInfo !== false && !!longDesc;
 
-          return (
-            <div
-              key={w.id}
-              style={{
-                gridColumn: `${w.x + 1} / span ${w.w}`,
-                gridRow: `${w.y + 1} / span ${w.h}`,
-              }}
-              className={`relative ${isEnabled ? '' : 'opacity-50 pointer-events-none'}`}
-            >
-              {showInfoBtn && <InfoButton description={longDesc!} title={(w.props as Record<string, unknown>).title as string} />}
-              <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} />
-            </div>
-          );
-        })}
-      </div>
+              return (
+                <div
+                  key={w.id}
+                  className={`absolute ${isEnabled ? '' : 'opacity-50 pointer-events-none'}`}
+                  style={{
+                    left: w.x,
+                    top: w.y,
+                    width: w.w,
+                    height: w.h,
+                    zIndex: index,
+                  }}
+                >
+                  {showInfoBtn && <InfoButton description={longDesc!} title={(w.props as Record<string, unknown>).title as string} />}
+                  <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        /* Grid mode: CSS grid layout */
+        <>
+          <div
+            className="grid gap-4"
+            style={{ gridTemplateColumns: 'repeat(12, 1fr)', gridAutoRows: '80px' }}
+          >
+            {runtimeWidgets.map((w) => {
+              const visibleByProp = w.visible !== false;
+              const visibleByTag = w.visibleTag ? !!tagValues[w.visibleTag]?.value : true;
+              const visibleByRole = !w.visibleRoles || w.visibleRoles.length === 0 || (userRole && w.visibleRoles.includes(userRole));
+              if (!visibleByProp || !visibleByTag || !visibleByRole) return null;
+
+              const enabledByProp = w.enabled !== false;
+              const enabledByTag = w.enabledTag ? !!tagValues[w.enabledTag]?.value : true;
+              const enabledByRole = !w.enabledRoles || w.enabledRoles.length === 0 || (userRole && w.enabledRoles.includes(userRole));
+              const isEnabled = enabledByProp && enabledByTag && enabledByRole;
+
+              const tagName = (w.props as Record<string, unknown>).tag as string | undefined;
+              const longDesc = tagName ? tagValues[tagName]?.long_description : undefined;
+              const showInfoBtn = w.showInfo !== false && !!longDesc;
+
+              return (
+                <div
+                  key={w.id}
+                  style={{
+                    gridColumn: `${w.x + 1} / span ${w.w}`,
+                    gridRow: `${w.y + 1} / span ${w.h}`,
+                  }}
+                  className={`relative ${isEnabled ? '' : 'opacity-50 pointer-events-none'}`}
+                >
+                  {showInfoBtn && <InfoButton description={longDesc!} title={(w.props as Record<string, unknown>).title as string} />}
+                  <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} />
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
 
       {runtimeWidgets.length === 0 && !activeScreen && (
         <div className="text-center text-slate-500 mt-20">
@@ -369,6 +482,66 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
               className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500 mb-4"
               autoFocus
             />
+
+            {/* Layout Mode */}
+            <div className="mb-4">
+              <label className="text-xs text-slate-400 mb-1.5 block">Layout Mode</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setNewScreenMode('grid')}
+                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    newScreenMode === 'grid' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Grid
+                </button>
+                <button
+                  onClick={() => setNewScreenMode('absolute')}
+                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    newScreenMode === 'absolute' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Absolute
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-500 mt-1">
+                {newScreenMode === 'grid' ? 'Responsive 12-column grid layout' : 'Fixed pixel positioning for panel PCs'}
+              </p>
+            </div>
+
+            {/* Resolution (absolute mode only) */}
+            {newScreenMode === 'absolute' && (
+              <div className="mb-4">
+                <label className="text-xs text-slate-400 mb-1.5 block">Target Resolution</label>
+                <select
+                  value={newScreenResolution}
+                  onChange={e => setNewScreenResolution(e.target.value)}
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500 mb-2"
+                >
+                  <option value="1920x1080">1920 × 1080 (Full HD)</option>
+                  <option value="1366x768">1366 × 768 (HD)</option>
+                  <option value="1024x768">1024 × 768 (XGA)</option>
+                  <option value="custom">Custom...</option>
+                </select>
+                {newScreenResolution === 'custom' && (
+                  <div className="flex gap-2">
+                    <div>
+                      <label className="text-[10px] text-slate-500">Width</label>
+                      <input type="number" value={newScreenCustomW} onChange={e => setNewScreenCustomW(Number(e.target.value))}
+                        min={320} max={3840}
+                        className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500">Height</label>
+                      <input type="number" value={newScreenCustomH} onChange={e => setNewScreenCustomH(Number(e.target.value))}
+                        min={240} max={2160}
+                        className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex justify-end gap-2">
               <button onClick={() => setShowNewScreenDialog(false)}
                 className="px-4 py-2 rounded-lg text-sm text-slate-400 hover:text-slate-200 transition-colors">

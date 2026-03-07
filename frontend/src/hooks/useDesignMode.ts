@@ -1,9 +1,10 @@
 import { useState, useCallback } from 'react';
-import type { Widget } from '../types';
+import type { Widget, LayoutMode } from '../types';
 
 export interface GridSettings {
   cellSize: number;
   visible: boolean;
+  snap: boolean;
   canvasWidth: number;
   canvasHeight: number;
 }
@@ -15,6 +16,7 @@ interface HistoryEntry {
 
 export interface DesignModeState {
   editing: boolean;
+  layoutMode: LayoutMode;
   widgets: Widget[];
   selectedIds: Set<string>;
   clipboard: Widget[];
@@ -23,7 +25,7 @@ export interface DesignModeState {
   zoom: number;
 
   // Mode toggle
-  enterEditMode: (widgets: Widget[]) => void;
+  enterEditMode: (widgets: Widget[], mode?: LayoutMode) => void;
   exitEditMode: () => void;
 
   // Selection
@@ -74,6 +76,7 @@ export interface DesignModeState {
 const DEFAULT_GRID: GridSettings = {
   cellSize: 20,
   visible: true,
+  snap: true,
   canvasWidth: 1920,
   canvasHeight: 1080,
 };
@@ -87,6 +90,7 @@ export function generateWidgetId(): string {
 
 export function useDesignMode(): DesignModeState {
   const [editing, setEditing] = useState(false);
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>('grid');
   const [widgets, setWidgets] = useState<Widget[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [clipboard, setClipboard] = useState<Widget[]>([]);
@@ -117,8 +121,9 @@ export function useDesignMode(): DesignModeState {
   }, [pushHistory]);
 
   // Mode toggle
-  const enterEditMode = useCallback((ws: Widget[]) => {
+  const enterEditMode = useCallback((ws: Widget[], mode: LayoutMode = 'grid') => {
     setWidgets(ws);
+    setLayoutMode(mode);
     setEditing(true);
     setDirty(false);
     setSelectedIds(new Set());
@@ -183,8 +188,9 @@ export function useDesignMode(): DesignModeState {
 
   const resizeWidget = useCallback((id: string, w: number, h: number) => {
     if (lockedIds.has(id)) return;
-    commitWidgets(prev => prev.map(wi => wi.id === id ? { ...wi, w: Math.max(1, w), h: Math.max(1, h) } : wi), 'Resize widget');
-  }, [commitWidgets, lockedIds]);
+    const minSize = layoutMode === 'absolute' ? 40 : 1;
+    commitWidgets(prev => prev.map(wi => wi.id === id ? { ...wi, w: Math.max(minSize, w), h: Math.max(minSize, h) } : wi), 'Resize widget');
+  }, [commitWidgets, lockedIds, layoutMode]);
 
   // Clipboard
   const copySelected = useCallback(() => {
@@ -199,27 +205,29 @@ export function useDesignMode(): DesignModeState {
 
   const paste = useCallback(() => {
     if (clipboard.length === 0) return;
+    const offset = layoutMode === 'absolute' ? 20 : 1;
     const pasted = clipboard.map(w => ({
       ...w,
       id: generateWidgetId(),
-      x: w.x + 1,
-      y: w.y + 1,
+      x: w.x + offset,
+      y: w.y + offset,
     }));
     commitWidgets(prev => [...prev, ...pasted], 'Paste widgets');
     setSelectedIds(new Set(pasted.map(w => w.id)));
-  }, [clipboard, commitWidgets]);
+  }, [clipboard, commitWidgets, layoutMode]);
 
   const duplicateSelected = useCallback(() => {
     const selected = widgets.filter(w => selectedIds.has(w.id));
+    const offset = layoutMode === 'absolute' ? 20 : 1;
     const duped = selected.map(w => ({
       ...w,
       id: generateWidgetId(),
-      x: w.x + 1,
-      y: w.y + 1,
+      x: w.x + offset,
+      y: w.y + offset,
     }));
     commitWidgets(prev => [...prev, ...duped], 'Duplicate widgets');
     setSelectedIds(new Set(duped.map(w => w.id)));
-  }, [widgets, selectedIds, commitWidgets]);
+  }, [widgets, selectedIds, commitWidgets, layoutMode]);
 
   // Z-order (array index = z-order, later = on top)
   const bringToFront = useCallback(() => {
@@ -357,7 +365,7 @@ export function useDesignMode(): DesignModeState {
   }, []);
 
   return {
-    editing, widgets, selectedIds, clipboard, gridSettings, dirty, zoom,
+    editing, layoutMode, widgets, selectedIds, clipboard, gridSettings, dirty, zoom,
     enterEditMode, exitEditMode,
     select, selectMultiple, selectAll, clearSelection,
     addWidget, updateWidget, updateWidgetProps, deleteSelected, moveWidget, resizeWidget,

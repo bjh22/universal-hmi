@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { Lock } from 'lucide-react';
-import type { Widget, TagValue, AlarmData } from '../../types';
+import type { Widget, TagValue, AlarmData, LayoutMode, ScreenResolution } from '../../types';
 import type { GridSettings } from '../../hooks/useDesignMode';
 import { WidgetRenderer } from '../widgets/WidgetRenderer';
 
@@ -25,6 +25,8 @@ interface Props {
   lockedIds: Set<string>;
   gridSettings: GridSettings;
   zoom: number;
+  layoutMode: LayoutMode;
+  targetResolution: ScreenResolution | null;
   onSelect: (id: string, additive?: boolean) => void;
   onSelectMultiple: (ids: string[]) => void;
   onClearSelection: () => void;
@@ -53,11 +55,13 @@ const GAP = 16;
 
 export function DesignCanvas({
   widgets, tagValues, alarms = [], selectedIds, lockedIds, gridSettings, zoom,
+  layoutMode, targetResolution,
   onSelect, onSelectMultiple, onClearSelection, onMoveWidget, onResizeWidget,
   onCopy, onCut, onPaste, onDuplicate, onDelete,
   onBringToFront, onSendToBack, onBringForward, onSendBackward,
   onToggleLock, onSelectAll, onAlign, onDistribute,
 }: Props) {
+  const isAbsolute = layoutMode === 'absolute';
   const canvasRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState<{
     id: string; startX: number; startY: number; origCol: number; origRow: number;
@@ -75,7 +79,7 @@ export function DesignCanvas({
 
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return; // left click only
-    if (e.target !== e.currentTarget && !(e.target as HTMLElement).closest('[data-canvas-grid]')) return;
+    if (e.target !== e.currentTarget && !(e.target as HTMLElement).closest('[data-canvas-grid]') && !(e.target as HTMLElement).closest('[data-canvas-absolute]')) return;
     onClearSelection();
     setContextMenu(null);
     // Start marquee selection
@@ -130,22 +134,52 @@ export function DesignCanvas({
 
     const handleMouseMove = (e: MouseEvent) => {
       if (dragging) {
-        const colW = getColWidth() + GAP;
-        const rowH = ROW_HEIGHT + GAP;
-        const dx = (e.clientX - dragging.startX) / zoom;
-        const dy = (e.clientY - dragging.startY) / zoom;
-        const newCol = Math.max(0, Math.round(dragging.origCol + dx / colW));
-        const newRow = Math.max(0, Math.round(dragging.origRow + dy / rowH));
-        onMoveWidget(dragging.id, newCol, newRow);
+        if (isAbsolute) {
+          const dx = (e.clientX - dragging.startX) / zoom;
+          const dy = (e.clientY - dragging.startY) / zoom;
+          let newX = dragging.origCol + dx;
+          let newY = dragging.origRow + dy;
+          if (gridSettings.snap) {
+            const snapSize = gridSettings.cellSize;
+            newX = Math.round(newX / snapSize) * snapSize;
+            newY = Math.round(newY / snapSize) * snapSize;
+          }
+          newX = Math.max(0, Math.round(newX));
+          newY = Math.max(0, Math.round(newY));
+          onMoveWidget(dragging.id, newX, newY);
+        } else {
+          const colW = getColWidth() + GAP;
+          const rowH = ROW_HEIGHT + GAP;
+          const dx = (e.clientX - dragging.startX) / zoom;
+          const dy = (e.clientY - dragging.startY) / zoom;
+          const newCol = Math.max(0, Math.round(dragging.origCol + dx / colW));
+          const newRow = Math.max(0, Math.round(dragging.origRow + dy / rowH));
+          onMoveWidget(dragging.id, newCol, newRow);
+        }
       }
       if (resizing) {
-        const colW = getColWidth() + GAP;
-        const rowH = ROW_HEIGHT + GAP;
-        const dx = (e.clientX - resizing.startX) / zoom;
-        const dy = (e.clientY - resizing.startY) / zoom;
-        const newW = Math.max(1, Math.min(12, Math.round(resizing.origW + dx / colW)));
-        const newH = Math.max(1, Math.round(resizing.origH + dy / rowH));
-        onResizeWidget(resizing.id, newW, newH);
+        if (isAbsolute) {
+          const dx = (e.clientX - resizing.startX) / zoom;
+          const dy = (e.clientY - resizing.startY) / zoom;
+          let newW = resizing.origW + dx;
+          let newH = resizing.origH + dy;
+          if (gridSettings.snap) {
+            const snapSize = gridSettings.cellSize;
+            newW = Math.round(newW / snapSize) * snapSize;
+            newH = Math.round(newH / snapSize) * snapSize;
+          }
+          newW = Math.max(40, Math.round(newW));
+          newH = Math.max(40, Math.round(newH));
+          onResizeWidget(resizing.id, newW, newH);
+        } else {
+          const colW = getColWidth() + GAP;
+          const rowH = ROW_HEIGHT + GAP;
+          const dx = (e.clientX - resizing.startX) / zoom;
+          const dy = (e.clientY - resizing.startY) / zoom;
+          const newW = Math.max(1, Math.min(12, Math.round(resizing.origW + dx / colW)));
+          const newH = Math.max(1, Math.round(resizing.origH + dy / rowH));
+          onResizeWidget(resizing.id, newW, newH);
+        }
       }
       if (marquee) {
         const rect = canvasRef.current?.getBoundingClientRect();
@@ -168,15 +202,26 @@ export function DesignCanvas({
         const my2 = Math.max(marquee.startY, marquee.currentY);
         // Only select if marquee is large enough (> 5px)
         if (mx2 - mx1 > 5 || my2 - my1 > 5) {
-          const colW = getColWidth() + GAP;
-          const rowH = ROW_HEIGHT + GAP;
-          const ids = widgets.filter(w => {
-            const wx1 = w.x * colW;
-            const wy1 = w.y * rowH;
-            const wx2 = wx1 + w.w * colW - GAP;
-            const wy2 = wy1 + w.h * rowH - GAP;
-            return wx1 < mx2 && wx2 > mx1 && wy1 < my2 && wy2 > my1;
-          }).map(w => w.id);
+          let ids: string[];
+          if (isAbsolute) {
+            ids = widgets.filter(w => {
+              const wx1 = w.x;
+              const wy1 = w.y;
+              const wx2 = w.x + w.w;
+              const wy2 = w.y + w.h;
+              return wx1 < mx2 && wx2 > mx1 && wy1 < my2 && wy2 > my1;
+            }).map(w => w.id);
+          } else {
+            const colW = getColWidth() + GAP;
+            const rowH = ROW_HEIGHT + GAP;
+            ids = widgets.filter(w => {
+              const wx1 = w.x * colW;
+              const wy1 = w.y * rowH;
+              const wx2 = wx1 + w.w * colW - GAP;
+              const wy2 = wy1 + w.h * rowH - GAP;
+              return wx1 < mx2 && wx2 > mx1 && wy1 < my2 && wy2 > my1;
+            }).map(w => w.id);
+          }
           if (ids.length > 0) onSelectMultiple(ids);
         }
         setMarquee(null);
@@ -191,7 +236,7 @@ export function DesignCanvas({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [dragging, resizing, marquee, zoom, getColWidth, onMoveWidget, onResizeWidget, onSelectMultiple, widgets]);
+  }, [dragging, resizing, marquee, zoom, getColWidth, onMoveWidget, onResizeWidget, onSelectMultiple, widgets, isAbsolute, gridSettings]);
 
   const hasMultipleSelected = selectedIds.size > 1;
 
@@ -245,49 +290,100 @@ export function DesignCanvas({
             />
           )}
 
-          {/* Widget grid layout */}
-          <div
-            data-canvas-grid
-            className="grid gap-4 relative"
-            style={{
-              gridTemplateColumns: `repeat(${COL_COUNT}, 1fr)`,
-              gridAutoRows: `${ROW_HEIGHT}px`,
-            }}
-          >
-            {widgets.map((w) => {
-              const isSelected = selectedIds.has(w.id);
-              const isLocked = lockedIds.has(w.id);
-              return (
-                <div
-                  key={w.id}
-                  className={`relative group ${dragging?.id === w.id ? 'opacity-70' : ''}`}
-                  style={{
-                    gridColumn: `${w.x + 1} / span ${w.w}`,
-                    gridRow: `${w.y + 1} / span ${w.h}`,
-                    cursor: isLocked ? 'default' : 'move',
-                  }}
-                  onMouseDown={e => handleWidgetMouseDown(e, w)}
-                  onContextMenu={e => handleContextMenu(e, w.id)}
-                >
-                  <div className={`absolute inset-0 rounded-xl pointer-events-none z-10 border-2 transition-colors ${
-                    isSelected ? 'border-blue-500' : 'border-transparent group-hover:border-blue-500/30'
-                  }`} />
-                  {isLocked && (
-                    <div className="absolute top-1 right-1 z-20 bg-yellow-600/80 rounded p-0.5">
-                      <Lock size={10} className="text-white" />
+          {/* Widget layout */}
+          {isAbsolute ? (
+            /* Absolute positioning layout */
+            <div
+              data-canvas-absolute
+              className="relative"
+              style={{
+                width: targetResolution?.width ?? 1920,
+                height: targetResolution?.height ?? 1080,
+              }}
+            >
+              {widgets.map((w, index) => {
+                const isSelected = selectedIds.has(w.id);
+                const isLocked = lockedIds.has(w.id);
+                return (
+                  <div
+                    key={w.id}
+                    className={`absolute group ${dragging?.id === w.id ? 'opacity-70' : ''}`}
+                    style={{
+                      left: w.x,
+                      top: w.y,
+                      width: w.w,
+                      height: w.h,
+                      zIndex: index,
+                      cursor: isLocked ? 'default' : 'move',
+                    }}
+                    onMouseDown={e => handleWidgetMouseDown(e, w)}
+                    onContextMenu={e => handleContextMenu(e, w.id)}
+                  >
+                    <div className={`absolute inset-0 rounded-xl pointer-events-none border-2 transition-colors ${
+                      isSelected ? 'border-blue-500' : 'border-transparent group-hover:border-blue-500/30'
+                    }`} style={{ zIndex: 10 }} />
+                    {isLocked && (
+                      <div className="absolute top-1 right-1 bg-yellow-600/80 rounded p-0.5" style={{ zIndex: 20 }}>
+                        <Lock size={10} className="text-white" />
+                      </div>
+                    )}
+                    {isSelected && !isLocked && (
+                      <div className="absolute bottom-0 right-0 w-4 h-4 bg-blue-500 rounded-tl-md cursor-se-resize"
+                        style={{ zIndex: 20 }}
+                        onMouseDown={e => handleResizeMouseDown(e, w)} />
+                    )}
+                    <div className="h-full pointer-events-none">
+                      <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} />
                     </div>
-                  )}
-                  {isSelected && !isLocked && (
-                    <div className="absolute bottom-0 right-0 w-4 h-4 bg-blue-500 rounded-tl-md cursor-se-resize z-20"
-                      onMouseDown={e => handleResizeMouseDown(e, w)} />
-                  )}
-                  <div className="h-full pointer-events-none">
-                    <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} />
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          ) : (
+            /* CSS Grid layout */
+            <div
+              data-canvas-grid
+              className="grid gap-4 relative"
+              style={{
+                gridTemplateColumns: `repeat(${COL_COUNT}, 1fr)`,
+                gridAutoRows: `${ROW_HEIGHT}px`,
+              }}
+            >
+              {widgets.map((w) => {
+                const isSelected = selectedIds.has(w.id);
+                const isLocked = lockedIds.has(w.id);
+                return (
+                  <div
+                    key={w.id}
+                    className={`relative group ${dragging?.id === w.id ? 'opacity-70' : ''}`}
+                    style={{
+                      gridColumn: `${w.x + 1} / span ${w.w}`,
+                      gridRow: `${w.y + 1} / span ${w.h}`,
+                      cursor: isLocked ? 'default' : 'move',
+                    }}
+                    onMouseDown={e => handleWidgetMouseDown(e, w)}
+                    onContextMenu={e => handleContextMenu(e, w.id)}
+                  >
+                    <div className={`absolute inset-0 rounded-xl pointer-events-none z-10 border-2 transition-colors ${
+                      isSelected ? 'border-blue-500' : 'border-transparent group-hover:border-blue-500/30'
+                    }`} />
+                    {isLocked && (
+                      <div className="absolute top-1 right-1 z-20 bg-yellow-600/80 rounded p-0.5">
+                        <Lock size={10} className="text-white" />
+                      </div>
+                    )}
+                    {isSelected && !isLocked && (
+                      <div className="absolute bottom-0 right-0 w-4 h-4 bg-blue-500 rounded-tl-md cursor-se-resize z-20"
+                        onMouseDown={e => handleResizeMouseDown(e, w)} />
+                    )}
+                    <div className="h-full pointer-events-none">
+                      <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Marquee selection rectangle */}
           {marquee && (

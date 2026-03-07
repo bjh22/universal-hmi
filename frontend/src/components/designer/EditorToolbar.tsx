@@ -1,7 +1,8 @@
 import {
-  Undo2, Redo2, Save, Grid3x3, ZoomIn, ZoomOut,
+  Undo2, Redo2, Save, Grid3x3, ZoomIn, ZoomOut, Magnet,
 } from 'lucide-react';
 import type { GridSettings } from '../../hooks/useDesignMode';
+import type { LayoutMode, ScreenResolution } from '../../types';
 
 interface Props {
   screenName: string;
@@ -10,6 +11,8 @@ interface Props {
   canRedo: boolean;
   gridSettings: GridSettings;
   zoom: number;
+  layoutMode: LayoutMode;
+  targetResolution: ScreenResolution | null;
   onUndo: () => void;
   onRedo: () => void;
   onSave: () => void;
@@ -20,12 +23,16 @@ interface Props {
 }
 
 const GRID_SIZES = [10, 20, 40, 80];
+const ABS_GRID_SIZES = [5, 10, 20, 50];
 
 export function EditorToolbar({
   screenName, dirty, canUndo, canRedo, gridSettings, zoom,
+  layoutMode, targetResolution,
   onUndo, onRedo, onSave, onSaveAndExit, onDiscard,
   onGridSettingsChange, onZoomChange,
 }: Props) {
+  const isAbsolute = layoutMode === 'absolute';
+  const gridSizes = isAbsolute ? ABS_GRID_SIZES : GRID_SIZES;
   return (
     <div className="h-10 bg-slate-900 border-b border-slate-700 flex items-center px-3 gap-2 shrink-0">
       {/* Screen name + dirty indicator */}
@@ -61,16 +68,29 @@ export function EditorToolbar({
         onClick={() => onGridSettingsChange({ visible: !gridSettings.visible })}
         active={gridSettings.visible}
       />
+      {isAbsolute && (
+        <ToolbarButton
+          icon={Magnet}
+          title={gridSettings.snap ? 'Disable snap' : 'Enable snap'}
+          onClick={() => onGridSettingsChange({ snap: !gridSettings.snap })}
+          active={gridSettings.snap}
+        />
+      )}
       <select
         value={gridSettings.cellSize}
         onChange={e => onGridSettingsChange({ cellSize: Number(e.target.value) })}
         className="bg-slate-800 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-slate-300"
         title="Grid cell size"
       >
-        {GRID_SIZES.map(s => (
+        {gridSizes.map(s => (
           <option key={s} value={s}>{s}px</option>
         ))}
       </select>
+      {isAbsolute && targetResolution && (
+        <span className="text-xs text-slate-500 ml-1">
+          {targetResolution.width} × {targetResolution.height}
+        </span>
+      )}
 
       <div className="w-px h-5 bg-slate-700" />
 

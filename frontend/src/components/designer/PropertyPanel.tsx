@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import type { Widget, TextStyle, Tag } from '../../types';
+import type { Widget, TextStyle, Tag, LayoutMode } from '../../types';
 import { api } from '../../lib/api';
 import { WIDGET_TYPES } from './WidgetPalette';
 import { GAUGE_DEFAULTS, type GaugeDisplayMode } from '../widgets/GaugeWidget';
 
 interface Props {
   widget: Widget | null;
+  layoutMode: LayoutMode;
   onUpdateProps: (id: string, props: Record<string, unknown>) => void;
   onUpdateWidget: (id: string, patch: Partial<Widget>) => void;
   onDelete: () => void;
@@ -133,7 +134,8 @@ function TextStyleEditor({ label, value, onChange }: {
   );
 }
 
-export function PropertyPanel({ widget, onUpdateProps, onUpdateWidget, onDelete, locked, onToggleLock }: Props) {
+export function PropertyPanel({ widget, layoutMode, onUpdateProps, onUpdateWidget, onDelete, locked, onToggleLock }: Props) {
+  const isAbsolute = layoutMode === 'absolute';
   if (!widget) {
     return (
       <div className="w-64 bg-slate-900 border-l border-slate-700 p-4 shrink-0">
@@ -388,21 +390,23 @@ export function PropertyPanel({ widget, onUpdateProps, onUpdateWidget, onDelete,
         {/* Position & Size */}
         <Section title="Position & Size">
           <div className="grid grid-cols-2 gap-2">
-            <Field label="X (col)">
+            <Field label={isAbsolute ? 'X (px)' : 'X (col)'}>
               <input type="number" value={widget.x} onChange={e => onUpdateWidget(widget.id, { x: Number(e.target.value) })}
                 className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" min={0} />
             </Field>
-            <Field label="Y (row)">
+            <Field label={isAbsolute ? 'Y (px)' : 'Y (row)'}>
               <input type="number" value={widget.y} onChange={e => onUpdateWidget(widget.id, { y: Number(e.target.value) })}
                 className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" min={0} />
             </Field>
-            <Field label="Width">
+            <Field label={isAbsolute ? 'Width (px)' : 'Width'}>
               <input type="number" value={widget.w} onChange={e => onUpdateWidget(widget.id, { w: Number(e.target.value) })}
-                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" min={1} max={12} />
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+                min={isAbsolute ? 40 : 1} max={isAbsolute ? undefined : 12} />
             </Field>
-            <Field label="Height">
+            <Field label={isAbsolute ? 'Height (px)' : 'Height'}>
               <input type="number" value={widget.h} onChange={e => onUpdateWidget(widget.id, { h: Number(e.target.value) })}
-                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" min={1} />
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+                min={isAbsolute ? 40 : 1} />
             </Field>
           </div>
         </Section>
