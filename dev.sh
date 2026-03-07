@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PY=""
 
 # --- Prerequisite checks ---
 
@@ -14,7 +15,6 @@ check_python() {
     echo "  Or download from https://www.python.org/downloads/"
     return 1
   fi
-  local PY
   PY=$(command -v python3 || command -v python)
   local VER
   VER=$($PY --version 2>&1 | awk '{print $2}')
@@ -147,7 +147,7 @@ cmd_dev() {
   echo "==> Starting backend and frontend dev servers..."
   echo "    Backend:  http://localhost:8080"
   echo "    Frontend: http://localhost:5173"
-  (cd "$ROOT_DIR/backend" && python run.py) &
+  (cd "$ROOT_DIR/backend" && "$PY" run.py) &
   BACKEND_PID=$!
   (cd "$ROOT_DIR/frontend" && npm run dev) &
   FRONTEND_PID=$!
@@ -158,13 +158,13 @@ cmd_dev() {
 cmd_seed() {
   check_python
   echo "==> Seeding database..."
-  cd "$ROOT_DIR/backend" && python -m app.seed
+  cd "$ROOT_DIR/backend" && "$PY" -m app.seed
 }
 
 cmd_install() {
   check_all
   echo "==> Installing backend dependencies..."
-  cd "$ROOT_DIR/backend" && pip install -r requirements.txt
+  cd "$ROOT_DIR/backend" && "$PY" -m pip install -r requirements.txt
   echo "==> Installing frontend dependencies..."
   cd "$ROOT_DIR/frontend" && npm install
   echo "==> All dependencies installed successfully."

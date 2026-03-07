@@ -26,7 +26,14 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         # Lightweight column migrations for SQLite (no Alembic)
+        # Tags
         await _add_column_if_missing(conn, "tags", "long_description", "TEXT")
+        await _add_column_if_missing(conn, "tags", "enum_mapping", "TEXT")
+        await _add_column_if_missing(conn, "tags", "template_id", "INTEGER REFERENCES tag_templates(id)")
+        # Screens
+        await _add_column_if_missing(conn, "screens", "layout_mode", "VARCHAR(20) NOT NULL DEFAULT 'grid'")
+        await _add_column_if_missing(conn, "screens", "target_resolution", "TEXT")
+        await _add_column_if_missing(conn, "screens", "sort_order", "INTEGER NOT NULL DEFAULT 0")
 
 
 async def _add_column_if_missing(conn, table: str, column: str, col_type: str):
