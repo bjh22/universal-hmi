@@ -164,7 +164,7 @@ cmd_seed() {
 cmd_install() {
   check_all
   echo "==> Installing backend dependencies..."
-  cd "$ROOT_DIR/backend" && pip install -r requirements.txt
+  cd "$ROOT_DIR/backend" && "$PY" -m pip install -r requirements.txt
   echo "==> Installing frontend dependencies..."
   cd "$ROOT_DIR/frontend" && npm install
   echo "==> All dependencies installed successfully."
