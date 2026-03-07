@@ -15,13 +15,22 @@ router = APIRouter(prefix="/api/trends", tags=["trends"])
 async def get_trend_data(
     tag_id: int,
     hours: float = 1,
+    start: str | None = None,
+    end: str | None = None,
     limit: int = 1000,
     session: AsyncSession = Depends(get_db),
 ):
-    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+    if start:
+        since = datetime.fromisoformat(start).replace(tzinfo=timezone.utc)
+    else:
+        since = datetime.now(timezone.utc) - timedelta(hours=hours)
+    conditions = [TrendData.tag_id == tag_id, TrendData.timestamp >= since]
+    if end:
+        until = datetime.fromisoformat(end).replace(tzinfo=timezone.utc)
+        conditions.append(TrendData.timestamp <= until)
     result = await session.execute(
         select(TrendData)
-        .where(TrendData.tag_id == tag_id, TrendData.timestamp >= since)
+        .where(*conditions)
         .order_by(TrendData.timestamp.asc())
         .limit(limit)
     )

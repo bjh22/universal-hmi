@@ -160,8 +160,16 @@ export const api = {
     request<JobHistoryEntry[]>(`/jobs/${id}/history`),
 
   // Trends
-  getTrendData: (tagId: number, hours = 1) =>
-    request<TrendDataPoint[]>(`/trends/data/${tagId}?hours=${hours}`),
+  getTrendData: (tagId: number, hours = 1, start?: string, end?: string) => {
+    const params = new URLSearchParams();
+    if (start) {
+      params.set('start', start);
+      if (end) params.set('end', end);
+    } else {
+      params.set('hours', String(hours));
+    }
+    return request<TrendDataPoint[]>(`/trends/data/${tagId}?${params.toString()}`);
+  },
   getTrendViews: () => request<Record<string, unknown>[]>('/trends/views'),
 
   // Data Sources

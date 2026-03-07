@@ -54,6 +54,7 @@ class TrendService:
         while self._running:
             if self._trending_tags:
                 async with async_session() as session:
+                    now = datetime.now(timezone.utc)
                     for tc in self._trending_tags:
                         tv = self._tag_engine.get_value(tc["name"])
                         if tv is None:
@@ -67,7 +68,7 @@ class TrendService:
 
                         record = TrendData(
                             tag_id=tc["tag_id"],
-                            timestamp=datetime.now(timezone.utc),
+                            timestamp=now,
                             value=numeric_value,
                             string_value=string_value,
                         )
