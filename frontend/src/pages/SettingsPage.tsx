@@ -2,10 +2,12 @@ import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { Search, Download, UserPlus, Plus, Pencil, Trash2, Upload, X, Plug, Unplug, FolderSearch, Tag as TagIcon, CheckSquare, Square, MinusSquare, Filter } from 'lucide-react';
 import { api } from '../lib/api';
 import { PROTOCOL_CONFIGS } from '../lib/protocolConfigs';
-import type { Tag, TagLabel, DataSourceData, ProtocolType, AuditEntry, UserData, BrowsedTag, UserListEntry, ImportPreviewTag } from '../types';
+import { IntegrationsTab } from '../components/settings/IntegrationsTab';
+import type { Tag, TagLabel, DataSourceData, ProtocolType, AuditEntry, UserData, BrowsedTag, UserListEntry, ImportPreviewTag, TagValue } from '../types';
 
 interface Props {
   user: UserData | null;
+  tagValues: Record<string, TagValue>;
 }
 
 const EMPTY_TAG: Omit<Tag, 'id'> = {
@@ -1182,8 +1184,8 @@ function BrowseTagsDialog({ dsId, dsName, existingTags, onCreateTag, onClose }: 
 }
 
 // ─── Main SettingsPage ───
-export function SettingsPage({ user }: Props) {
-  const [tab, setTab] = useState<'tags' | 'datasources' | 'users' | 'audit'>('tags');
+export function SettingsPage({ user, tagValues }: Props) {
+  const [tab, setTab] = useState<'tags' | 'datasources' | 'integrations' | 'users' | 'audit'>('tags');
   const [tags, setTags] = useState<Tag[]>([]);
   const [dataSources, setDataSources] = useState<DataSourceData[]>([]);
   const [users, setUsers] = useState<UserListEntry[]>([]);
@@ -1531,6 +1533,7 @@ export function SettingsPage({ user }: Props) {
   const tabList = [
     { key: 'tags' as const, label: 'Tags' },
     { key: 'datasources' as const, label: 'Data Sources' },
+    { key: 'integrations' as const, label: 'Integrations' },
     { key: 'users' as const, label: 'Users' },
     { key: 'audit' as const, label: 'Audit Trail' },
   ];
@@ -1969,6 +1972,11 @@ export function SettingsPage({ user }: Props) {
           {browseDs && <BrowseTagsDialog dsId={browseDs.id} dsName={browseDs.name} existingTags={tags} onCreateTag={(tagData) => { setEditTag(tagData); }} onClose={() => setBrowseDs(null)} />}
           {editTag && <TagDialog tag={editTag} dataSources={dataSources} allLabels={allLabels} onSave={handleSaveTag} onClose={() => setEditTag(null)} />}
         </div>
+      )}
+
+      {/* ═══ Integrations ═══ */}
+      {tab === 'integrations' && (
+        <IntegrationsTab tagValues={tagValues} canManage={canManage} />
       )}
 
       {/* ═══ Users ═══ */}

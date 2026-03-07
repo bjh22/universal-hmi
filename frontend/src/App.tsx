@@ -39,7 +39,7 @@ export default function App() {
                 <Route path="/jobs" element={<JobsPage user={auth.user} />} />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/projects" element={<ProjectsPage user={auth.user} />} />
-                <Route path="/settings" element={<SettingsPage user={auth.user} />} />
+                <Route path="/settings" element={<SettingsPage user={auth.user} tagValues={tagValues} />} />
               </Routes>
             </AppShell>
           }
