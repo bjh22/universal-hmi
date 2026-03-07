@@ -81,10 +81,11 @@ export function TrendsPage() {
 
   const exportCsv = useCallback(() => {
     if (displayChartData.length === 0) return;
-    const tagNames = selectedTags.map(id => tags.find(t => t.id === id)?.name || `tag_${id}`);
-    const header = ['Timestamp', ...tagNames].join(',');
+    const tagKeys = selectedTags.map(id => tags.find(t => t.id === id)?.name || `tag_${id}`);
+    const tagDisplayNames = selectedTags.map(id => { const t = tags.find(t => t.id === id); return t?.description || t?.name || `tag_${id}`; });
+    const header = ['Timestamp', ...tagDisplayNames].join(',');
     const rows = displayChartData.map(row =>
-      [row.fullTime, ...tagNames.map(n => row[n] ?? '')].join(',')
+      [row.fullTime, ...tagKeys.map(n => row[n] ?? '')].join(',')
     );
     const csv = [header, ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -242,7 +243,7 @@ export function TrendsPage() {
                   onChange={() => toggleTag(tag.id)}
                   className="rounded"
                 />
-                <span className="text-sm text-slate-300 truncate">{tag.name}</span>
+                <span className="text-sm text-slate-300 truncate">{tag.description || tag.name}</span>
               </label>
             ))}
             {tags.length === 0 && <p className="text-sm text-slate-500">No trending tags configured</p>}
@@ -269,6 +270,7 @@ export function TrendsPage() {
                       key={id}
                       type="monotone"
                       dataKey={tag?.name || `tag_${i}`}
+                      name={tag?.description || tag?.name || `tag_${i}`}
                       stroke={COLORS[i % COLORS.length]}
                       dot={false}
                       strokeWidth={2}

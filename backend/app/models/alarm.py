@@ -45,6 +45,7 @@ class AlarmHistory(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tag_id: Mapped[int] = mapped_column(Integer, nullable=False)
     tag_name: Mapped[str] = mapped_column(String(300), nullable=False)
+    tag_display_name: Mapped[str | None] = mapped_column(String(300), nullable=True)
     message: Mapped[str] = mapped_column(String(500), nullable=False)
     severity: Mapped[AlarmSeverity] = mapped_column(Enum(AlarmSeverity), nullable=False)
     triggered_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

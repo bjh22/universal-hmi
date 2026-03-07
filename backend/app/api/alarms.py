@@ -18,6 +18,7 @@ class AlarmOut(BaseModel):
     id: int
     tag_id: int
     tag_name: str | None = None
+    tag_display_name: str | None = None
     message: str
     severity: AlarmSeverity
     state: AlarmState
@@ -33,6 +34,7 @@ class AlarmHistoryOut(BaseModel):
     id: int
     tag_id: int
     tag_name: str | None = None
+    tag_display_name: str | None = None
     message: str
     severity: AlarmSeverity
     triggered_at: str
@@ -48,7 +50,7 @@ class AlarmHistoryOut(BaseModel):
 @router.get("/active", response_model=list[AlarmOut])
 async def get_active_alarms(session: AsyncSession = Depends(get_db)):
     result = await session.execute(
-        select(Alarm, Tag.name.label("tag_name"))
+        select(Alarm, Tag.name.label("tag_name"), Tag.description.label("tag_display_name"))
         .join(Tag, Alarm.tag_id == Tag.id)
         .where(Alarm.state.in_([
             AlarmState.ACTIVE_UNACKED,
@@ -58,7 +60,7 @@ async def get_active_alarms(session: AsyncSession = Depends(get_db)):
         .order_by(Alarm.triggered_at.desc())
     )
     rows = result.all()
-    return [_alarm_to_out(row[0], row[1]) for row in rows]
+    return [_alarm_to_out(row[0], row[1], row[2]) for row in rows]
 
 
 @router.get("/history", response_model=list[AlarmHistoryOut])
@@ -68,12 +70,16 @@ async def get_alarm_history(
     severity: AlarmSeverity | None = None,
     session: AsyncSession = Depends(get_db),
 ):
-    query = select(AlarmHistory).order_by(AlarmHistory.triggered_at.desc())
+    query = (
+        select(AlarmHistory, Tag.description.label("current_display_name"))
+        .outerjoin(Tag, AlarmHistory.tag_id == Tag.id)
+        .order_by(AlarmHistory.triggered_at.desc())
+    )
     if severity:
         query = query.where(AlarmHistory.severity == severity)
     query = query.offset(offset).limit(limit)
     result = await session.execute(query)
-    return [_history_to_out(h) for h in result.scalars().all()]
+    return [_history_to_out(row[0], row[1]) for row in result.all()]
 
 
 @router.post("/{alarm_id}/acknowledge")
@@ -98,11 +104,12 @@ async def acknowledge_alarm(
     return {"success": True}
 
 
-def _alarm_to_out(alarm: Alarm, tag_name: str = "") -> AlarmOut:
+def _alarm_to_out(alarm: Alarm, tag_name: str = "", tag_display_name: str | None = None) -> AlarmOut:
     return AlarmOut(
         id=alarm.id,
         tag_id=alarm.tag_id,
         tag_name=tag_name,
+        tag_display_name=tag_display_name,
         message=alarm.message,
         severity=alarm.severity,
         state=alarm.state,
@@ -113,11 +120,12 @@ def _alarm_to_out(alarm: Alarm, tag_name: str = "") -> AlarmOut:
     )
 
 
-def _history_to_out(h: AlarmHistory) -> AlarmHistoryOut:
+def _history_to_out(h: AlarmHistory, current_display_name: str | None = None) -> AlarmHistoryOut:
     return AlarmHistoryOut(
         id=h.id,
         tag_id=h.tag_id,
         tag_name=h.tag_name,
+        tag_display_name=current_display_name or h.tag_display_name,
         message=h.message,
         severity=h.severity,
         triggered_at=h.triggered_at.isoformat() if h.triggered_at else "",

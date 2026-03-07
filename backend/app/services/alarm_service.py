@@ -40,6 +40,7 @@ class AlarmService:
                 config = json.loads(tag.alarm_config)
                 config["tag_id"] = tag.id
                 config["tag_name"] = tag.name
+                config["tag_description"] = tag.description
                 self._alarm_configs.append(config)
 
         # Restore active alarms from DB (survive restarts)
@@ -174,7 +175,7 @@ class AlarmService:
             await session.refresh(alarm)
 
         self._active_alarms[config["tag_id"]] = alarm
-        self._broadcast_alarm(alarm, tag_name=config["tag_name"])
+        self._broadcast_alarm(alarm, tag_name=config["tag_name"], tag_display_name=config.get("tag_description"))
 
     async def _clear_alarm(self, tag_id: int, value):
         alarm = self._active_alarms.get(tag_id)
@@ -229,6 +230,12 @@ class AlarmService:
                 return config["tag_name"]
         return ""
 
+    def _get_tag_description(self, tag_id: int) -> str | None:
+        for config in self._alarm_configs:
+            if config["tag_id"] == tag_id:
+                return config.get("tag_description")
+        return None
+
     def _record_history_obj(
         self, session: AsyncSession, alarm: Alarm, clear_value: str | None = None
     ):
@@ -237,6 +244,7 @@ class AlarmService:
         history = AlarmHistory(
             tag_id=alarm.tag_id,
             tag_name=tag_name,
+            tag_display_name=self._get_tag_description(alarm.tag_id),
             message=alarm.message,
             severity=alarm.severity,
             triggered_at=alarm.triggered_at,
@@ -252,16 +260,19 @@ class AlarmService:
     # WebSocket broadcast
     # ------------------------------------------------------------------
 
-    def _broadcast_alarm(self, alarm: Alarm, tag_name: str | None = None):
+    def _broadcast_alarm(self, alarm: Alarm, tag_name: str | None = None, tag_display_name: str | None = None):
         """Send alarm state to all WebSocket subscribers."""
         if tag_name is None:
             tag_name = self._get_tag_name(alarm.tag_id)
+        if tag_display_name is None:
+            tag_display_name = self._get_tag_description(alarm.tag_id)
         msg = {
             "type": "alarm",
             "data": {
                 "id": alarm.id,
                 "tag_id": alarm.tag_id,
                 "tag_name": tag_name,
+                "tag_display_name": tag_display_name,
                 "message": alarm.message,
                 "severity": alarm.severity.value,
                 "state": alarm.state.value,
