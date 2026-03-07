@@ -15,6 +15,7 @@ import type {
   ProductionRun,
   ProjectData,
   ProjectDetail,
+  MachineProfile,
   ImportPreviewTag,
 } from '../types/index';
 
@@ -56,7 +57,8 @@ export const api = {
     }),
 
   // Tags
-  getTags: () => request<Tag[]>('/tags/'),
+  getTags: (projectId?: number) =>
+    request<Tag[]>(`/tags/${projectId != null ? `?project_id=${projectId}` : ''}`),
   getTagByName: (name: string) => request<Tag>(`/tags/by-name/${encodeURIComponent(name)}`),
   createTag: (data: Partial<Tag>) =>
     request('/tags/', { method: 'POST', body: JSON.stringify(data) }),
@@ -158,7 +160,8 @@ export const api = {
   getTrendViews: () => request<Record<string, unknown>[]>('/trends/views'),
 
   // Data Sources
-  getDataSources: () => request<DataSourceData[]>('/datasources/'),
+  getDataSources: (projectId?: number) =>
+    request<DataSourceData[]>(`/datasources/${projectId != null ? `?project_id=${projectId}` : ''}`),
   createDataSource: (data: Partial<DataSourceData>) =>
     request('/datasources/', { method: 'POST', body: JSON.stringify(data) }),
   updateDataSource: (id: number, data: Partial<DataSourceData>) =>
@@ -208,6 +211,32 @@ export const api = {
     request<Record<string, unknown>>(`/projects/${id}/export`),
   importProject: (data: Record<string, unknown>) =>
     request<ProjectData>('/projects/import', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Machine Profiles
+  getProfiles: (projectId: number) =>
+    request<MachineProfile[]>(`/projects/${projectId}/profiles/`),
+  createProfile: (projectId: number, data: { name: string; description?: string }) =>
+    request<MachineProfile>(`/projects/${projectId}/profiles/`, {
+      method: 'POST', body: JSON.stringify(data),
+    }),
+  getProfile: (projectId: number, profileId: number) =>
+    request<MachineProfile>(`/projects/${projectId}/profiles/${profileId}`),
+  updateProfile: (projectId: number, profileId: number, data: {
+    name?: string; description?: string;
+    data_source_overrides?: Record<string, { config?: Record<string, unknown> }>;
+    tag_overrides?: Record<string, { address?: string }>;
+  }) =>
+    request<MachineProfile>(`/projects/${projectId}/profiles/${profileId}`, {
+      method: 'PUT', body: JSON.stringify(data),
+    }),
+  deleteProfile: (projectId: number, profileId: number) =>
+    request(`/projects/${projectId}/profiles/${profileId}`, { method: 'DELETE' }),
+  cloneProfile: (projectId: number, profileId: number, name: string) =>
+    request<MachineProfile>(`/projects/${projectId}/profiles/${profileId}/clone`, {
+      method: 'POST', body: JSON.stringify({ name }),
+    }),
+  exportForMachine: (projectId: number, profileId: number) =>
+    request<Record<string, unknown>>(`/projects/${projectId}/export?profile_id=${profileId}`),
 
   // Health
   health: () => request<Record<string, unknown>>('/health'),
