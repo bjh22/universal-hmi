@@ -1,6 +1,7 @@
 import { api } from '../../lib/api';
 import type { TagValue, TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
+import { getContainerClasses, shouldShowTitle, shouldShowExtras, getTitleClasses } from '../../lib/widgetChrome';
 
 interface SelectOption {
   label: string;
@@ -14,9 +15,10 @@ interface Props {
   options?: SelectOption[];
   titleStyle?: TextStyle;
   valueStyle?: TextStyle;
+  chrome?: 'full' | 'compact' | 'none';
 }
 
-export function DropdownSelectWidget({ title, tag, tagValues, options = [], titleStyle, valueStyle }: Props) {
+export function DropdownSelectWidget({ title, tag, tagValues, options = [], titleStyle, valueStyle, chrome = 'full' }: Props) {
   const tv = tagValues[tag];
   const currentValue = tv?.value;
 
@@ -30,8 +32,8 @@ export function DropdownSelectWidget({ title, tag, tagValues, options = [], titl
   const currentIdx = options.findIndex(o => String(o.value) === String(currentValue));
 
   return (
-    <div className="bg-slate-800 rounded-xl p-4 h-full flex flex-col justify-center border border-slate-700">
-      <div className="text-xs text-slate-400 mb-2 font-medium uppercase tracking-wider" style={textStyleToCSS(titleStyle)}>{title}</div>
+    <div className={`${getContainerClasses(chrome)} h-full flex flex-col justify-center`}>
+      {shouldShowTitle(chrome) && <div className={getTitleClasses(chrome)} style={textStyleToCSS(titleStyle)}>{title}</div>}
       <select
         value={currentIdx >= 0 ? currentIdx : ''}
         onChange={handleChange}
@@ -43,7 +45,7 @@ export function DropdownSelectWidget({ title, tag, tagValues, options = [], titl
           <option key={i} value={i}>{opt.label}</option>
         ))}
       </select>
-      {options.length === 0 && (
+      {shouldShowExtras(chrome) && options.length === 0 && (
         <div className="text-xs text-slate-500 mt-1">No options configured</div>
       )}
     </div>

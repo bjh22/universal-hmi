@@ -6,6 +6,7 @@ import { GAUGE_DEFAULTS, type GaugeDisplayMode } from '../widgets/GaugeWidget';
 
 interface Props {
   widget: Widget | null;
+  widgets: Widget[];
   layoutMode: LayoutMode;
   onUpdateProps: (id: string, props: Record<string, unknown>) => void;
   onUpdateWidget: (id: string, patch: Partial<Widget>) => void;
@@ -134,7 +135,7 @@ function TextStyleEditor({ label, value, onChange }: {
   );
 }
 
-export function PropertyPanel({ widget, layoutMode, onUpdateProps, onUpdateWidget, onDelete, locked, onToggleLock }: Props) {
+export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUpdateWidget, onDelete, locked, onToggleLock }: Props) {
   const isAbsolute = layoutMode === 'absolute';
   if (!widget) {
     return (
@@ -185,8 +186,66 @@ export function PropertyPanel({ widget, layoutMode, onUpdateProps, onUpdateWidge
           </Field>
         </Section>
 
+        {/* Container Description (for info button) */}
+        {widget.type === 'container' && (
+          <Section title="Info Button">
+            <Field label="Description">
+              <textarea
+                value={p.description || ''}
+                onChange={e => setProp('description', e.target.value)}
+                rows={3}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white resize-y"
+                placeholder="Info button text..."
+              />
+            </Field>
+          </Section>
+        )}
+
+        {/* Group Assignment */}
+        {widget.type !== 'container' && (() => {
+          const containers = widgets.filter(w => w.type === 'container' && w.id !== widget.id);
+          if (containers.length === 0) return null;
+          return (
+            <Section title="Group">
+              <Field label="Container">
+                <select
+                  value={widget.parentId || ''}
+                  onChange={e => onUpdateWidget(widget.id, { parentId: e.target.value || undefined })}
+                  className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+                >
+                  <option value="">None</option>
+                  {containers.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {(c.props as Record<string, unknown>).title as string || c.id}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </Section>
+          );
+        })()}
+
+        {/* Display Chrome */}
+        <Section title="Display">
+          <Field label="Chrome">
+            <div className="flex gap-1">
+              {(['full', 'compact', 'none'] as const).map(level => (
+                <button
+                  key={level}
+                  onClick={() => onUpdateWidget(widget.id, { chrome: level })}
+                  className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                    (widget.chrome || 'full') === level ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {level.charAt(0).toUpperCase() + level.slice(1)}
+                </button>
+              ))}
+            </div>
+          </Field>
+        </Section>
+
         {/* Tag Binding */}
-        {widget.type !== 'text_label' && widget.type !== 'alarm_summary' && widget.type !== 'multi_value' && widget.type !== 'control_group' && (
+        {widget.type !== 'text_label' && widget.type !== 'alarm_summary' && widget.type !== 'multi_value' && widget.type !== 'control_group' && widget.type !== 'container' && (
           <Section title="Tag Binding">
             <Field label="Tag Name">
               <TagPicker value={p.tag || ''} onChange={v => setProp('tag', v)} />

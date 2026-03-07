@@ -3,6 +3,7 @@ import { api } from '../../lib/api';
 import type { TagValue, TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
 import { NumericKeypad } from './TouchInput';
+import { getContainerClasses, shouldShowTitle, shouldShowExtras, getTitleClasses } from '../../lib/widgetChrome';
 
 interface Props {
   title: string;
@@ -15,9 +16,10 @@ interface Props {
   decimalPlaces?: number;
   titleStyle?: TextStyle;
   valueStyle?: TextStyle;
+  chrome?: 'full' | 'compact' | 'none';
 }
 
-export function ParameterInput({ title, tag, tagValues, min = 0, max = 100, units = '', decimalPlaces = 1, titleStyle, valueStyle }: Props) {
+export function ParameterInput({ title, tag, tagValues, min = 0, max = 100, units = '', decimalPlaces = 1, titleStyle, valueStyle, chrome = 'full' }: Props) {
   const tv = tagValues[tag];
   const currentValue = Number(tv?.value ?? 0);
   const [showKeypad, setShowKeypad] = useState(false);
@@ -31,8 +33,8 @@ export function ParameterInput({ title, tag, tagValues, min = 0, max = 100, unit
   };
 
   return (
-    <div className="bg-slate-800 rounded-xl p-4 h-full flex flex-col border border-slate-700">
-      <div className="text-xs text-slate-400 mb-2 font-medium uppercase tracking-wider" style={textStyleToCSS(titleStyle)}>{title}</div>
+    <div className={`${getContainerClasses(chrome)} h-full flex flex-col`}>
+      {shouldShowTitle(chrome) && <div className={getTitleClasses(chrome)} style={textStyleToCSS(titleStyle)}>{title}</div>}
       <div className="flex-1 flex flex-col justify-center gap-2">
         <button
           onClick={() => setShowKeypad(true)}
@@ -42,9 +44,9 @@ export function ParameterInput({ title, tag, tagValues, min = 0, max = 100, unit
             {currentValue.toFixed(decimalPlaces)}
             <span className="text-sm font-normal text-slate-400 ml-1">{units}</span>
           </div>
-          <div className="text-xs text-blue-400 group-hover:text-blue-300 mt-1">Tap to change</div>
+          {shouldShowExtras(chrome) && <div className="text-xs text-blue-400 group-hover:text-blue-300 mt-1">Tap to change</div>}
         </button>
-        <div className="text-xs text-slate-500">Range: {min} – {max} {units}</div>
+        {shouldShowExtras(chrome) && <div className="text-xs text-slate-500">Range: {min} – {max} {units}</div>}
       </div>
       {showKeypad && (
         <NumericKeypad

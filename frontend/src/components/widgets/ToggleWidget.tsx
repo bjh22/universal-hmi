@@ -1,6 +1,7 @@
 import { api } from '../../lib/api';
 import type { TagValue, TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
+import { getContainerClasses, shouldShowTitle, getTitleClasses } from '../../lib/widgetChrome';
 
 interface Props {
   title: string;
@@ -8,9 +9,10 @@ interface Props {
   tagValues: Record<string, TagValue>;
   titleStyle?: TextStyle;
   valueStyle?: TextStyle;
+  chrome?: 'full' | 'compact' | 'none';
 }
 
-export function ToggleWidget({ title, tag, tagValues, titleStyle, valueStyle }: Props) {
+export function ToggleWidget({ title, tag, tagValues, titleStyle, valueStyle, chrome = 'full' }: Props) {
   const tv = tagValues[tag];
   const value = Boolean(tv?.value);
 
@@ -18,9 +20,11 @@ export function ToggleWidget({ title, tag, tagValues, titleStyle, valueStyle }: 
     await api.writeTag(tag, !value);
   };
 
+  const isNone = chrome === 'none';
+
   return (
-    <div className="bg-slate-800 rounded-xl p-4 h-full flex flex-col justify-center items-center border border-slate-700">
-      <div className="text-xs text-slate-400 mb-3 font-medium uppercase tracking-wider" style={textStyleToCSS(titleStyle)}>{title}</div>
+    <div className={`${getContainerClasses(chrome)} h-full flex ${isNone ? 'flex-row items-center gap-2' : 'flex-col justify-center items-center'}`}>
+      {shouldShowTitle(chrome) && <div className={`${getTitleClasses(chrome)} ${isNone ? '' : 'mb-3'}`} style={textStyleToCSS(titleStyle)}>{title}</div>}
       <button
         onClick={handleToggle}
         className={`w-16 h-8 rounded-full transition-colors relative ${
@@ -33,7 +37,7 @@ export function ToggleWidget({ title, tag, tagValues, titleStyle, valueStyle }: 
           }`}
         />
       </button>
-      <div className={`text-sm mt-2 font-medium ${value ? 'text-green-400' : 'text-slate-400'}`} style={textStyleToCSS(valueStyle)}>
+      <div className={`text-sm font-medium ${value ? 'text-green-400' : 'text-slate-400'} ${isNone ? '' : 'mt-2'}`} style={textStyleToCSS(valueStyle)}>
         {value ? 'ON' : 'OFF'}
       </div>
     </div>

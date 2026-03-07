@@ -112,6 +112,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
       w: isAbs ? typeInfo.defaultAbsW : typeInfo.defaultW,
       h: isAbs ? typeInfo.defaultAbsH : typeInfo.defaultH,
       props: { ...typeInfo.defaultProps },
+      ...(isAbs ? { chrome: 'compact' as const } : {}),
     };
     dm.addWidget(widget);
     dm.select(widget.id);
@@ -221,10 +222,12 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
       const scaleX = availW / screenResolution.width;
       const scaleY = availH / screenResolution.height;
       const s = Math.min(scaleX, scaleY);
-      setAbsScale(s);
-      setAbsOffset({
-        x: (availW - screenResolution.width * s) / 2,
-        y: (availH - screenResolution.height * s) / 2,
+      setAbsScale(prev => prev === s ? prev : s);
+      setAbsOffset(prev => {
+        const newX = (availW - screenResolution.width * s) / 2;
+        const newY = (availH - screenResolution.height * s) / 2;
+        if (prev.x === newX && prev.y === newY) return prev;
+        return { x: newX, y: newY };
       });
     };
     updateScale();
@@ -295,6 +298,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
           />
           <PropertyPanel
             widget={selectedWidget}
+            widgets={dm.widgets}
             layoutMode={dm.layoutMode}
             onUpdateProps={dm.updateWidgetProps}
             onUpdateWidget={dm.updateWidget}
@@ -309,7 +313,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
 
   // ─── RUNTIME MODE ───
   return (
-    <div>
+    <div className={screenLayoutMode === 'absolute' && screenResolution ? 'flex flex-col h-full overflow-hidden' : ''}>
       {/* Screen tabs + edit button */}
       <div className="flex items-center gap-2 mb-4">
         {screens.length > 1 && (
@@ -363,92 +367,99 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
       </div>
 
       {/* Widget rendering */}
-      {screenLayoutMode === 'absolute' && screenResolution ? (
-        /* Absolute mode: scaled canvas with letterboxing */
-        <div ref={absContainerRef} className="flex-1 relative bg-black overflow-hidden" style={{ minHeight: 400 }}>
-          <div
-            style={{
-              width: screenResolution.width,
-              height: screenResolution.height,
-              transform: `translate(${absOffset.x}px, ${absOffset.y}px) scale(${absScale})`,
-              transformOrigin: 'top left',
-              position: 'relative',
-              background: '#0f172a',
-            }}
-          >
-            {runtimeWidgets.map((w, index) => {
-              const visibleByProp = w.visible !== false;
-              const visibleByTag = w.visibleTag ? !!tagValues[w.visibleTag]?.value : true;
-              const visibleByRole = !w.visibleRoles || w.visibleRoles.length === 0 || (userRole && w.visibleRoles.includes(userRole));
-              if (!visibleByProp || !visibleByTag || !visibleByRole) return null;
+      {(() => {
+        // Build set of hidden container IDs for visibility cascading
+        const hiddenContainers = new Set<string>();
+        runtimeWidgets.forEach(w => {
+          if (w.type === 'container') {
+            const vis = (w.visible !== false)
+              && (!w.visibleTag || !!tagValues[w.visibleTag]?.value)
+              && (!w.visibleRoles?.length || (userRole && w.visibleRoles.includes(userRole)));
+            if (!vis) hiddenContainers.add(w.id);
+          }
+        });
 
-              const enabledByProp = w.enabled !== false;
-              const enabledByTag = w.enabledTag ? !!tagValues[w.enabledTag]?.value : true;
-              const enabledByRole = !w.enabledRoles || w.enabledRoles.length === 0 || (userRole && w.enabledRoles.includes(userRole));
-              const isEnabled = enabledByProp && enabledByTag && enabledByRole;
+        const renderWidget = (w: typeof runtimeWidgets[number], index: number, isAbsolute: boolean) => {
+          // Cascade container visibility to children
+          if (w.parentId && hiddenContainers.has(w.parentId)) return null;
 
-              const tagName = (w.props as Record<string, unknown>).tag as string | undefined;
-              const longDesc = tagName ? tagValues[tagName]?.long_description : undefined;
-              const showInfoBtn = w.showInfo !== false && !!longDesc;
+          const visibleByProp = w.visible !== false;
+          const visibleByTag = w.visibleTag ? !!tagValues[w.visibleTag]?.value : true;
+          const visibleByRole = !w.visibleRoles || w.visibleRoles.length === 0 || (userRole && w.visibleRoles.includes(userRole));
+          if (!visibleByProp || !visibleByTag || !visibleByRole) return null;
 
-              return (
-                <div
-                  key={w.id}
-                  className={`absolute ${isEnabled ? '' : 'opacity-50 pointer-events-none'}`}
-                  style={{
-                    left: w.x,
-                    top: w.y,
-                    width: w.w,
-                    height: w.h,
-                    zIndex: index,
-                  }}
-                >
-                  {showInfoBtn && <InfoButton description={longDesc!} title={(w.props as Record<string, unknown>).title as string} />}
-                  <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} />
-                </div>
-              );
-            })}
+          const enabledByProp = w.enabled !== false;
+          const enabledByTag = w.enabledTag ? !!tagValues[w.enabledTag]?.value : true;
+          const enabledByRole = !w.enabledRoles || w.enabledRoles.length === 0 || (userRole && w.enabledRoles.includes(userRole));
+          const isEnabled = enabledByProp && enabledByTag && enabledByRole;
+
+          const tagName = (w.props as Record<string, unknown>).tag as string | undefined;
+          const longDesc = tagName ? tagValues[tagName]?.long_description : undefined;
+          // For containers, fall back to the description prop for info button
+          const containerDesc = w.type === 'container' ? (w.props as Record<string, unknown>).description as string : undefined;
+          const infoDesc = longDesc || containerDesc;
+          const showInfoBtn = w.showInfo !== false && !!infoDesc;
+
+          if (isAbsolute) {
+            return (
+              <div
+                key={w.id}
+                className={`absolute ${isEnabled ? '' : 'opacity-50 pointer-events-none'}`}
+                style={{
+                  left: w.x,
+                  top: w.y,
+                  width: w.w,
+                  height: w.h,
+                  zIndex: index,
+                }}
+              >
+                {showInfoBtn && <InfoButton description={infoDesc!} title={(w.props as Record<string, unknown>).title as string} />}
+                <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} />
+              </div>
+            );
+          }
+
+          return (
+            <div
+              key={w.id}
+              style={{
+                gridColumn: `${w.x + 1} / span ${w.w}`,
+                gridRow: `${w.y + 1} / span ${w.h}`,
+              }}
+              className={`relative ${isEnabled ? '' : 'opacity-50 pointer-events-none'}`}
+            >
+              {showInfoBtn && <InfoButton description={infoDesc!} title={(w.props as Record<string, unknown>).title as string} />}
+              <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} />
+            </div>
+          );
+        };
+
+        return screenLayoutMode === 'absolute' && screenResolution ? (
+          /* Absolute mode: scaled canvas with letterboxing */
+          <div ref={absContainerRef} className="flex-1 relative bg-black overflow-hidden" style={{ minHeight: 400 }}>
+            <div
+              style={{
+                width: screenResolution.width,
+                height: screenResolution.height,
+                transform: `translate(${absOffset.x}px, ${absOffset.y}px) scale(${absScale})`,
+                transformOrigin: 'top left',
+                position: 'absolute',
+                background: '#0f172a',
+              }}
+            >
+              {runtimeWidgets.map((w, index) => renderWidget(w, index, true))}
+            </div>
           </div>
-        </div>
-      ) : (
-        /* Grid mode: CSS grid layout */
-        <>
+        ) : (
+          /* Grid mode: CSS grid layout */
           <div
             className="grid gap-4"
             style={{ gridTemplateColumns: 'repeat(12, 1fr)', gridAutoRows: '80px' }}
           >
-            {runtimeWidgets.map((w) => {
-              const visibleByProp = w.visible !== false;
-              const visibleByTag = w.visibleTag ? !!tagValues[w.visibleTag]?.value : true;
-              const visibleByRole = !w.visibleRoles || w.visibleRoles.length === 0 || (userRole && w.visibleRoles.includes(userRole));
-              if (!visibleByProp || !visibleByTag || !visibleByRole) return null;
-
-              const enabledByProp = w.enabled !== false;
-              const enabledByTag = w.enabledTag ? !!tagValues[w.enabledTag]?.value : true;
-              const enabledByRole = !w.enabledRoles || w.enabledRoles.length === 0 || (userRole && w.enabledRoles.includes(userRole));
-              const isEnabled = enabledByProp && enabledByTag && enabledByRole;
-
-              const tagName = (w.props as Record<string, unknown>).tag as string | undefined;
-              const longDesc = tagName ? tagValues[tagName]?.long_description : undefined;
-              const showInfoBtn = w.showInfo !== false && !!longDesc;
-
-              return (
-                <div
-                  key={w.id}
-                  style={{
-                    gridColumn: `${w.x + 1} / span ${w.w}`,
-                    gridRow: `${w.y + 1} / span ${w.h}`,
-                  }}
-                  className={`relative ${isEnabled ? '' : 'opacity-50 pointer-events-none'}`}
-                >
-                  {showInfoBtn && <InfoButton description={longDesc!} title={(w.props as Record<string, unknown>).title as string} />}
-                  <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} />
-                </div>
-              );
-            })}
+            {runtimeWidgets.map((w, index) => renderWidget(w, index, false))}
           </div>
-        </>
-      )}
+        );
+      })()}
 
       {runtimeWidgets.length === 0 && !activeScreen && (
         <div className="text-center text-slate-500 mt-20">

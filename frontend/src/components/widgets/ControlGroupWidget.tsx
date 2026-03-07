@@ -4,6 +4,7 @@ import type { TagValue, TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
 import { NumericKeypad } from './TouchInput';
 import { InlineInfoButton } from './InfoButton';
+import { getContainerClasses, shouldShowTitle, getTitleClasses } from '../../lib/widgetChrome';
 
 export type ControlItem =
   | { type: 'toggle'; tag: string; label: string }
@@ -18,6 +19,7 @@ interface Props {
   columns?: number;
   titleStyle?: TextStyle;
   valueStyle?: TextStyle;
+  chrome?: 'full' | 'compact' | 'none';
 }
 
 // ─── Individual control renderers ───
@@ -158,12 +160,12 @@ function InputControl({ item, tagValues, valueStyle }: { item: ControlItem & { t
 
 // ─── Main Component ───
 
-export function ControlGroupWidget({ title, controls = [], tagValues, columns = 1, titleStyle, valueStyle }: Props) {
+export function ControlGroupWidget({ title, controls = [], tagValues, columns = 1, titleStyle, valueStyle, chrome = 'full' }: Props) {
   return (
-    <div className="bg-slate-800 rounded-xl p-4 h-full flex flex-col border border-slate-700">
-      <div className="text-xs text-slate-400 mb-2 font-medium uppercase tracking-wider" style={textStyleToCSS(titleStyle)}>
+    <div className={`${getContainerClasses(chrome)} h-full flex flex-col`}>
+      {shouldShowTitle(chrome) && <div className={getTitleClasses(chrome)} style={textStyleToCSS(titleStyle)}>
         {title}
-      </div>
+      </div>}
       <div
         className="flex-1 overflow-auto"
         style={columns > 1 ? {

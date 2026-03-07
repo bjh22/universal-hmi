@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api } from '../../lib/api';
 import type { TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
+import { getContainerClasses } from '../../lib/widgetChrome';
 
 interface Props {
   title: string;
@@ -11,6 +12,7 @@ interface Props {
   color?: string;
   confirm?: boolean;
   titleStyle?: TextStyle;
+  chrome?: 'full' | 'compact' | 'none';
 }
 
 const COLORS: Record<string, string> = {
@@ -20,7 +22,7 @@ const COLORS: Record<string, string> = {
   yellow: 'bg-yellow-600 hover:bg-yellow-700 text-white',
 };
 
-export function CommandButton({ title, tag, value, script, color = 'blue', confirm: needsConfirm, titleStyle }: Props) {
+export function CommandButton({ title, tag, value, script, color = 'blue', confirm: needsConfirm, titleStyle, chrome = 'full' }: Props) {
   const [pending, setPending] = useState(false);
 
   const handleClick = async () => {
@@ -38,7 +40,7 @@ export function CommandButton({ title, tag, value, script, color = 'blue', confi
   };
 
   return (
-    <div className="bg-slate-800 rounded-xl p-4 h-full flex flex-col justify-center items-center border border-slate-700">
+    <div className={`${getContainerClasses(chrome)} h-full flex flex-col justify-center items-center`}>
       <button
         onClick={handleClick}
         disabled={pending}
