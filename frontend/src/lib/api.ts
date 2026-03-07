@@ -17,6 +17,8 @@ import type {
   ProjectDetail,
   MachineProfile,
   ImportPreviewTag,
+  IntegrationType,
+  IntegrationData,
 } from '../types/index';
 
 const BASE = '/api';
@@ -250,6 +252,45 @@ export const api = {
     }),
   exportForMachine: (projectId: number, profileId: number) =>
     request<Record<string, unknown>>(`/projects/${projectId}/export?profile_id=${profileId}`),
+
+  // Integrations
+  getIntegrationTypes: () =>
+    request<IntegrationType[]>('/integrations/types'),
+  getIntegrations: () =>
+    request<IntegrationData[]>('/integrations/'),
+  createIntegration: (data: { type_name: string; name: string; enabled: boolean; config: Record<string, unknown> }) =>
+    request<IntegrationData>('/integrations/', { method: 'POST', body: JSON.stringify(data) }),
+  updateIntegration: (id: number, data: { name: string; enabled: boolean; config: Record<string, unknown> }) =>
+    request<IntegrationData>(`/integrations/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteIntegration: (id: number) =>
+    request(`/integrations/${id}`, { method: 'DELETE' }),
+
+  // Zebra printer
+  zebraGetStatus: () =>
+    request<Record<string, unknown>>('/integrations/zebra/status'),
+  zebraSendTestLabel: () =>
+    request('/integrations/zebra/test-label', { method: 'POST' }),
+  zebraSendZpl: (zpl: string) =>
+    request('/integrations/zebra/send-zpl', { method: 'POST', body: JSON.stringify({ zpl }) }),
+  zebraSetSpeed: (speed: number) =>
+    request('/integrations/zebra/speed', { method: 'POST', body: JSON.stringify({ speed }) }),
+  zebraSetDarkness: (darkness: number) =>
+    request('/integrations/zebra/darkness', { method: 'POST', body: JSON.stringify({ darkness }) }),
+
+  // Cognex DataMan
+  datamanGetStatus: () =>
+    request<Record<string, unknown>>('/integrations/dataman/status'),
+  datamanGetImage: async (): Promise<Blob | null> => {
+    const token = localStorage.getItem('hmi_token');
+    const headers: HeadersInit = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${BASE}/integrations/dataman/image`, { headers });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(await res.text());
+    return res.blob();
+  },
+  datamanTrigger: () =>
+    request('/integrations/dataman/trigger', { method: 'POST' }),
 
   // Health
   health: () => request<Record<string, unknown>>('/health'),

@@ -225,3 +225,20 @@ export interface MachineProfile {
   created_at: string;
   updated_at: string;
 }
+
+export interface IntegrationType {
+  type_name: string;
+  display_name: string;
+  description: string;
+  default_config: Record<string, unknown>;
+}
+
+export interface IntegrationData {
+  id: number;
+  type_name: string;
+  name: string;
+  enabled: boolean;
+  config: Record<string, unknown>;
+  status: 'stopped' | 'running' | 'error';
+  status_message: string | null;
+}

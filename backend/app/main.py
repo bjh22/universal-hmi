@@ -11,11 +11,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import alarms, audit, auth, datasources, jobs, machine_profiles, production, projects, screens, scripts, tags, trends, users
+from app.api import alarms, audit, auth, datasources, integrations, jobs, machine_profiles, production, projects, screens, scripts, tags, trends, users
 from app.api.websocket import router as ws_router
 from app.core.config import settings
 from app.core.database import async_session, init_db
 from app.drivers.driver_manager import driver_manager
+from app.integrations.manager import IntegrationManager
+from app.models.integration import Integration  # noqa: F401 — ensure table creation
 from app.services.alarm_service import AlarmService
 from app.services.tag_engine import tag_engine
 from app.services.trend_service import TrendService
@@ -41,6 +43,13 @@ async def lifespan(app: FastAPI):
 
     tag_engine.set_driver_manager(driver_manager)
     app.state.alarm_service = alarm_service
+
+    # Integration system
+    integration_manager = IntegrationManager(tag_engine, async_session)
+    integration_manager.discover()
+    await integration_manager.load_and_start(app)
+    app.state.integration_manager = integration_manager
+
     await tag_engine.start_simulation()
     await alarm_service.start()
     await trend_service.start()
@@ -50,6 +59,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down services")
+    await integration_manager.stop_all()
     await tag_engine.stop_simulation()
     await alarm_service.stop()
     await trend_service.stop()
@@ -85,6 +95,7 @@ app.include_router(production.router)
 app.include_router(scripts.router)
 app.include_router(projects.router)
 app.include_router(machine_profiles.router)
+app.include_router(integrations.router)
 app.include_router(ws_router)
 
 

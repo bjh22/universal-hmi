@@ -1,0 +1,3 @@
+from app.integrations.cognex_dataman.integration import CognexDataManIntegration
+
+integration_class = CognexDataManIntegration

@@ -1,0 +1,3 @@
+from app.integrations.ftp_hot_folder.integration import FtpHotFolderIntegration
+
+integration_class = FtpHotFolderIntegration

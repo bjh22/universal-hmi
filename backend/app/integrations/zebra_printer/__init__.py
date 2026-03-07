@@ -1,0 +1,3 @@
+from app.integrations.zebra_printer.integration import ZebraPrinterIntegration
+
+integration_class = ZebraPrinterIntegration
