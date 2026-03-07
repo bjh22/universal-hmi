@@ -12,6 +12,11 @@ class ProtocolDriver(ABC):
         self.config = config
         self.connected = False
 
+    @property
+    def address_prefix(self) -> str | None:
+        """Return the detected address prefix, if any."""
+        return None
+
     @abstractmethod
     async def connect(self):
         """Establish connection to the data source."""

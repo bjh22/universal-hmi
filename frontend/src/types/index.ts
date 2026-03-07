@@ -174,6 +174,7 @@ export interface BrowsedTag {
   display_name?: string;
   node_id?: string;
   address?: string;
+  relative_address?: string;
   data_type?: string;
 }
 

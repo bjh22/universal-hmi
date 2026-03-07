@@ -115,7 +115,19 @@ async def connect_datasource(
         raise HTTPException(status_code=404, detail="Data source not found")
     await driver_manager.connect_source(ds)
     driver = driver_manager.get_driver(ds_id)
-    return {"connected": driver.connected if driver else False}
+    connected = driver.connected if driver else False
+    address_prefix = None
+
+    # Auto-detect OPC UA address prefix after successful connection
+    if connected and driver and hasattr(driver, "detect_address_prefix"):
+        address_prefix = await driver.detect_address_prefix()
+        if address_prefix:
+            config = json.loads(ds.config) if isinstance(ds.config, str) else ds.config
+            config["address_prefix"] = address_prefix
+            ds.config = json.dumps(config)
+            await session.flush()
+
+    return {"connected": connected, "address_prefix": address_prefix}
 
 
 @router.post("/{ds_id}/browse")
@@ -127,4 +139,4 @@ async def browse_datasource(
     if not driver or not driver.connected:
         raise HTTPException(status_code=400, detail="Data source not connected")
     tags = await driver.browse()
-    return {"tags": tags}
+    return {"tags": tags, "address_prefix": driver.address_prefix}

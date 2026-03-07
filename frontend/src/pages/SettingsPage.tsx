@@ -686,8 +686,8 @@ type ImportFormat = 'hmi_csv' | 'codesys_xml' | 'rslogix500';
 
 function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClose }: {
   onImportCsv: (tags: Record<string, unknown>[]) => void;
-  onImportCodesys: (xml: string, prefix: string) => void;
-  onImportRslogix: (csv: string, prefix: string) => void;
+  onImportCodesys: (xml: string, prefix: string, names: string[]) => void;
+  onImportRslogix: (csv: string, prefix: string, names: string[]) => void;
   onClose: () => void;
 }) {
   const [format, setFormat] = useState<ImportFormat>('hmi_csv');
@@ -701,6 +701,7 @@ function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClos
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState('');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [selectedNames, setSelectedNames] = useState<Set<string>>(new Set());
   const fileRef = useRef<HTMLInputElement>(null);
 
   const resetState = useCallback(() => {
@@ -712,6 +713,7 @@ function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClos
     setPreviewEnumCount(0);
     setPreviewError('');
     setExpandedGroups(new Set());
+    setSelectedNames(new Set());
     if (fileRef.current) fileRef.current.value = '';
   }, []);
 
@@ -729,16 +731,19 @@ function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClos
         setPreviewTags(result.tags);
         setPreviewGroups(result.groups);
         setPreviewEnumCount(result.enum_count);
+        setSelectedNames(new Set(result.tags.map(t => t.name)));
       } else if (fmt === 'rslogix500') {
         const result = await api.previewRslogix500Import(content, pfx);
         setPreviewTags(result.tags);
         setPreviewGroups(result.groups);
         setPreviewEnumCount(0);
+        setSelectedNames(new Set(result.tags.map(t => t.name)));
       }
     } catch (err) {
       setPreviewError(err instanceof Error ? err.message : String(err));
       setPreviewTags([]);
       setPreviewGroups({});
+      setSelectedNames(new Set());
     } finally {
       setPreviewLoading(false);
     }
@@ -763,6 +768,7 @@ function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClos
           return row;
         });
         setRows(parsed);
+        setSelectedNames(new Set(parsed.map((r, i) => r.name || String(i))));
       } else {
         setRawContent(text);
         loadPreview(text, format, prefix);
@@ -772,7 +778,7 @@ function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClos
   }, [format, prefix, loadPreview]);
 
   // Re-preview when prefix changes for PLC formats
-  const prefixTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const prefixTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(prefixTimeoutRef.current), []);
   const handlePrefixChange = useCallback((val: string) => {
     setPrefix(val);
@@ -791,15 +797,56 @@ function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClos
     });
   }, []);
 
-  const handleImport = useCallback(() => {
+  // Selection helpers
+  const allNames = format === 'hmi_csv'
+    ? rows.map((r, i) => r.name || String(i))
+    : previewTags.map(t => t.name);
+  const selectedCount = selectedNames.size;
+  const totalCount = allNames.length;
+
+  const toggleSelectAll = useCallback(() => {
     if (format === 'hmi_csv') {
-      onImportCsv(rows);
-    } else if (format === 'codesys_xml') {
-      onImportCodesys(rawContent, prefix);
-    } else if (format === 'rslogix500') {
-      onImportRslogix(rawContent, prefix);
+      const all = rows.map((r, i) => r.name || String(i));
+      setSelectedNames(prev => prev.size === all.length ? new Set() : new Set(all));
+    } else {
+      setSelectedNames(prev => prev.size === previewTags.length ? new Set() : new Set(previewTags.map(t => t.name)));
     }
-  }, [format, rows, rawContent, prefix, onImportCsv, onImportCodesys, onImportRslogix]);
+  }, [format, rows, previewTags]);
+
+  const toggleGroupSelection = useCallback((group: string) => {
+    const groupTagNames = previewTags.filter(t => (t.group_name || 'Ungrouped') === group).map(t => t.name);
+    setSelectedNames(prev => {
+      const next = new Set(prev);
+      const allSelected = groupTagNames.every(n => next.has(n));
+      if (allSelected) {
+        groupTagNames.forEach(n => next.delete(n));
+      } else {
+        groupTagNames.forEach(n => next.add(n));
+      }
+      return next;
+    });
+  }, [previewTags]);
+
+  const toggleTagSelection = useCallback((name: string) => {
+    setSelectedNames(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }, []);
+
+  const handleImport = useCallback(() => {
+    const names = [...selectedNames];
+    if (format === 'hmi_csv') {
+      const selected = rows.filter((r, i) => selectedNames.has(r.name || String(i)));
+      onImportCsv(selected);
+    } else if (format === 'codesys_xml') {
+      onImportCodesys(rawContent, prefix, names);
+    } else if (format === 'rslogix500') {
+      onImportRslogix(rawContent, prefix, names);
+    }
+  }, [format, rows, rawContent, prefix, selectedNames, onImportCsv, onImportCodesys, onImportRslogix]);
 
   const hasData = format === 'hmi_csv' ? rows.length > 0 : previewTags.length > 0;
   const fileAccept = format === 'codesys_xml' ? '.xml' : '.csv,.CSV';
@@ -857,22 +904,42 @@ function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClos
         {/* HMI CSV preview */}
         {format === 'hmi_csv' && rows.length > 0 && (
           <>
-            <div className="text-sm text-slate-300 mb-2">{rows.length} tags to import</div>
+            <div className="flex items-center gap-3 mb-2">
+              <button onClick={toggleSelectAll} className="text-xs text-blue-400 hover:text-blue-300">
+                {selectedCount === totalCount ? 'Deselect All' : 'Select All'}
+              </button>
+              <span className="text-sm text-slate-400">{selectedCount} of {totalCount} selected</span>
+            </div>
             <div className="max-h-60 overflow-auto mb-4">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-slate-700 text-slate-400">
+                    <th className="px-2 py-1 w-8">
+                      <input
+                        type="checkbox"
+                        checked={selectedCount === totalCount}
+                        onChange={toggleSelectAll}
+                        className="accent-blue-600"
+                      />
+                    </th>
                     {headers.map(h => <th key={h} className="text-left px-2 py-1 font-medium">{h}</th>)}
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.slice(0, 50).map((row, i) => (
-                    <tr key={i} className="border-b border-slate-700/50">
-                      {headers.map(h => <td key={h} className="px-2 py-1 text-slate-300 truncate max-w-32">{row[h]}</td>)}
-                    </tr>
-                  ))}
+                  {rows.slice(0, 50).map((row, i) => {
+                    const key = row.name || String(i);
+                    const checked = selectedNames.has(key);
+                    return (
+                      <tr key={i} className={`border-b border-slate-700/50 cursor-pointer ${checked ? '' : 'opacity-50'}`} onClick={() => toggleTagSelection(key)}>
+                        <td className="px-2 py-1" onClick={e => e.stopPropagation()}>
+                          <input type="checkbox" checked={checked} onChange={() => toggleTagSelection(key)} className="accent-blue-600" />
+                        </td>
+                        {headers.map(h => <td key={h} className="px-2 py-1 text-slate-300 truncate max-w-32">{row[h]}</td>)}
+                      </tr>
+                    );
+                  })}
                   {rows.length > 50 && (
-                    <tr><td colSpan={headers.length} className="px-2 py-1 text-slate-500 text-center">...and {rows.length - 50} more</td></tr>
+                    <tr><td colSpan={headers.length + 1} className="px-2 py-1 text-slate-500 text-center">...and {rows.length - 50} more</td></tr>
                   )}
                 </tbody>
               </table>
@@ -889,9 +956,12 @@ function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClos
         )}
         {format !== 'hmi_csv' && previewTags.length > 0 && (
           <>
-            {/* Summary */}
-            <div className="flex flex-wrap gap-3 mb-3 text-sm">
-              <span className="text-slate-300">{previewTags.length} tags found</span>
+            {/* Summary + selection controls */}
+            <div className="flex flex-wrap items-center gap-3 mb-3 text-sm">
+              <button onClick={toggleSelectAll} className="text-xs text-blue-400 hover:text-blue-300">
+                {selectedCount === totalCount ? 'Deselect All' : 'Select All'}
+              </button>
+              <span className="text-slate-400">{selectedCount} of {totalCount} selected</span>
               <span className="text-slate-500">|</span>
               <span className="text-slate-400">{Object.keys(previewGroups).length} groups</span>
               {previewEnumCount > 0 && (
@@ -906,37 +976,63 @@ function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClos
             <div className="max-h-72 overflow-auto mb-4 border border-slate-700 rounded-lg">
               {Object.entries(previewGroups)
                 .sort(([, a], [, b]) => b - a)
-                .map(([group, count]) => {
+                .map(([group]) => {
                   const isExpanded = expandedGroups.has(group);
                   const groupTags = previewTags.filter(t => (t.group_name || 'Ungrouped') === group);
+                  const groupSelectedCount = groupTags.filter(t => selectedNames.has(t.name)).length;
+                  const allGroupSelected = groupSelectedCount === groupTags.length;
+                  const someGroupSelected = groupSelectedCount > 0 && !allGroupSelected;
                   return (
                     <div key={group}>
-                      <button
-                        onClick={() => toggleGroup(group)}
-                        className="w-full flex items-center justify-between px-3 py-1.5 bg-slate-750 hover:bg-slate-700 text-left border-b border-slate-700"
-                      >
-                        <span className="text-sm text-slate-200 font-medium">
-                          <span className="text-slate-500 mr-1">{isExpanded ? '\u25BC' : '\u25B6'}</span>
-                          {group}
-                        </span>
-                        <span className="text-xs text-slate-500">{count} tags</span>
-                      </button>
+                      <div className="w-full flex items-center gap-2 px-3 py-1.5 bg-slate-750 hover:bg-slate-700 border-b border-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={allGroupSelected}
+                          ref={el => { if (el) el.indeterminate = someGroupSelected; }}
+                          onChange={() => toggleGroupSelection(group)}
+                          className="accent-blue-600"
+                        />
+                        <button
+                          onClick={() => toggleGroup(group)}
+                          className="flex items-center justify-between flex-1 text-left"
+                        >
+                          <span className="text-sm text-slate-200 font-medium">
+                            <span className="text-slate-500 mr-1">{isExpanded ? '\u25BC' : '\u25B6'}</span>
+                            {group}
+                          </span>
+                          <span className="text-xs text-slate-500">{groupSelectedCount} / {groupTags.length} selected</span>
+                        </button>
+                      </div>
                       {isExpanded && (
                         <div className="bg-slate-900">
-                          {groupTags.slice(0, 100).map((tag, i) => (
-                            <div key={i} className="flex items-center gap-2 px-4 py-1 border-b border-slate-800 text-xs">
-                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium text-white ${typeBadgeColor[tag.data_type] || 'bg-slate-600'}`}>
-                                {tag.data_type}
-                              </span>
-                              {tag.has_enum && (
-                                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium text-amber-300 bg-amber-900/40">enum</span>
-                              )}
-                              <span className="text-slate-300 font-mono truncate flex-1">{tag.name}</span>
-                              {tag.description && (
-                                <span className="text-slate-500 truncate max-w-48">{tag.description}</span>
-                              )}
-                            </div>
-                          ))}
+                          {groupTags.slice(0, 100).map((tag, i) => {
+                            const checked = selectedNames.has(tag.name);
+                            return (
+                              <div
+                                key={i}
+                                className={`flex items-center gap-2 px-4 py-1 border-b border-slate-800 text-xs cursor-pointer ${checked ? '' : 'opacity-50'}`}
+                                onClick={() => toggleTagSelection(tag.name)}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => toggleTagSelection(tag.name)}
+                                  onClick={e => e.stopPropagation()}
+                                  className="accent-blue-600"
+                                />
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium text-white ${typeBadgeColor[tag.data_type] || 'bg-slate-600'}`}>
+                                  {tag.data_type}
+                                </span>
+                                {tag.has_enum && (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-medium text-amber-300 bg-amber-900/40">enum</span>
+                                )}
+                                <span className="text-slate-300 font-mono truncate flex-1">{tag.name}</span>
+                                {tag.description && (
+                                  <span className="text-slate-500 truncate max-w-48">{tag.description}</span>
+                                )}
+                              </div>
+                            );
+                          })}
                           {groupTags.length > 100 && (
                             <div className="px-4 py-1 text-xs text-slate-500">...and {groupTags.length - 100} more</div>
                           )}
@@ -952,8 +1048,12 @@ function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClos
         {hasData && (
           <div className="flex justify-end gap-2">
             <button onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300">Cancel</button>
-            <button onClick={handleImport} className="px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-700">
-              Import {format === 'hmi_csv' ? rows.length : previewTags.length} Tags
+            <button
+              onClick={handleImport}
+              disabled={selectedCount === 0}
+              className="px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Import {selectedCount} {selectedCount === 1 ? 'Tag' : 'Tags'}
             </button>
           </div>
         )}
@@ -1001,7 +1101,8 @@ function BrowseTagsDialog({ dsId, dsName, existingTags, onCreateTag, onClose }: 
   }, [existingTags, dsId]);
 
   const handleCreate = useCallback((t: BrowsedTag) => {
-    const address = t.node_id || t.address || '';
+    // Prefer relative_address (prefix-stripped) so tags work across machines
+    const address = t.relative_address || t.node_id || t.address || '';
     const name = t.name || t.display_name || '';
     onCreateTag({
       ...EMPTY_TAG,
@@ -1039,12 +1140,19 @@ function BrowseTagsDialog({ dsId, dsName, existingTags, onCreateTag, onClose }: 
               </thead>
               <tbody>
                 {browsedTags.map((t, i) => {
-                  const address = t.node_id || t.address || '';
-                  const alreadyExists = existingAddresses.has(address) || createdAddresses.has(address);
+                  const tagAddress = t.relative_address || t.node_id || t.address || '';
+                  const fullAddress = t.node_id || t.address || '';
+                  const alreadyExists = existingAddresses.has(tagAddress) || existingAddresses.has(fullAddress) || createdAddresses.has(tagAddress);
                   return (
                     <tr key={i} className="border-b border-slate-700/50">
                       <td className="px-3 py-2 text-slate-200">{t.name || t.display_name || '\u2014'}</td>
-                      <td className="px-3 py-2 text-slate-400 font-mono text-xs">{address || '\u2014'}</td>
+                      <td className="px-3 py-2 text-slate-400 font-mono text-xs">
+                        {t.relative_address ? (
+                          <span title={fullAddress}>{t.relative_address}</span>
+                        ) : (
+                          fullAddress || '\u2014'
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-slate-400">{t.data_type || '\u2014'}</td>
                       <td className="px-3 py-2 text-right">
                         {alreadyExists ? (
@@ -1091,7 +1199,7 @@ export function SettingsPage({ user }: Props) {
   const [allLabels, setAllLabels] = useState<TagLabel[]>([]);
   const [editTag, setEditTag] = useState<(Omit<Tag, 'id'> & { id?: number }) | null>(null);
   const [deleteTagTarget, setDeleteTagTarget] = useState<Tag | null>(null);
-  const [showTagImport, setShowCsvImport] = useState(false);
+  const [showTagImport, setShowTagImport] = useState(false);
   const [editLabel, setEditLabel] = useState<{ id?: number; name: string; color: string; description: string } | null>(null);
   const [deleteLabelTarget, setDeleteLabelTarget] = useState<TagLabel | null>(null);
 
@@ -1173,6 +1281,7 @@ export function SettingsPage({ user }: Props) {
   // Tag handlers
   const handleSaveTag = useCallback(async (data: Omit<Tag, 'id'> & { id?: number }) => {
     try {
+      const oldName = data.id != null ? editTag?.name : undefined;
       let savedTag: Tag;
       if (data.id != null) {
         savedTag = await api.updateTag(data.id, data) as Tag;
@@ -1189,12 +1298,22 @@ export function SettingsPage({ user }: Props) {
       for (const lid of oldLabelIds) {
         if (!newLabelIds.has(lid)) await api.removeTagLabel(tagId, lid);
       }
+      // If tag was renamed, offer to update screen references
+      if (oldName && oldName !== data.name) {
+        const doUpdate = confirm(`Tag renamed from "${oldName}" to "${data.name}".\n\nUpdate all screen widget references to use the new name?`);
+        if (doUpdate) {
+          const result = await api.renameTagReferences(oldName, data.name);
+          if (result.updated_screens > 0) {
+            alert(`Updated references in ${result.updated_screens} screen${result.updated_screens === 1 ? '' : 's'}.`);
+          }
+        }
+      }
       setEditTag(null);
       loadTags();
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err));
     }
-  }, [loadTags]);
+  }, [loadTags, editTag]);
 
   const handleDeleteTag = useCallback(async () => {
     if (!deleteTagTarget) return;
@@ -1270,9 +1389,9 @@ export function SettingsPage({ user }: Props) {
     }
   }, [loadTags]);
 
-  const handleCodesysImport = useCallback(async (xml: string, prefix: string) => {
+  const handleCodesysImport = useCallback(async (xml: string, prefix: string, names: string[]) => {
     try {
-      const result = await api.importTagsCodesys(xml, prefix);
+      const result = await api.importTagsCodesys(xml, prefix, names);
       setShowTagImport(false);
       alert(`Imported ${result.imported} tags from CODESYS`);
       loadTags();
@@ -1281,9 +1400,9 @@ export function SettingsPage({ user }: Props) {
     }
   }, [loadTags]);
 
-  const handleRslogixImport = useCallback(async (csv: string, prefix: string) => {
+  const handleRslogixImport = useCallback(async (csv: string, prefix: string, names: string[]) => {
     try {
-      const result = await api.importTagsRslogix500(csv, prefix);
+      const result = await api.importTagsRslogix500(csv, prefix, names);
       setShowTagImport(false);
       alert(`Imported ${result.imported} tags from RSLogix 500`);
       loadTags();
@@ -1472,7 +1591,7 @@ export function SettingsPage({ user }: Props) {
             {canManage && (
               <div className="flex gap-2 ml-auto">
                 <button
-                  onClick={() => setShowCsvImport(true)}
+                  onClick={() => setShowTagImport(true)}
                   className="flex items-center gap-1.5 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm font-medium"
                 >
                   <Upload size={16} /> Import
@@ -1791,6 +1910,9 @@ export function SettingsPage({ user }: Props) {
                   <div className="font-medium text-slate-200">{ds.name}</div>
                   <div className="text-xs text-slate-400">
                     {PROTOCOL_CONFIGS[ds.protocol]?.label || ds.protocol} {'\u2022'} {ds.enabled ? 'Enabled' : 'Disabled'}
+                    {typeof ds.config?.address_prefix === 'string' && (
+                      <span className="ml-1" title={`Detected prefix: ${ds.config.address_prefix}`}> {'\u2022'} Prefix: <span className="font-mono">{ds.config.address_prefix}</span></span>
+                    )}
                   </div>
                 </div>
                 <span className={`text-xs px-2 py-1 rounded flex-shrink-0 ${ds.connected ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>

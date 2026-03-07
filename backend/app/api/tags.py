@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import require_role
 from app.core.database import get_db
+from app.models.screen import Screen
 from app.models.tag import Tag, TagAccessMode, TagDataType, TagLabel, TagTemplate
 from app.models.user import User, UserRole
 from app.services.tag_engine import tag_engine
@@ -469,10 +470,12 @@ async def import_tags_codesys(
 ):
     """Import tags from a CODESYS symbol configuration XML string.
 
-    Body: {"xml": "<Symbolconfiguration>...</Symbolconfiguration>", "prefix": "optional_prefix"}
+    Body: {"xml": "<Symbolconfiguration>...</Symbolconfiguration>", "prefix": "optional_prefix", "names": ["tag1", "tag2"]}
+    Optional 'names' filters to only import the listed tag names.
     """
     xml_str = body.get("xml", "")
     prefix = body.get("prefix", "")
+    selected_names = body.get("names")
     if not xml_str:
         raise HTTPException(status_code=400, detail="Missing 'xml' in body")
 
@@ -483,6 +486,10 @@ async def import_tags_codesys(
 
     if not parsed_tags:
         raise HTTPException(status_code=400, detail="No NodeList found in XML")
+
+    if selected_names is not None:
+        name_set = set(selected_names)
+        parsed_tags = [t for t in parsed_tags if t["name"] in name_set]
 
     created = []
     for td in parsed_tags:
@@ -558,17 +565,23 @@ async def import_tags_rslogix500(
 ):
     """Import tags from RSLogix 500 CSV export.
 
-    Body: {"csv": "raw CSV text", "prefix": "optional_prefix"}
+    Body: {"csv": "raw CSV text", "prefix": "optional_prefix", "names": ["tag1", "tag2"]}
+    Optional 'names' filters to only import the listed tag names.
 
     RSLogix 500 CSV format (no header row):
     address, scope, symbol, desc1, desc2, desc3, desc4, desc5, ...
     """
     csv_str = body.get("csv", "")
     prefix = body.get("prefix", "")
+    selected_names = body.get("names")
     if not csv_str:
         raise HTTPException(status_code=400, detail="Missing 'csv' in body")
 
     parsed_tags = _parse_rslogix500_csv(csv_str, prefix)
+    if selected_names is not None:
+        name_set = set(selected_names)
+        parsed_tags = [t for t in parsed_tags if t["name"] in name_set]
+
     created = []
     for td in parsed_tags:
         tag = Tag(
@@ -723,6 +736,75 @@ async def preview_rslogix500_import(
         g = t.get("group_name") or "Ungrouped"
         groups[g] = groups.get(g, 0) + 1
     return {"total": len(tags), "tags": tags, "groups": groups}
+
+
+# ─── Rename Tag References in Screen Layouts ───
+
+# Top-level widget fields that hold tag names
+_WIDGET_TAG_FIELDS = {"visibleTag", "enabledTag"}
+# Props fields that hold tag names (simple string values)
+_PROPS_TAG_FIELDS = {"tag", "availabilityTag", "performanceTag", "qualityTag", "oeeTag"}
+# Props fields that are arrays of objects with a .tag field
+_PROPS_TAG_ARRAY_FIELDS = {"controls", "tags"}
+
+
+def _rename_tag_in_widget(widget: dict, old_name: str, new_name: str) -> bool:
+    """Replace old_name with new_name in a widget's tag fields. Returns True if changed."""
+    changed = False
+    for field in _WIDGET_TAG_FIELDS:
+        if widget.get(field) == old_name:
+            widget[field] = new_name
+            changed = True
+    props = widget.get("props", {})
+    for field in _PROPS_TAG_FIELDS:
+        if props.get(field) == old_name:
+            props[field] = new_name
+            changed = True
+    for field in _PROPS_TAG_ARRAY_FIELDS:
+        arr = props.get(field)
+        if isinstance(arr, list):
+            for item in arr:
+                if isinstance(item, dict) and item.get("tag") == old_name:
+                    item["tag"] = new_name
+                    changed = True
+    return changed
+
+
+@router.post("/rename-references")
+async def rename_tag_references(
+    body: dict,
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    """Update all screen widget references from old_name to new_name.
+
+    Body: {"old_name": "X", "new_name": "Y"}
+    """
+    old_name = body.get("old_name", "")
+    new_name = body.get("new_name", "")
+    if not old_name or not new_name or old_name == new_name:
+        raise HTTPException(status_code=400, detail="old_name and new_name are required and must differ")
+
+    result = await session.execute(select(Screen))
+    screens = result.scalars().all()
+
+    updated_screens = 0
+    for screen in screens:
+        try:
+            widgets = json.loads(screen.layout)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(widgets, list):
+            continue
+        screen_changed = False
+        for widget in widgets:
+            if _rename_tag_in_widget(widget, old_name, new_name):
+                screen_changed = True
+        if screen_changed:
+            screen.layout = json.dumps(widgets)
+            updated_screens += 1
+
+    return {"updated_screens": updated_screens}
 
 
 # ─── Bulk Tag Operations ───
