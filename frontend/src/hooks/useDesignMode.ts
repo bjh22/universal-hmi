@@ -90,7 +90,7 @@ export function generateWidgetId(): string {
 
 export function useDesignMode(): DesignModeState {
   const [editing, setEditing] = useState(false);
-  const [layoutMode, setLayoutMode] = useState<LayoutMode>('grid');
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>('absolute');
   const [widgets, setWidgets] = useState<Widget[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [clipboard, setClipboard] = useState<Widget[]>([]);
