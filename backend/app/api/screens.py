@@ -19,6 +19,8 @@ class ScreenCreate(BaseModel):
     name: str
     slug: str
     layout: list = []
+    layout_mode: str = "grid"
+    target_resolution: str | None = None
     is_default: bool = False
     sort_order: int = 0
 
@@ -28,6 +30,8 @@ class ScreenOut(BaseModel):
     name: str
     slug: str
     layout: str
+    layout_mode: str
+    target_resolution: str | None
     version: int
     is_default: bool
     sort_order: int
@@ -68,6 +72,8 @@ async def create_screen(
         name=body.name,
         slug=body.slug,
         layout=json.dumps(body.layout),
+        layout_mode=body.layout_mode,
+        target_resolution=body.target_resolution,
         is_default=body.is_default,
         sort_order=body.sort_order,
     )
@@ -103,6 +109,8 @@ async def update_screen(
     screen.name = body.name
     screen.slug = body.slug
     screen.layout = json.dumps(body.layout)
+    screen.layout_mode = body.layout_mode
+    screen.target_resolution = body.target_resolution
     screen.is_default = body.is_default
     screen.sort_order = body.sort_order
     screen.version += 1

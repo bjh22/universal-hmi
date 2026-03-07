@@ -53,11 +53,20 @@ export interface AlarmData {
   trigger_value: string | null;
 }
 
+export type LayoutMode = 'grid' | 'absolute';
+
+export interface ScreenResolution {
+  width: number;
+  height: number;
+}
+
 export interface ScreenData {
   id: number;
   name: string;
   slug: string;
   layout: string;
+  layout_mode: LayoutMode;
+  target_resolution: string | null; // JSON: {"width": 1920, "height": 1080} or null
   version: number;
   is_default: boolean;
   sort_order: number;
