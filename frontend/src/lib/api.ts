@@ -67,6 +67,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ tags }),
     }),
+  importTagsCodesys: (xml: string, prefix?: string) =>
+    request<{ imported: number; names: string[] }>('/tags/import/codesys', {
+      method: 'POST',
+      body: JSON.stringify({ xml, prefix: prefix || '' }),
+    }),
+  importTagsRslogix500: (csv: string, prefix?: string) =>
+    request<{ imported: number; names: string[] }>('/tags/import/rslogix500', {
+      method: 'POST',
+      body: JSON.stringify({ csv, prefix: prefix || '' }),
+    }),
   getTagValues: () => request<Record<string, TagValue>>('/tags/values'),
   writeTag: (name: string, value: unknown) =>
     request('/tags/values/' + encodeURIComponent(name) + '/write', {

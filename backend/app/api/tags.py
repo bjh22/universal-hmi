@@ -1,4 +1,5 @@
 import json
+import xml.etree.ElementTree as ET
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -196,6 +197,314 @@ async def import_tags_csv(
         )
         session.add(tag)
         created.append(tag)
+    await session.flush()
+    for tag in created:
+        await session.refresh(tag)
+        tag_engine.register_tag(tag)
+    return {"imported": len(created), "names": [t.name for t in created]}
+
+
+# ─── CODESYS Symbol Configuration XML Import ───
+
+CODESYS_TYPE_MAP: dict[str, TagDataType] = {
+    "Bool": TagDataType.BOOL,
+    "Int": TagDataType.INT,
+    "UInt": TagDataType.INT,
+    "DInt": TagDataType.INT,
+    "UDInt": TagDataType.INT,
+    "Real": TagDataType.FLOAT,
+    "LReal": TagDataType.FLOAT,
+    "String": TagDataType.STRING,
+    "Word": TagDataType.INT,
+    "DWord": TagDataType.INT,
+    "Byte": TagDataType.INT,
+    "Time": TagDataType.INT,
+}
+
+CODESYS_NS = {"sc": "http://www.3s-software.com/schemas/Symbolconfiguration.xsd"}
+
+
+def _codesys_resolve_typeclass(type_name: str, type_map: dict[str, dict]) -> str | None:
+    """Resolve a CODESYS type name to its typeclass via the TypeList."""
+    info = type_map.get(type_name)
+    if not info:
+        return None
+    tc = info.get("typeclass")
+    if tc and tc != "Enum":
+        return tc
+    # Enums map to their base type
+    if tc == "Enum":
+        base = info.get("basetype")
+        if base:
+            return _codesys_resolve_typeclass(base, type_map)
+    return tc
+
+
+def _codesys_parse_nodes(
+    node_el: ET.Element,
+    path_parts: list[str],
+    type_map: dict[str, dict],
+    ns: dict[str, str],
+) -> list[dict]:
+    """Recursively walk CODESYS Node elements, collecting leaf tags."""
+    tags: list[dict] = []
+    name = node_el.get("name", "")
+    current_path = path_parts + [name] if name else path_parts
+    type_attr = node_el.get("type")
+    access = node_el.get("access", "ReadWrite")
+
+    children = node_el.findall("sc:Node", ns) if ns else node_el.findall("Node")
+    if not children and type_attr:
+        # Check if this is a struct with child fields via type_map
+        type_info = type_map.get(type_attr, {})
+        typeclass = type_info.get("typeclass")
+
+        # Skip complex FB types and arrays
+        if typeclass in ("Array",) or (
+            typeclass == "Userdef"
+            and type_info.get("pouclass") == "STRUCTURE"
+        ):
+            return tags
+
+        resolved = _codesys_resolve_typeclass(type_attr, type_map)
+        data_type = CODESYS_TYPE_MAP.get(resolved or "", TagDataType.FLOAT)
+
+        access_mode = TagAccessMode.READ_WRITE
+        if access == "Read":
+            access_mode = TagAccessMode.READ
+        elif access == "Write":
+            access_mode = TagAccessMode.WRITE
+
+        tag_name = ".".join(current_path)
+        comment_el = node_el.find("sc:Comment", ns) if ns else node_el.find("Comment")
+        description = comment_el.text.strip() if comment_el is not None and comment_el.text else None
+
+        # Use second path part as group (first is usually "Application")
+        group = current_path[1] if len(current_path) > 2 else None
+
+        tags.append({
+            "name": tag_name,
+            "description": description,
+            "group_name": group,
+            "data_type": data_type,
+            "access_mode": access_mode,
+        })
+    else:
+        for child in children:
+            tags.extend(_codesys_parse_nodes(child, current_path, type_map, ns))
+
+    return tags
+
+
+@router.post("/import/codesys")
+async def import_tags_codesys(
+    body: dict,
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    """Import tags from a CODESYS symbol configuration XML string.
+
+    Body: {"xml": "<Symbolconfiguration>...</Symbolconfiguration>", "prefix": "optional_prefix"}
+    """
+    xml_str = body.get("xml", "")
+    prefix = body.get("prefix", "")
+    if not xml_str:
+        raise HTTPException(status_code=400, detail="Missing 'xml' in body")
+
+    try:
+        root = ET.fromstring(xml_str)
+    except ET.ParseError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid XML: {e}")
+
+    # Build type lookup from TypeList
+    type_map: dict[str, dict] = {}
+    ns = CODESYS_NS
+    type_list = root.find("sc:TypeList", ns)
+    if type_list is None:
+        # Try without namespace
+        ns = {}
+        type_list = root.find("TypeList")
+
+    if type_list is not None:
+        for tel in type_list:
+            tname = tel.get("name", "")
+            type_map[tname] = {
+                "typeclass": tel.get("typeclass", ""),
+                "iecname": tel.get("iecname", ""),
+                "basetype": tel.get("basetype", ""),
+                "pouclass": tel.get("pouclass", ""),
+            }
+
+    # Walk NodeList
+    node_list = root.find("sc:NodeList", ns) or root.find("NodeList")
+    if node_list is None:
+        raise HTTPException(status_code=400, detail="No NodeList found in XML")
+
+    parsed_tags: list[dict] = []
+    for top_node in (node_list.findall("sc:Node", ns) if ns else node_list.findall("Node")):
+        parsed_tags.extend(_codesys_parse_nodes(top_node, [], type_map, ns if ns else {}))
+
+    created = []
+    for td in parsed_tags:
+        tag_name = f"{prefix}.{td['name']}" if prefix else td["name"]
+        tag = Tag(
+            name=tag_name,
+            description=td.get("description"),
+            group_name=td.get("group_name"),
+            data_type=td["data_type"],
+            access_mode=td["access_mode"],
+        )
+        session.add(tag)
+        created.append(tag)
+
+    await session.flush()
+    for tag in created:
+        await session.refresh(tag)
+        tag_engine.register_tag(tag)
+    return {"imported": len(created), "names": [t.name for t in created]}
+
+
+# ─── RSLogix 500 CSV Import ───
+
+RSLOGIX_FILE_TYPE_MAP: dict[str, TagDataType] = {
+    "B": TagDataType.BOOL,
+    "N": TagDataType.INT,
+    "F": TagDataType.FLOAT,
+    "T": TagDataType.INT,
+    "C": TagDataType.INT,
+    "R": TagDataType.INT,
+    "S": TagDataType.STRING,
+    "ST": TagDataType.STRING,
+    "O": TagDataType.INT,
+    "I": TagDataType.INT,
+    "L": TagDataType.INT,
+    "A": TagDataType.INT,
+}
+
+
+def _rslogix_parse_address(address: str) -> tuple[str, str]:
+    """Extract file type letter and base address from RSLogix 500 address.
+
+    e.g. 'B3:0/1' -> ('B', 'B3:0/1'), 'N7:0' -> ('N', 'N7:0'), 'F8:0' -> ('F', 'F8:0')
+    """
+    file_letter = ""
+    for ch in address:
+        if ch.isalpha():
+            file_letter += ch
+        else:
+            break
+    return file_letter.upper(), address
+
+
+def _rslogix_build_description(fields: list[str]) -> str:
+    """Build description from RSLogix 500 CSV descriptor columns (columns 3-7)."""
+    parts = [f.strip().strip('"') for f in fields if f.strip().strip('"')]
+    return " ".join(parts)
+
+
+@router.post("/import/rslogix500")
+async def import_tags_rslogix500(
+    body: dict,
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    """Import tags from RSLogix 500 CSV export.
+
+    Body: {"csv": "raw CSV text", "prefix": "optional_prefix"}
+
+    RSLogix 500 CSV format (no header row):
+    address, scope, symbol, desc1, desc2, desc3, desc4, desc5, ...
+    """
+    csv_str = body.get("csv", "")
+    prefix = body.get("prefix", "")
+    if not csv_str:
+        raise HTTPException(status_code=400, detail="Missing 'csv' in body")
+
+    lines = csv_str.strip().split("\n")
+    parsed_tags: list[dict] = []
+    seen_names: set[str] = set()
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+
+        # Split CSV fields (respecting quoted fields)
+        fields: list[str] = []
+        current = ""
+        in_quotes = False
+        for ch in line:
+            if ch == '"':
+                in_quotes = not in_quotes
+            elif ch == ',' and not in_quotes:
+                fields.append(current)
+                current = ""
+                continue
+            current += ch
+        fields.append(current)
+
+        if len(fields) < 3:
+            continue
+
+        address = fields[0].strip()
+        if not address:
+            continue
+
+        # Skip data file descriptors (DFILE, PFILE) and header-only entries
+        if address.startswith("DFILE") or address.startswith("PFILE"):
+            continue
+
+        symbol = fields[2].strip().strip('"')
+        description = _rslogix_build_description(fields[3:8]) if len(fields) > 3 else ""
+
+        file_letter, _ = _rslogix_parse_address(address)
+        data_type = RSLOGIX_FILE_TYPE_MAP.get(file_letter, TagDataType.INT)
+
+        # Use symbol as tag name if available, otherwise use address
+        tag_name = symbol if symbol else address
+        # Replace characters not suitable for tag names
+        tag_name = tag_name.replace("/", "_").replace(":", "_").replace(".", "_")
+
+        if tag_name in seen_names:
+            continue
+        seen_names.add(tag_name)
+
+        # Skip entries with no symbol and no description (metadata rows)
+        if not symbol and not description:
+            continue
+
+        # Determine group from file type
+        group_map: dict[str, str] = {
+            "B": "Bits", "N": "Integers", "F": "Floats",
+            "T": "Timers", "C": "Counters", "R": "Control",
+            "O": "Outputs", "I": "Inputs", "S": "Status",
+            "ST": "Strings", "L": "Long Integers", "A": "ASCII",
+        }
+        group = group_map.get(file_letter, "Other")
+
+        parsed_tags.append({
+            "name": tag_name,
+            "description": description or None,
+            "group_name": group,
+            "data_type": data_type,
+            "access_mode": TagAccessMode.READ_WRITE,
+            "address": address,
+        })
+
+    created = []
+    for td in parsed_tags:
+        tag_name = f"{prefix}.{td['name']}" if prefix else td["name"]
+        tag = Tag(
+            name=tag_name,
+            description=td.get("description"),
+            group_name=td.get("group_name"),
+            data_type=td["data_type"],
+            access_mode=td["access_mode"],
+            address=td.get("address"),
+        )
+        session.add(tag)
+        created.append(tag)
+
     await session.flush()
     for tag in created:
         await session.refresh(tag)

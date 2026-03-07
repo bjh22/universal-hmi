@@ -403,48 +403,127 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
   );
 }
 
-// ─── CSV Import Dialog ───
-function CsvImportDialog({ onImport, onClose }: {
-  onImport: (tags: Record<string, unknown>[]) => void;
+// ─── Tag Import Dialog (HMI CSV, CODESYS XML, RSLogix 500) ───
+type ImportFormat = 'hmi_csv' | 'codesys_xml' | 'rslogix500';
+
+function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClose }: {
+  onImportCsv: (tags: Record<string, unknown>[]) => void;
+  onImportCodesys: (xml: string, prefix: string) => void;
+  onImportRslogix: (csv: string, prefix: string) => void;
   onClose: () => void;
 }) {
+  const [format, setFormat] = useState<ImportFormat>('hmi_csv');
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
+  const [rawContent, setRawContent] = useState('');
+  const [fileName, setFileName] = useState('');
+  const [prefix, setPrefix] = useState('');
+  const [previewLines, setPreviewLines] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const resetState = useCallback(() => {
+    setRows([]);
+    setHeaders([]);
+    setRawContent('');
+    setFileName('');
+    setPreviewLines([]);
+    if (fileRef.current) fileRef.current.value = '';
+  }, []);
+
+  const handleFormatChange = useCallback((f: ImportFormat) => {
+    setFormat(f);
+    resetState();
+  }, [resetState]);
+
+  const handleFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setFileName(file.name);
     const reader = new FileReader();
     reader.onload = () => {
       const text = reader.result as string;
-      const lines = text.split(/\r?\n/).filter(l => l.trim());
-      if (lines.length < 2) return;
-      const hdr = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-      setHeaders(hdr);
-      const parsed = lines.slice(1).map(line => {
-        const vals = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
-        const row: Record<string, string> = {};
-        hdr.forEach((h, i) => { row[h] = vals[i] || ''; });
-        return row;
-      });
-      setRows(parsed);
+      if (format === 'hmi_csv') {
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        if (lines.length < 2) return;
+        const hdr = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+        setHeaders(hdr);
+        const parsed = lines.slice(1).map(line => {
+          const vals = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+          const row: Record<string, string> = {};
+          hdr.forEach((h, i) => { row[h] = vals[i] || ''; });
+          return row;
+        });
+        setRows(parsed);
+      } else {
+        setRawContent(text);
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        setPreviewLines(lines.slice(0, 20));
+      }
     };
     reader.readAsText(file);
+  }, [format]);
+
+  const handleImport = useCallback(() => {
+    if (format === 'hmi_csv') {
+      onImportCsv(rows);
+    } else if (format === 'codesys_xml') {
+      onImportCodesys(rawContent, prefix);
+    } else if (format === 'rslogix500') {
+      onImportRslogix(rawContent, prefix);
+    }
+  }, [format, rows, rawContent, prefix, onImportCsv, onImportCodesys, onImportRslogix]);
+
+  const hasData = format === 'hmi_csv' ? rows.length > 0 : rawContent.length > 0;
+  const fileAccept = format === 'codesys_xml' ? '.xml' : '.csv,.CSV';
+
+  const formatInfo: Record<ImportFormat, { label: string; desc: string }> = {
+    hmi_csv: { label: 'HMI CSV', desc: 'CSV with header row. Columns: name, description, group_name, data_type, access_mode, engineering_units, min_value, max_value, address' },
+    codesys_xml: { label: 'CODESYS XML', desc: 'CODESYS symbol configuration XML exported from the PLC IDE (Symbolconfiguration.xsd)' },
+    rslogix500: { label: 'RSLogix 500', desc: 'RSLogix 500 database CSV export with address, symbol, and description columns' },
   };
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
       <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-3xl max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-slate-100">Import Tags from CSV</h2>
+          <h2 className="text-lg font-semibold text-slate-100">Import Tags</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
         </div>
-        <div className="mb-4">
-          <p className="text-xs text-slate-400 mb-2">CSV must have a header row. Supported columns: name, description, group_name, data_type, access_mode, engineering_units, min_value, max_value, address</p>
-          <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} className="text-sm text-slate-300" />
+
+        {/* Format selector */}
+        <div className="flex gap-2 mb-4">
+          {(Object.keys(formatInfo) as ImportFormat[]).map(f => (
+            <button
+              key={f}
+              onClick={() => handleFormatChange(f)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${format === f ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+            >
+              {formatInfo[f].label}
+            </button>
+          ))}
         </div>
-        {rows.length > 0 && (
+
+        <div className="mb-4">
+          <p className="text-xs text-slate-400 mb-2">{formatInfo[format].desc}</p>
+          <input ref={fileRef} type="file" accept={fileAccept} onChange={handleFile} className="text-sm text-slate-300" />
+        </div>
+
+        {/* Optional prefix for PLC imports */}
+        {format !== 'hmi_csv' && (
+          <div className="mb-4">
+            <label className="block text-xs text-slate-400 mb-1">Tag name prefix (optional)</label>
+            <input
+              type="text"
+              value={prefix}
+              onChange={e => setPrefix(e.target.value)}
+              placeholder="e.g. PLC1"
+              className="w-48 px-3 py-1.5 bg-slate-900 border border-slate-600 rounded-lg text-sm text-slate-200"
+            />
+          </div>
+        )}
+
+        {/* HMI CSV preview */}
+        {format === 'hmi_csv' && rows.length > 0 && (
           <>
             <div className="text-sm text-slate-300 mb-2">{rows.length} tags to import</div>
             <div className="max-h-60 overflow-auto mb-4">
@@ -466,11 +545,29 @@ function CsvImportDialog({ onImport, onClose }: {
                 </tbody>
               </table>
             </div>
-            <div className="flex justify-end gap-2">
-              <button onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300">Cancel</button>
-              <button onClick={() => onImport(rows)} className="px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-700">Import {rows.length} Tags</button>
+          </>
+        )}
+
+        {/* PLC file preview */}
+        {format !== 'hmi_csv' && rawContent && (
+          <>
+            <div className="text-sm text-slate-300 mb-2">File loaded: {fileName}</div>
+            <div className="max-h-48 overflow-auto mb-4 bg-slate-900 rounded-lg p-3 font-mono text-xs text-slate-400">
+              {previewLines.map((line, i) => (
+                <div key={i} className="truncate">{line}</div>
+              ))}
+              {previewLines.length >= 20 && <div className="text-slate-500 mt-1">...</div>}
             </div>
           </>
+        )}
+
+        {hasData && (
+          <div className="flex justify-end gap-2">
+            <button onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300">Cancel</button>
+            <button onClick={handleImport} className="px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-700">
+              Import{format === 'hmi_csv' ? ` ${rows.length} Tags` : ' Tags'}
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -602,7 +699,7 @@ export function SettingsPage({ user }: Props) {
   const [allLabels, setAllLabels] = useState<TagLabel[]>([]);
   const [editTag, setEditTag] = useState<(Omit<Tag, 'id'> & { id?: number }) | null>(null);
   const [deleteTagTarget, setDeleteTagTarget] = useState<Tag | null>(null);
-  const [showCsvImport, setShowCsvImport] = useState(false);
+  const [showTagImport, setShowCsvImport] = useState(false);
   const [editLabel, setEditLabel] = useState<{ id?: number; name: string; color: string; description: string } | null>(null);
   const [deleteLabelTarget, setDeleteLabelTarget] = useState<TagLabel | null>(null);
 
@@ -696,8 +793,30 @@ export function SettingsPage({ user }: Props) {
   const handleCsvImport = useCallback(async (rows: Record<string, unknown>[]) => {
     try {
       const result = await api.importTagsCsv(rows);
-      setShowCsvImport(false);
+      setShowTagImport(false);
       alert(`Imported ${result.imported} tags`);
+      loadTags();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
+  }, [loadTags]);
+
+  const handleCodesysImport = useCallback(async (xml: string, prefix: string) => {
+    try {
+      const result = await api.importTagsCodesys(xml, prefix);
+      setShowTagImport(false);
+      alert(`Imported ${result.imported} tags from CODESYS`);
+      loadTags();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
+  }, [loadTags]);
+
+  const handleRslogixImport = useCallback(async (csv: string, prefix: string) => {
+    try {
+      const result = await api.importTagsRslogix500(csv, prefix);
+      setShowTagImport(false);
+      alert(`Imported ${result.imported} tags from RSLogix 500`);
       loadTags();
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err));
@@ -875,7 +994,7 @@ export function SettingsPage({ user }: Props) {
                   onClick={() => setShowCsvImport(true)}
                   className="flex items-center gap-1.5 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm font-medium"
                 >
-                  <Upload size={16} /> Import CSV
+                  <Upload size={16} /> Import Tags
                 </button>
                 <button
                   onClick={() => setEditTag({ ...EMPTY_TAG })}
@@ -953,7 +1072,7 @@ export function SettingsPage({ user }: Props) {
 
           {editTag && <TagDialog tag={editTag} dataSources={dataSources} allLabels={allLabels} onSave={handleSaveTag} onClose={() => setEditTag(null)} />}
           {deleteTagTarget && <DeleteConfirmDialog title="Delete Tag" name={deleteTagTarget.name} onConfirm={handleDeleteTag} onCancel={() => setDeleteTagTarget(null)} />}
-          {showCsvImport && <CsvImportDialog onImport={handleCsvImport} onClose={() => setShowCsvImport(false)} />}
+          {showTagImport && <TagImportDialog onImportCsv={handleCsvImport} onImportCodesys={handleCodesysImport} onImportRslogix={handleRslogixImport} onClose={() => setShowTagImport(false)} />}
 
           {/* Label Management */}
           <div className="mt-6">
