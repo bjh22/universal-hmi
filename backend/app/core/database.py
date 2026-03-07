@@ -27,6 +27,7 @@ async def init_db():
         await conn.run_sync(Base.metadata.create_all)
         # Lightweight column migrations for SQLite (no Alembic)
         await _add_column_if_missing(conn, "tags", "long_description", "TEXT")
+        await _add_column_if_missing(conn, "screens", "layout_mode", "VARCHAR(20) NOT NULL DEFAULT 'grid'")
 
 
 async def _add_column_if_missing(conn, table: str, column: str, col_type: str):
