@@ -147,7 +147,7 @@ cmd_dev() {
   echo "==> Starting backend and frontend dev servers..."
   echo "    Backend:  http://localhost:8080"
   echo "    Frontend: http://localhost:5173"
-  (cd "$ROOT_DIR/backend" && python run.py) &
+  (cd "$ROOT_DIR/backend" && "$PY" run.py) &
   BACKEND_PID=$!
   (cd "$ROOT_DIR/frontend" && npm run dev) &
   FRONTEND_PID=$!
@@ -158,7 +158,7 @@ cmd_dev() {
 cmd_seed() {
   check_python
   echo "==> Seeding database..."
-  cd "$ROOT_DIR/backend" && python -m app.seed
+  cd "$ROOT_DIR/backend" && "$PY" -m app.seed
 }
 
 cmd_install() {
