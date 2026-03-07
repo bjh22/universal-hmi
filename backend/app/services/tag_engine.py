@@ -23,9 +23,9 @@ logger = logging.getLogger(__name__)
 
 
 class TagValue:
-    __slots__ = ("tag_id", "name", "value", "quality", "timestamp", "data_type", "long_description")
+    __slots__ = ("tag_id", "name", "value", "quality", "timestamp", "data_type", "long_description", "description")
 
-    def __init__(self, tag_id: int, name: str, value, data_type: str, long_description: str | None = None):
+    def __init__(self, tag_id: int, name: str, value, data_type: str, long_description: str | None = None, description: str | None = None):
         self.tag_id = tag_id
         self.name = name
         self.value = value
@@ -33,6 +33,7 @@ class TagValue:
         self.timestamp = datetime.now(timezone.utc)
         self.data_type = data_type
         self.long_description = long_description
+        self.description = description
 
     def to_dict(self) -> dict:
         d = {
@@ -44,6 +45,8 @@ class TagValue:
         }
         if self.long_description:
             d["long_description"] = self.long_description
+        if self.description:
+            d["description"] = self.description
         return d
 
 
@@ -72,6 +75,7 @@ class TagEngine:
             self._values[tag.name] = TagValue(
                 tag_id=tag.id, name=tag.name, value=initial_value,
                 data_type=tag.data_type.value, long_description=tag.long_description,
+                description=tag.description,
             )
 
     def _get_initial_value(self, tag: Tag):
@@ -104,6 +108,7 @@ class TagEngine:
         self._values[tag.name] = TagValue(
             tag_id=tag.id, name=tag.name, value=initial_value,
             data_type=tag.data_type.value, long_description=tag.long_description,
+            description=tag.description,
         )
 
     def get_value(self, tag_name: str) -> TagValue | None:

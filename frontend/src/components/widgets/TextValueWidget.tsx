@@ -33,7 +33,7 @@ export function TextValueWidget({ title, tag, tagValues, units, format, titleSty
         {display}
         {units && <span className="text-sm font-normal text-slate-400 ml-1">{units}</span>}
       </div>
-      {shouldShowExtras(chrome) && tv && <div className="text-xs text-slate-500 mt-1">{tag}</div>}
+      {shouldShowExtras(chrome) && tv && <div className="text-xs text-slate-500 mt-1">{tv.description || tag}</div>}
     </div>
   );
 }

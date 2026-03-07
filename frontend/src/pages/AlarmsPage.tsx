@@ -48,7 +48,8 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         return (a.message?.toLowerCase().includes(q) ||
-                a.tag_name?.toLowerCase().includes(q));
+                a.tag_name?.toLowerCase().includes(q) ||
+                a.tag_display_name?.toLowerCase().includes(q));
       }
       return true;
     });
@@ -66,7 +67,7 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
           cmp = new Date(a.triggered_at).getTime() - new Date(b.triggered_at).getTime();
           break;
         case 'tag_name':
-          cmp = (a.tag_name || '').localeCompare(b.tag_name || '');
+          cmp = (a.tag_display_name || a.tag_name || '').localeCompare(b.tag_display_name || b.tag_name || '');
           break;
         case 'message':
           cmp = (a.message || '').localeCompare(b.message || '');
@@ -106,9 +107,9 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
   };
 
   const exportCsv = useCallback(() => {
-    const header = 'Severity,State,Tag,Message,Triggered At,Acknowledged At,Acknowledged By,Trigger Value';
+    const header = 'Severity,State,Tag,Display Name,Message,Triggered At,Acknowledged At,Acknowledged By,Trigger Value';
     const rows = displayAlarms.map(a =>
-      [a.severity, a.state, a.tag_name || '', `"${(a.message || '').replace(/"/g, '""')}"`,
+      [a.severity, a.state, a.tag_name || '', a.tag_display_name || '', `"${(a.message || '').replace(/"/g, '""')}"`,
        a.triggered_at, a.acknowledged_at || '', a.acknowledged_by || '', a.trigger_value || ''].join(',')
     );
     const csv = [header, ...rows].join('\n');
@@ -231,7 +232,7 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
               <div className="text-sm font-medium text-slate-200">{alarm.message}</div>
               <div className="text-xs text-slate-400">
                 {new Date(alarm.triggered_at).toLocaleString()}
-                {alarm.tag_name && ` \u2022 ${alarm.tag_name}`}
+                {(alarm.tag_display_name || alarm.tag_name) && ` \u2022 ${alarm.tag_display_name || alarm.tag_name}`}
                 {alarm.trigger_value && ` \u2022 Value: ${alarm.trigger_value}`}
               </div>
             </div>

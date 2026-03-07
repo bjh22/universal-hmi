@@ -301,10 +301,10 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
               )}
             </div>
           </Field>
-          <Field label="Description">
-            <input value={form.description || ''} onChange={e => set('description', e.target.value || null)} className={inputCls} />
+          <Field label="Display Name">
+            <input value={form.description || ''} onChange={e => set('description', e.target.value || null)} className={inputCls} placeholder="Friendly name shown to operators instead of the tag name" />
           </Field>
-          <Field label="Long Description">
+          <Field label="Description">
             <textarea
               value={form.long_description || ''}
               onChange={e => set('long_description', e.target.value || null)}
@@ -852,7 +852,7 @@ function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClos
   const fileAccept = format === 'codesys_xml' ? '.xml' : '.csv,.CSV';
 
   const formatInfo: Record<ImportFormat, { label: string; desc: string }> = {
-    hmi_csv: { label: 'HMI CSV', desc: 'CSV with header row. Columns: name, description, group_name, data_type, access_mode, engineering_units, min_value, max_value, address' },
+    hmi_csv: { label: 'HMI CSV', desc: 'CSV with header row. Columns: name, description (Display Name), group_name, data_type, access_mode, engineering_units, min_value, max_value, address' },
     codesys_xml: { label: 'CODESYS XML', desc: 'CODESYS symbol configuration XML exported from the PLC IDE. Structures, function blocks, enums, and arrays are expanded into flat tags.' },
     rslogix500: { label: 'RSLogix 500', desc: 'RSLogix 500 database CSV export. Addresses are mapped to typed tags grouped by data file (B=Bits, N=Integers, F=Floats, T=Timers, C=Counters).' },
   };
@@ -1733,8 +1733,8 @@ export function SettingsPage({ user }: Props) {
                       </td>
                     )}
                     <td className="px-4 py-2">
-                      <div className="text-slate-200">{tag.name}</div>
-                      {tag.description && <div className="text-[10px] text-slate-500 truncate max-w-48">{tag.description}</div>}
+                      <div className="text-slate-200">{tag.description || tag.name}</div>
+                      {tag.description && <div className="text-[10px] text-slate-500 font-mono truncate max-w-48">{tag.name}</div>}
                     </td>
                     <td className="px-4 py-2">
                       <div className="flex flex-wrap gap-1">

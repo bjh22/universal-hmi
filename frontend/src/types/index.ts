@@ -5,6 +5,7 @@ export interface TagValue {
   quality: string;
   timestamp: string;
   long_description?: string;
+  description?: string;
 }
 
 export interface TagLabel {
@@ -55,6 +56,7 @@ export interface AlarmData {
   id: number;
   tag_id: number;
   tag_name?: string;
+  tag_display_name?: string;
   message: string;
   severity: 'info' | 'warning' | 'critical';
   state: 'active_unacked' | 'active_acked' | 'inactive_unacked' | 'inactive';

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { ClipboardList, Download, Plus, Trash2, Edit, Copy, Upload, Save, X, Search, History, Shield, ChevronDown, ChevronRight, Tag as TagIcon } from 'lucide-react';
 import { api } from '../lib/api';
+import { getTagDisplayName, buildTagDisplayNameMap } from '../lib/tagDisplayName';
 import { NumericKeypad, AlphaKeyboard } from '../components/widgets/TouchInput';
 import type { JobData, JobHistoryEntry, Tag, UserData } from '../types';
 
@@ -27,6 +28,11 @@ function SetpointEditor({ value, onChange, tags }: {
 }) {
   const entries = Object.entries(value);
   const [keypad, setKeypad] = useState<{ key: string; kind: 'numeric' | 'alpha' } | null>(null);
+
+  const tagDisplayName = (name: string) => {
+    const t = tags.find(t => t.name === name);
+    return t?.description || name;
+  };
 
   const addRow = () => {
     onChange({ ...value, '': '' });
@@ -66,13 +72,16 @@ function SetpointEditor({ value, onChange, tags }: {
       {entries.map(([key, val], idx) => (
         <div key={idx} className="flex gap-2 items-center">
           <div className="flex-1">
-            <input
-              list="tag-names"
+            <select
               value={key}
               onChange={e => updateKey(key, e.target.value, idx)}
-              placeholder="Tag name"
               className={inputCls + ' text-xs'}
-            />
+            >
+              <option value="">Select tag…</option>
+              {tags.filter(t => t.access_mode !== 'read' && !t.name.startsWith('$')).map(t => (
+                <option key={t.id} value={t.name}>{t.description || t.name}</option>
+              ))}
+            </select>
           </div>
           <button
             type="button"
@@ -90,13 +99,10 @@ function SetpointEditor({ value, onChange, tags }: {
           </button>
         </div>
       ))}
-      <datalist id="tag-names">
-        {tags.map(t => <option key={t.id} value={t.name} />)}
-      </datalist>
       {keypad?.kind === 'numeric' && (
         <NumericKeypad
           value={String(value[keypad.key] ?? '')}
-          title={keypad.key || 'Setpoint Value'}
+          title={tagDisplayName(keypad.key) || 'Setpoint Value'}
           onSubmit={val => { updateValue(keypad.key, val); setKeypad(null); }}
           onClose={() => setKeypad(null)}
         />
@@ -104,7 +110,7 @@ function SetpointEditor({ value, onChange, tags }: {
       {keypad?.kind === 'alpha' && (
         <AlphaKeyboard
           value={String(value[keypad.key] ?? '')}
-          title={keypad.key || 'Setpoint Value'}
+          title={tagDisplayName(keypad.key) || 'Setpoint Value'}
           onSubmit={val => { updateValue(keypad.key, val); setKeypad(null); }}
           onClose={() => setKeypad(null)}
         />
@@ -114,12 +120,18 @@ function SetpointEditor({ value, onChange, tags }: {
 }
 
 // ─── Download Conditions Editor ───
-function ConditionsEditor({ value, onChange }: {
+function ConditionsEditor({ value, onChange, tags }: {
   value: { guards: { tag: string; value: unknown }[] };
   onChange: (v: { guards: { tag: string; value: unknown }[] }) => void;
+  tags: Tag[];
 }) {
   const guards = value.guards || [];
   const [keypad, setKeypad] = useState<{ idx: number; kind: 'numeric' | 'alpha' } | null>(null);
+
+  const tagDisplayName = (name: string) => {
+    const t = tags.find(t => t.name === name);
+    return t?.description || name;
+  };
 
   const addGuard = () => {
     onChange({ guards: [...guards, { tag: '', value: '' }] });
@@ -155,13 +167,16 @@ function ConditionsEditor({ value, onChange }: {
       {guards.map((g, idx) => (
         <div key={idx} className="flex gap-2 items-center">
           <div className="flex-1">
-            <input
-              list="tag-names"
+            <select
               value={g.tag}
               onChange={e => updateGuard(idx, 'tag', e.target.value)}
-              placeholder="Tag name"
               className={inputCls + ' text-xs'}
-            />
+            >
+              <option value="">Select tag…</option>
+              {tags.filter(t => !t.name.startsWith('$')).map(t => (
+                <option key={t.id} value={t.name}>{t.description || t.name}</option>
+              ))}
+            </select>
           </div>
           <span className="text-sm text-slate-500">=</span>
           <button
@@ -183,7 +198,7 @@ function ConditionsEditor({ value, onChange }: {
       {keypad?.kind === 'numeric' && (
         <NumericKeypad
           value={String(guards[keypad.idx].value ?? '')}
-          title={guards[keypad.idx].tag || 'Guard Value'}
+          title={tagDisplayName(guards[keypad.idx].tag) || 'Guard Value'}
           onSubmit={val => { updateGuard(keypad.idx, 'value', val); setKeypad(null); }}
           onClose={() => setKeypad(null)}
         />
@@ -191,7 +206,7 @@ function ConditionsEditor({ value, onChange }: {
       {keypad?.kind === 'alpha' && (
         <AlphaKeyboard
           value={String(guards[keypad.idx].value ?? '')}
-          title={guards[keypad.idx].tag || 'Guard Value'}
+          title={tagDisplayName(guards[keypad.idx].tag) || 'Guard Value'}
           onSubmit={val => { updateGuard(keypad.idx, 'value', val); setKeypad(null); }}
           onClose={() => setKeypad(null)}
         />
@@ -295,7 +310,7 @@ function UploadDialog({ tags, onClose, onUploaded }: {
   const filteredTags = useMemo(() => {
     if (!tagSearch) return writableTags;
     const q = tagSearch.toLowerCase();
-    return writableTags.filter(t => t.name.toLowerCase().includes(q) || (t.group_name || '').toLowerCase().includes(q));
+    return writableTags.filter(t => t.name.toLowerCase().includes(q) || (t.description || '').toLowerCase().includes(q) || (t.group_name || '').toLowerCase().includes(q));
   }, [writableTags, tagSearch]);
 
   const toggleAll = () => {
@@ -361,7 +376,7 @@ function UploadDialog({ tags, onClose, onUploaded }: {
                     }}
                     className="accent-blue-500 w-5 h-5"
                   />
-                  <span className="text-slate-300">{t.name}</span>
+                  <span className="text-slate-300">{t.description || t.name}</span>
                   {t.labels?.map(l => (
                     <span key={l.id} className="px-1.5 py-0.5 rounded text-[10px] font-medium" style={{ backgroundColor: (l.color || '#6b7280') + '20', color: l.color || '#6b7280' }}>{l.name}</span>
                   ))}
@@ -427,11 +442,12 @@ export function JobsPage({ user }: Props) {
     const job = jobs.find(j => j.id === id);
     if (!job) return;
     const setpoints = JSON.parse(job.setpoints || '{}');
-    const params = Object.entries(setpoints).map(([k, v]) => `  ${k}: ${v}`).join('\n');
+    const displayMap = buildTagDisplayNameMap(tags);
+    const params = Object.entries(setpoints).map(([k, v]) => `  ${displayMap[k] || k}: ${v}`).join('\n');
     const conditions = job.download_conditions ? JSON.parse(job.download_conditions) : null;
     let msg = `Download job "${job.name}" to machine?\n\nSetpoints:\n${params || '(none)'}`;
     if (conditions?.guards?.length) {
-      msg += `\n\nPre-conditions:\n${conditions.guards.map((g: { tag: string; value: unknown }) => `  ${g.tag} = ${g.value}`).join('\n')}`;
+      msg += `\n\nPre-conditions:\n${conditions.guards.map((g: { tag: string; value: unknown }) => `  ${displayMap[g.tag] || g.tag} = ${g.value}`).join('\n')}`;
     }
     if (!window.confirm(msg)) return;
     try {
@@ -579,7 +595,7 @@ export function JobsPage({ user }: Props) {
                 <TagIcon size={12} className="mt-0.5 text-blue-400 flex-shrink-0" />
                 <span>
                   Default setpoints from <span className="text-blue-400 font-medium">Job Setpoint</span> tags:{' '}
-                  {jobSetpointTags.map(t => t.name).join(', ')}
+                  {jobSetpointTags.map(t => t.description || t.name).join(', ')}
                 </span>
               </div>
             )}
@@ -704,7 +720,7 @@ export function JobsPage({ user }: Props) {
                   />
                 </div>
                 <SetpointEditor value={editSetpoints} onChange={setEditSetpoints} tags={tags} />
-                <ConditionsEditor value={editConditions} onChange={setEditConditions} />
+                <ConditionsEditor value={editConditions} onChange={setEditConditions} tags={tags} />
                 <div className="flex gap-3 pt-2">
                   <button
                     onClick={handleSaveEdit}
@@ -743,7 +759,7 @@ export function JobsPage({ user }: Props) {
                         <tbody>
                           {entries.map(([k, v]) => (
                             <tr key={k} className="border-b border-slate-700/50">
-                              <td className="px-4 py-3 text-slate-300 font-mono text-sm">{k}</td>
+                              <td className="px-4 py-3 text-slate-300 text-sm">{getTagDisplayName(k, tags)}</td>
                               <td className="px-4 py-3 text-slate-200 text-right text-sm">{String(v)}</td>
                             </tr>
                           ))}
@@ -767,7 +783,7 @@ export function JobsPage({ user }: Props) {
                           <tbody>
                             {guards.map((g: { tag: string; value: unknown }, i: number) => (
                               <tr key={i} className="border-b border-slate-700/50">
-                                <td className="px-4 py-3 text-slate-300 font-mono text-sm">{g.tag}</td>
+                                <td className="px-4 py-3 text-slate-300 text-sm">{getTagDisplayName(g.tag, tags)}</td>
                                 <td className="px-4 py-3 text-sm text-slate-500">=</td>
                                 <td className="px-4 py-3 text-slate-200 text-sm">{String(g.value)}</td>
                               </tr>
