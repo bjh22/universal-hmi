@@ -1,15 +1,26 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useAuthState } from './hooks/useAuth';
-import { DashboardPage } from './pages/DashboardPage';
-import { AlarmsPage } from './pages/AlarmsPage';
-import { TrendsPage } from './pages/TrendsPage';
-import { JobsPage } from './pages/JobsPage';
-import { ReportsPage } from './pages/ReportsPage';
-import { SettingsPage } from './pages/SettingsPage';
-import { ProjectsPage } from './pages/ProjectsPage';
 import { LoginPage } from './pages/LoginPage';
+
+// Lazy-load page components for code splitting
+const DashboardPage = lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
+const AlarmsPage = lazy(() => import('./pages/AlarmsPage').then(m => ({ default: m.AlarmsPage })));
+const TrendsPage = lazy(() => import('./pages/TrendsPage').then(m => ({ default: m.TrendsPage })));
+const JobsPage = lazy(() => import('./pages/JobsPage').then(m => ({ default: m.JobsPage })));
+const ReportsPage = lazy(() => import('./pages/ReportsPage').then(m => ({ default: m.ReportsPage })));
+const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
+const ProjectsPage = lazy(() => import('./pages/ProjectsPage').then(m => ({ default: m.ProjectsPage })));
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center h-64">
+      <div className="text-slate-400 text-sm">Loading...</div>
+    </div>
+  );
+}
 
 export default function App() {
   const { tagValues, alarms, connected } = useWebSocket();
@@ -31,16 +42,18 @@ export default function App() {
               alarms={alarms}
               onLogout={auth.logout}
             >
-              <Routes>
-                <Route path="/" element={<DashboardPage tagValues={tagValues} alarms={alarms} userRole={auth.user?.role} />} />
-                <Route path="/screen/:slug" element={<DashboardPage tagValues={tagValues} alarms={alarms} userRole={auth.user?.role} />} />
-                <Route path="/alarms" element={<AlarmsPage realtimeAlarms={alarms} />} />
-                <Route path="/trends" element={<TrendsPage />} />
-                <Route path="/jobs" element={<JobsPage user={auth.user} />} />
-                <Route path="/reports" element={<ReportsPage />} />
-                <Route path="/projects" element={<ProjectsPage user={auth.user} />} />
-                <Route path="/settings" element={<SettingsPage user={auth.user} tagValues={tagValues} />} />
-              </Routes>
+              <Suspense fallback={<PageLoader />}>
+                <Routes>
+                  <Route path="/" element={<DashboardPage tagValues={tagValues} alarms={alarms} userRole={auth.user?.role} />} />
+                  <Route path="/screen/:slug" element={<DashboardPage tagValues={tagValues} alarms={alarms} userRole={auth.user?.role} />} />
+                  <Route path="/alarms" element={<AlarmsPage realtimeAlarms={alarms} />} />
+                  <Route path="/trends" element={<TrendsPage />} />
+                  <Route path="/jobs" element={<JobsPage user={auth.user} />} />
+                  <Route path="/reports" element={<ReportsPage />} />
+                  <Route path="/projects" element={<ProjectsPage user={auth.user} />} />
+                  <Route path="/settings" element={<SettingsPage user={auth.user} tagValues={tagValues} />} />
+                </Routes>
+              </Suspense>
             </AppShell>
           }
         />

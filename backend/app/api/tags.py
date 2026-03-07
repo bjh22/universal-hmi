@@ -92,7 +92,7 @@ async def list_tags(
     project_id: int | None = None,
     session: AsyncSession = Depends(get_db),
 ):
-    query = select(Tag).order_by(Tag.group_name, Tag.name)
+    query = select(Tag).options(selectinload(Tag.labels)).order_by(Tag.group_name, Tag.name)
     if group:
         query = query.where(Tag.group_name == group)
     if project_id is not None:
@@ -785,7 +785,10 @@ async def rename_tag_references(
     if not old_name or not new_name or old_name == new_name:
         raise HTTPException(status_code=400, detail="old_name and new_name are required and must differ")
 
-    result = await session.execute(select(Screen))
+    # Only load screens whose layout JSON contains the old tag name
+    result = await session.execute(
+        select(Screen).where(Screen.layout.contains(old_name))
+    )
     screens = result.scalars().all()
 
     updated_screens = 0

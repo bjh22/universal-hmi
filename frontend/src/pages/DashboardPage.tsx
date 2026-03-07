@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, memo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { api } from '../lib/api';
@@ -368,99 +368,35 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
       </div>
 
       {/* Widget rendering */}
-      {(() => {
-        // Build set of hidden container IDs for visibility cascading
-        const hiddenContainers = new Set<string>();
-        runtimeWidgets.forEach(w => {
-          if (w.type === 'container') {
-            const vis = (w.visible !== false)
-              && (!w.visibleTag || !!tagValues[w.visibleTag]?.value)
-              && (!w.visibleRoles?.length || (userRole && w.visibleRoles.includes(userRole)));
-            if (!vis) hiddenContainers.add(w.id);
-          }
-        });
-
-        const renderWidget = (w: typeof runtimeWidgets[number], index: number, isAbsolute: boolean) => {
-          // Cascade container visibility to children
-          if (w.parentId && hiddenContainers.has(w.parentId)) return null;
-
-          const visibleByProp = w.visible !== false;
-          const visibleByTag = w.visibleTag ? !!tagValues[w.visibleTag]?.value : true;
-          const visibleByRole = !w.visibleRoles || w.visibleRoles.length === 0 || (userRole && w.visibleRoles.includes(userRole));
-          if (!visibleByProp || !visibleByTag || !visibleByRole) return null;
-
-          const enabledByProp = w.enabled !== false;
-          const enabledByTag = w.enabledTag ? !!tagValues[w.enabledTag]?.value : true;
-          const enabledByRole = !w.enabledRoles || w.enabledRoles.length === 0 || (userRole && w.enabledRoles.includes(userRole));
-          const isEnabled = enabledByProp && enabledByTag && enabledByRole;
-
-          const tagName = (w.props as Record<string, unknown>).tag as string | undefined;
-          const longDesc = tagName ? tagValues[tagName]?.long_description : undefined;
-          // For containers, fall back to the description prop for info button
-          const containerDesc = w.type === 'container' ? (w.props as Record<string, unknown>).description as string : undefined;
-          const infoDesc = longDesc || containerDesc;
-          const showInfoBtn = w.showInfo !== false && !!infoDesc;
-
-          if (isAbsolute) {
-            return (
-              <div
-                key={w.id}
-                className={`absolute ${isEnabled ? '' : 'opacity-50 pointer-events-none'}`}
-                style={{
-                  left: w.x,
-                  top: w.y,
-                  width: w.w,
-                  height: w.h,
-                  zIndex: index,
-                }}
-              >
-                {showInfoBtn && <InfoButton description={infoDesc!} title={(w.props as Record<string, unknown>).title as string} />}
-                <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} />
-              </div>
-            );
-          }
-
-          return (
-            <div
-              key={w.id}
-              style={{
-                gridColumn: `${w.x + 1} / span ${w.w}`,
-                gridRow: `${w.y + 1} / span ${w.h}`,
-              }}
-              className={`relative ${isEnabled ? '' : 'opacity-50 pointer-events-none'}`}
-            >
-              {showInfoBtn && <InfoButton description={infoDesc!} title={(w.props as Record<string, unknown>).title as string} />}
-              <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} />
-            </div>
-          );
-        };
-
-        return screenLayoutMode === 'absolute' && screenResolution ? (
-          /* Absolute mode: scaled canvas with letterboxing */
-          <div ref={absContainerRef} className="flex-1 relative bg-black overflow-hidden" style={{ minHeight: 400 }}>
-            <div
-              style={{
-                width: screenResolution.width,
-                height: screenResolution.height,
-                transform: `translate(${absOffset.x}px, ${absOffset.y}px) scale(${absScale})`,
-                transformOrigin: 'top left',
-                position: 'absolute',
-                background: '#0f172a',
-              }}
-            >
-              {runtimeWidgets.map((w, index) => renderWidget(w, index, true))}
-            </div>
-          </div>
-        ) : (
-          /* Grid mode: CSS grid layout */
+      {screenLayoutMode === 'absolute' && screenResolution ? (
+        /* Absolute mode: scaled canvas with letterboxing */
+        <div ref={absContainerRef} className="flex-1 relative bg-black overflow-hidden" style={{ minHeight: 400 }}>
           <div
-            className="grid gap-4"
-            style={{ gridTemplateColumns: 'repeat(12, 1fr)', gridAutoRows: '80px' }}
+            style={{
+              width: screenResolution.width,
+              height: screenResolution.height,
+              transform: `translate(${absOffset.x}px, ${absOffset.y}px) scale(${absScale})`,
+              transformOrigin: 'top left',
+              position: 'absolute',
+              background: '#0f172a',
+            }}
           >
-            {runtimeWidgets.map((w, index) => renderWidget(w, index, false))}
+            {runtimeWidgets.map((w, index) => (
+              <RuntimeWidget key={w.id} widget={w} index={index} isAbsolute tagValues={tagValues} alarms={alarms} userRole={userRole} allWidgets={runtimeWidgets} />
+            ))}
           </div>
-        );
-      })()}
+        </div>
+      ) : (
+        /* Grid mode: CSS grid layout */
+        <div
+          className="grid gap-4"
+          style={{ gridTemplateColumns: 'repeat(12, 1fr)', gridAutoRows: '80px' }}
+        >
+          {runtimeWidgets.map((w, index) => (
+            <RuntimeWidget key={w.id} widget={w} index={index} isAbsolute={false} tagValues={tagValues} alarms={alarms} userRole={userRole} allWidgets={runtimeWidgets} />
+          ))}
+        </div>
+      )}
 
       {runtimeWidgets.length === 0 && !activeScreen && (
         <div className="text-center text-slate-500 mt-20">
@@ -570,3 +506,98 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
     </div>
   );
 }
+
+// ─── Memoized runtime widget wrapper ───
+// Avoids rebuilding visibility/enabled logic for every widget on each tagValues change.
+// Only re-renders when the specific tags this widget cares about change.
+interface RuntimeWidgetProps {
+  widget: Widget;
+  index: number;
+  isAbsolute: boolean;
+  tagValues: Record<string, TagValue>;
+  alarms: AlarmData[];
+  userRole?: string;
+  allWidgets: Widget[];
+}
+
+const RuntimeWidget = memo(function RuntimeWidget({ widget: w, index, isAbsolute, tagValues, alarms, userRole, allWidgets }: RuntimeWidgetProps) {
+  // Cascade container visibility to children
+  if (w.parentId) {
+    const parent = allWidgets.find(p => p.id === w.parentId);
+    if (parent && parent.type === 'container') {
+      const parentVis = (parent.visible !== false)
+        && (!parent.visibleTag || !!tagValues[parent.visibleTag]?.value)
+        && (!parent.visibleRoles?.length || (userRole && parent.visibleRoles.includes(userRole)));
+      if (!parentVis) return null;
+    }
+  }
+
+  const visibleByProp = w.visible !== false;
+  const visibleByTag = w.visibleTag ? !!tagValues[w.visibleTag]?.value : true;
+  const visibleByRole = !w.visibleRoles || w.visibleRoles.length === 0 || (userRole && w.visibleRoles.includes(userRole));
+  if (!visibleByProp || !visibleByTag || !visibleByRole) return null;
+
+  const enabledByProp = w.enabled !== false;
+  const enabledByTag = w.enabledTag ? !!tagValues[w.enabledTag]?.value : true;
+  const enabledByRole = !w.enabledRoles || w.enabledRoles.length === 0 || (userRole && w.enabledRoles.includes(userRole));
+  const isEnabled = enabledByProp && enabledByTag && enabledByRole;
+
+  const tagName = (w.props as Record<string, unknown>).tag as string | undefined;
+  const longDesc = tagName ? tagValues[tagName]?.long_description : undefined;
+  const containerDesc = w.type === 'container' ? (w.props as Record<string, unknown>).description as string : undefined;
+  const infoDesc = longDesc || containerDesc;
+  const showInfoBtn = w.showInfo !== false && !!infoDesc;
+
+  if (isAbsolute) {
+    return (
+      <div
+        className={`absolute ${isEnabled ? '' : 'opacity-50 pointer-events-none'}`}
+        style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: index }}
+      >
+        {showInfoBtn && <InfoButton description={infoDesc!} title={(w.props as Record<string, unknown>).title as string} />}
+        <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{ gridColumn: `${w.x + 1} / span ${w.w}`, gridRow: `${w.y + 1} / span ${w.h}` }}
+      className={`relative ${isEnabled ? '' : 'opacity-50 pointer-events-none'}`}
+    >
+      {showInfoBtn && <InfoButton description={infoDesc!} title={(w.props as Record<string, unknown>).title as string} />}
+      <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} />
+    </div>
+  );
+}, (prev, next) => {
+  if (prev.widget !== next.widget) return false;
+  if (prev.index !== next.index) return false;
+  if (prev.isAbsolute !== next.isAbsolute) return false;
+  if (prev.alarms !== next.alarms) return false;
+  if (prev.userRole !== next.userRole) return false;
+
+  // Only diff the tag values this widget actually reads
+  const w = prev.widget;
+  const tagNames: string[] = [];
+  const p = w.props as Record<string, unknown>;
+  if (typeof p.tag === 'string' && p.tag) tagNames.push(p.tag);
+  if (typeof p.availabilityTag === 'string') tagNames.push(p.availabilityTag);
+  if (typeof p.performanceTag === 'string') tagNames.push(p.performanceTag);
+  if (typeof p.qualityTag === 'string') tagNames.push(p.qualityTag);
+  if (typeof p.oeeTag === 'string') tagNames.push(p.oeeTag);
+  if (Array.isArray(p.tags)) for (const t of p.tags) if (t?.tag) tagNames.push(t.tag);
+  if (Array.isArray(p.controls)) for (const c of p.controls) if (c?.tag) tagNames.push(c.tag);
+  // Also check visibility/enabled tags
+  if (w.visibleTag) tagNames.push(w.visibleTag);
+  if (w.enabledTag) tagNames.push(w.enabledTag);
+  // Check parent visibility tag
+  if (w.parentId) {
+    const parent = prev.allWidgets.find(pw => pw.id === w.parentId);
+    if (parent?.visibleTag) tagNames.push(parent.visibleTag);
+  }
+
+  for (const name of tagNames) {
+    if (prev.tagValues[name] !== next.tagValues[name]) return false;
+  }
+  return true;
+});

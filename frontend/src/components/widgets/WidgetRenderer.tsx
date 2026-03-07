@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { Widget, TagValue, AlarmData } from '../../types';
 import { StatusIndicator } from './StatusIndicator';
 import { GaugeWidget, type GaugeDisplayMode } from './GaugeWidget';
@@ -19,7 +20,28 @@ interface Props {
   alarms?: AlarmData[];
 }
 
-export function WidgetRenderer({ widget, tagValues, alarms = [] }: Props) {
+/** Extract all tag names a widget depends on for value lookups. */
+function getWidgetTagNames(widget: Widget): string[] {
+  const p = widget.props as Record<string, unknown>;
+  const tags: string[] = [];
+  // Single-tag widgets
+  if (typeof p.tag === 'string' && p.tag) tags.push(p.tag);
+  // OEE widget
+  if (typeof p.availabilityTag === 'string' && p.availabilityTag) tags.push(p.availabilityTag);
+  if (typeof p.performanceTag === 'string' && p.performanceTag) tags.push(p.performanceTag);
+  if (typeof p.qualityTag === 'string' && p.qualityTag) tags.push(p.qualityTag);
+  if (typeof p.oeeTag === 'string' && p.oeeTag) tags.push(p.oeeTag);
+  // Multi-value / control_group
+  if (Array.isArray(p.tags)) {
+    for (const t of p.tags) if (t && typeof t.tag === 'string') tags.push(t.tag);
+  }
+  if (Array.isArray(p.controls)) {
+    for (const c of p.controls) if (c && typeof c.tag === 'string') tags.push(c.tag);
+  }
+  return tags;
+}
+
+export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, alarms = [] }: Props) {
   const p = widget.props as Record<string, unknown>;
   const chrome = widget.chrome;
 
@@ -65,4 +87,17 @@ export function WidgetRenderer({ widget, tagValues, alarms = [] }: Props) {
         </div>
       );
   }
-}
+}, (prev, next) => {
+  // Custom comparator: skip re-render if the widget's own tags haven't changed
+  if (prev.widget !== next.widget) return false;
+  if (prev.alarms !== next.alarms) return false;
+  // Only compare tag values this widget actually uses
+  const tagNames = getWidgetTagNames(prev.widget);
+  if (tagNames.length === 0) return prev.tagValues === next.tagValues;
+  for (const name of tagNames) {
+    const pv = prev.tagValues[name];
+    const nv = next.tagValues[name];
+    if (pv !== nv) return false;
+  }
+  return true;
+});

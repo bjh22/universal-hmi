@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import type { Widget, LayoutMode } from '../types';
 
 export interface GridSettings {
@@ -383,7 +383,10 @@ export function useDesignMode(): DesignModeState {
     });
   }, []);
 
-  return {
+  const canUndo = undoStack.length > 0;
+  const canRedo = redoStack.length > 0;
+
+  return useMemo(() => ({
     editing, layoutMode, widgets, selectedIds, clipboard, gridSettings, dirty, zoom,
     enterEditMode, exitEditMode,
     select, selectMultiple, selectAll, clearSelection,
@@ -392,9 +395,20 @@ export function useDesignMode(): DesignModeState {
     bringToFront, sendToBack, bringForward, sendBackward,
     align, distribute,
     undo, redo,
-    canUndo: undoStack.length > 0,
-    canRedo: redoStack.length > 0,
+    canUndo, canRedo,
     setGridSettings, setZoom,
     lockedIds, toggleLock,
-  };
+  }), [
+    editing, layoutMode, widgets, selectedIds, clipboard, gridSettings, dirty, zoom,
+    enterEditMode, exitEditMode,
+    select, selectMultiple, selectAll, clearSelection,
+    addWidget, updateWidget, updateWidgetProps, deleteSelected, moveWidget, resizeWidget,
+    copySelected, cutSelected, paste, duplicateSelected,
+    bringToFront, sendToBack, bringForward, sendBackward,
+    align, distribute,
+    undo, redo,
+    canUndo, canRedo,
+    setGridSettings, setZoom,
+    lockedIds, toggleLock,
+  ]);
 }

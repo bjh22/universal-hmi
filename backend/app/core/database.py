@@ -8,6 +8,13 @@ engine = create_async_engine(settings.database_url, echo=settings.debug)
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
+async def _enable_wal_mode():
+    """Enable WAL journal mode for better concurrent read/write performance."""
+    async with engine.begin() as conn:
+        await conn.execute(text("PRAGMA journal_mode=WAL"))
+        await conn.execute(text("PRAGMA synchronous=NORMAL"))
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -23,6 +30,7 @@ async def get_db() -> AsyncSession:
 
 
 async def init_db():
+    await _enable_wal_mode()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         # Lightweight column migrations for SQLite (no Alembic)

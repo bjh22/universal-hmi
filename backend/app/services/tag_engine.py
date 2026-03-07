@@ -54,6 +54,7 @@ class TagEngine:
     def __init__(self):
         self._values: dict[str, TagValue] = {}
         self._tags: dict[str, Tag] = {}  # tag name -> Tag model
+        self._sim_configs: dict[str, dict] = {}  # cached parsed simulation configs
         self._running = False
         self._sim_task: asyncio.Task | None = None
         self._poll_task: asyncio.Task | None = None
@@ -61,6 +62,8 @@ class TagEngine:
         self._subscribers: list[asyncio.Queue] = []
         self._start_time = time.time()
         self._system_values: dict[str, object] = {}  # mutable system tag values
+        self._snapshot_cache: dict[str, dict] | None = None  # cached get_all_values result
+        self._poll_tags: dict[int, list[tuple[str, str]]] | None = None  # cached ds_id -> [(name, addr)]
 
     @property
     def values(self) -> dict[str, TagValue]:
@@ -71,6 +74,9 @@ class TagEngine:
         tags = result.scalars().all()
         for tag in tags:
             self._tags[tag.name] = tag
+            # Cache parsed simulation config to avoid JSON parsing every cycle
+            if tag.simulation_enabled and tag.simulation_config:
+                self._sim_configs[tag.name] = json.loads(tag.simulation_config)
             initial_value = self._get_initial_value(tag)
             self._values[tag.name] = TagValue(
                 tag_id=tag.id, name=tag.name, value=initial_value,
@@ -104,12 +110,29 @@ class TagEngine:
     def register_tag(self, tag: Tag):
         """Register a new tag at runtime (e.g. after creation via API)."""
         self._tags[tag.name] = tag
+        # Cache parsed simulation config
+        if tag.simulation_enabled and tag.simulation_config:
+            self._sim_configs[tag.name] = json.loads(tag.simulation_config)
+        else:
+            self._sim_configs.pop(tag.name, None)
         initial_value = self._get_initial_value(tag)
         self._values[tag.name] = TagValue(
             tag_id=tag.id, name=tag.name, value=initial_value,
             data_type=tag.data_type.value, long_description=tag.long_description,
             description=tag.description,
         )
+        self._poll_tags = None  # invalidate cached poll list
+
+    def _build_poll_tags(self) -> dict[int, list[tuple[str, str]]]:
+        """Build and cache the poll tag list grouped by data_source_id."""
+        if self._poll_tags is not None:
+            return self._poll_tags
+        ds_tags: dict[int, list[tuple[str, str]]] = defaultdict(list)
+        for name, tag in self._tags.items():
+            if tag.data_source_id and tag.address and not tag.simulation_enabled:
+                ds_tags[tag.data_source_id].append((name, tag.address))
+        self._poll_tags = dict(ds_tags)
+        return self._poll_tags
 
     def get_value(self, tag_name: str) -> TagValue | None:
         # Handle system tags
@@ -118,10 +141,16 @@ class TagEngine:
         return self._values.get(tag_name)
 
     def get_all_values(self) -> dict[str, dict]:
+        if self._snapshot_cache is not None:
+            return self._snapshot_cache
         result = {}
         for name, tv in self._values.items():
             result[name] = tv.to_dict()
+        self._snapshot_cache = result
         return result
+
+    def _invalidate_snapshot(self):
+        self._snapshot_cache = None
 
     def set_value(self, tag_name: str, value) -> bool:
         if tag_name.startswith("$"):
@@ -133,6 +162,7 @@ class TagEngine:
         tv.value = value
         tv.timestamp = datetime.now(timezone.utc)
         tv.quality = "good"
+        self._invalidate_snapshot()
         self._notify_change(tag_name, tv)
         return True
 
@@ -247,7 +277,7 @@ class TagEngine:
                 tv = self._values.get(name)
                 if tv is None:
                     continue
-                config = json.loads(tag.simulation_config or "{}")
+                config = self._sim_configs.get(name, {})
                 new_val = self._compute_sim_value(tag.simulation_behavior, config, elapsed, tv)
                 if new_val is not None and new_val != tv.value:
                     tv.value = new_val
@@ -255,6 +285,7 @@ class TagEngine:
                     changed[name] = tv.to_dict()
 
             if changed:
+                self._invalidate_snapshot()
                 msg = {"type": "tag_update", "data": changed}
                 for q in self._subscribers:
                     try:
@@ -267,11 +298,7 @@ class TagEngine:
     async def _polling_loop(self):
         """Poll connected data source drivers for tag values."""
         while self._running:
-            # Group tags by data_source_id for batch reads
-            ds_tags: dict[int, list[tuple[str, str]]] = defaultdict(list)
-            for name, tag in self._tags.items():
-                if tag.data_source_id and tag.address and not tag.simulation_enabled:
-                    ds_tags[tag.data_source_id].append((name, tag.address))
+            ds_tags = self._build_poll_tags()
 
             changed = {}
             for ds_id, tag_list in ds_tags.items():
@@ -298,6 +325,7 @@ class TagEngine:
                         changed[tag_name] = tv.to_dict()
 
             if changed:
+                self._invalidate_snapshot()
                 msg = {"type": "tag_update", "data": changed}
                 for q in self._subscribers:
                     try:

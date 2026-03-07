@@ -25,11 +25,16 @@ function TagPicker({ value, onChange }: { value: string; onChange: (tag: string)
     api.getTags().then(setTags).catch(() => {});
   }, []);
 
+  const lowerSearch = search.toLowerCase();
   const filtered = tags.filter(t =>
-    t.name.toLowerCase().includes(search.toLowerCase()) ||
-    (t.description || '').toLowerCase().includes(search.toLowerCase()) ||
-    (t.group_name || '').toLowerCase().includes(search.toLowerCase())
+    t.name.toLowerCase().includes(lowerSearch) ||
+    (t.description || '').toLowerCase().includes(lowerSearch) ||
+    (t.group_name || '').toLowerCase().includes(lowerSearch)
   );
+  // Cap visible items to avoid rendering 1000+ DOM nodes
+  const MAX_VISIBLE = 50;
+  const visibleTags = filtered.slice(0, MAX_VISIBLE);
+  const hasMore = filtered.length > MAX_VISIBLE;
 
   return (
     <div className="relative">
@@ -48,7 +53,7 @@ function TagPicker({ value, onChange }: { value: string; onChange: (tag: string)
           {filtered.length === 0 && (
             <div className="px-2 py-1.5 text-xs text-slate-500">No tags found</div>
           )}
-          {filtered.map(t => (
+          {visibleTags.map(t => (
             <button
               key={t.id}
               className={`w-full text-left px-2 py-1.5 text-xs hover:bg-slate-700 ${t.name === value ? 'bg-slate-700 text-blue-400' : 'text-slate-300'}`}
@@ -58,6 +63,11 @@ function TagPicker({ value, onChange }: { value: string; onChange: (tag: string)
               {t.description && <div className="text-[10px] text-slate-500 font-mono truncate">{t.name}</div>}
             </button>
           ))}
+          {hasMore && (
+            <div className="px-2 py-1.5 text-[10px] text-slate-500 text-center">
+              {filtered.length - MAX_VISIBLE} more — type to narrow results
+            </div>
+          )}
         </div>
       )}
     </div>
