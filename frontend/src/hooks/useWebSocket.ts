@@ -41,7 +41,16 @@ export function useWebSocket() {
         setTagValues((prev) => ({ ...prev, ...data }));
       } else if (msg.type === 'alarm') {
         const alarm = msg.data as AlarmData;
-        setAlarms((prev) => [alarm, ...prev.slice(0, 99)]);
+        setAlarms((prev) => {
+          // Update existing alarm or prepend new one
+          const idx = prev.findIndex((a) => a.id === alarm.id);
+          if (idx >= 0) {
+            const updated = [...prev];
+            updated[idx] = alarm;
+            return updated;
+          }
+          return [alarm, ...prev.slice(0, 99)];
+        });
       }
     };
 

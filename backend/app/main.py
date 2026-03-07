@@ -23,7 +23,7 @@ from app.services.trend_service import TrendService
 logging.basicConfig(level=logging.INFO if not settings.debug else logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-alarm_service = AlarmService(tag_engine)
+alarm_service = AlarmService(tag_engine, async_session)
 trend_service = TrendService(tag_engine)
 
 
@@ -40,6 +40,7 @@ async def lifespan(app: FastAPI):
         await driver_manager.load_and_connect(session)
 
     tag_engine.set_driver_manager(driver_manager)
+    app.state.alarm_service = alarm_service
     await tag_engine.start_simulation()
     await alarm_service.start()
     await trend_service.start()
