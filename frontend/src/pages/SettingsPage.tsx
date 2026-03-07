@@ -479,6 +479,187 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
   );
 }
 
+// ─── Bulk Edit Dialog ───
+type BulkFieldState = { enabled: boolean; value: unknown };
+
+function BulkEditDialog({ tagCount, dataSources, onApply, onClose }: {
+  tagCount: number;
+  dataSources: DataSourceData[];
+  onApply: (fields: Record<string, unknown>) => void;
+  onClose: () => void;
+}) {
+  const [fields, setFields] = useState<Record<string, BulkFieldState>>({
+    group_name:          { enabled: false, value: '' },
+    data_type:           { enabled: false, value: 'float' },
+    access_mode:         { enabled: false, value: 'read_write' },
+    engineering_units:   { enabled: false, value: '' },
+    data_source_id:      { enabled: false, value: null },
+    trending_enabled:    { enabled: false, value: false },
+    alarm_enabled:       { enabled: false, value: false },
+    simulation_enabled:  { enabled: false, value: false },
+    simulation_behavior: { enabled: false, value: null },
+  });
+
+  const toggle = useCallback((key: string) =>
+    setFields(f => ({ ...f, [key]: { ...f[key], enabled: !f[key].enabled } })), []);
+  const setValue = useCallback((key: string, value: unknown) =>
+    setFields(f => ({ ...f, [key]: { ...f[key], value } })), []);
+
+  const handleApply = useCallback(() => {
+    const patch: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(fields)) {
+      if (v.enabled) patch[k] = v.value;
+    }
+    if (Object.keys(patch).length > 0) onApply(patch);
+    else onClose();
+  }, [fields, onApply, onClose]);
+
+  const enabledCount = Object.values(fields).filter(f => f.enabled).length;
+
+  const rowCls = 'flex items-center gap-3 py-2 border-b border-slate-700/50';
+  const checkCls = 'text-slate-500 hover:text-slate-300 flex-shrink-0';
+  const labelCls = 'text-sm text-slate-400 w-36 flex-shrink-0';
+  const ctrlCls = 'flex-1 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-white outline-none disabled:opacity-40';
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 w-full max-w-lg" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-lg font-semibold text-slate-100">Edit Fields</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
+        </div>
+        <p className="text-sm text-slate-500 mb-4">
+          Editing {tagCount} tag{tagCount !== 1 ? 's' : ''}. Check a field to change its value on all selected tags.
+        </p>
+
+        <div className="space-y-0 mb-5">
+          {/* Group Name */}
+          <div className={rowCls}>
+            <button onClick={() => toggle('group_name')} className={checkCls}>
+              {fields.group_name.enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+            </button>
+            <span className={labelCls}>Group</span>
+            <input type="text" value={fields.group_name.value as string}
+              onChange={e => setValue('group_name', e.target.value)}
+              disabled={!fields.group_name.enabled}
+              className={ctrlCls} placeholder="e.g. Pumps" />
+          </div>
+
+          {/* Data Type */}
+          <div className={rowCls}>
+            <button onClick={() => toggle('data_type')} className={checkCls}>
+              {fields.data_type.enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+            </button>
+            <span className={labelCls}>Data Type</span>
+            <select value={fields.data_type.value as string}
+              onChange={e => setValue('data_type', e.target.value)}
+              disabled={!fields.data_type.enabled} className={ctrlCls}>
+              <option value="bool">Bool</option>
+              <option value="int">Int</option>
+              <option value="float">Float</option>
+              <option value="string">String</option>
+            </select>
+          </div>
+
+          {/* Access Mode */}
+          <div className={rowCls}>
+            <button onClick={() => toggle('access_mode')} className={checkCls}>
+              {fields.access_mode.enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+            </button>
+            <span className={labelCls}>Access Mode</span>
+            <select value={fields.access_mode.value as string}
+              onChange={e => setValue('access_mode', e.target.value)}
+              disabled={!fields.access_mode.enabled} className={ctrlCls}>
+              <option value="read">Read</option>
+              <option value="write">Write</option>
+              <option value="read_write">Read/Write</option>
+            </select>
+          </div>
+
+          {/* Engineering Units */}
+          <div className={rowCls}>
+            <button onClick={() => toggle('engineering_units')} className={checkCls}>
+              {fields.engineering_units.enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+            </button>
+            <span className={labelCls}>Units</span>
+            <input type="text" value={fields.engineering_units.value as string}
+              onChange={e => setValue('engineering_units', e.target.value || null)}
+              disabled={!fields.engineering_units.enabled}
+              className={ctrlCls} placeholder="e.g. °C, bar, rpm" />
+          </div>
+
+          {/* Data Source */}
+          <div className={rowCls}>
+            <button onClick={() => toggle('data_source_id')} className={checkCls}>
+              {fields.data_source_id.enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+            </button>
+            <span className={labelCls}>Data Source</span>
+            <select
+              value={fields.data_source_id.value == null ? '' : String(fields.data_source_id.value)}
+              onChange={e => setValue('data_source_id', e.target.value ? Number(e.target.value) : null)}
+              disabled={!fields.data_source_id.enabled} className={ctrlCls}>
+              <option value="">None (simulation)</option>
+              {dataSources.map(ds => <option key={ds.id} value={ds.id}>{ds.name} ({ds.protocol})</option>)}
+            </select>
+          </div>
+
+          {/* Boolean flags */}
+          {([
+            ['trending_enabled', 'Trending'],
+            ['alarm_enabled', 'Alarm'],
+            ['simulation_enabled', 'Simulation'],
+          ] as [string, string][]).map(([key, label]) => (
+            <div key={key} className={rowCls}>
+              <button onClick={() => toggle(key)} className={checkCls}>
+                {fields[key].enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+              </button>
+              <span className={labelCls}>{label}</span>
+              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                <input type="checkbox"
+                  checked={fields[key].value as boolean}
+                  onChange={e => setValue(key, e.target.checked)}
+                  disabled={!fields[key].enabled}
+                  className="accent-blue-500 disabled:opacity-40" />
+                {(fields[key].value as boolean) ? 'Enabled' : 'Disabled'}
+              </label>
+            </div>
+          ))}
+
+          {/* Simulation Behavior */}
+          <div className={rowCls + ' border-b-0'}>
+            <button onClick={() => toggle('simulation_behavior')} className={checkCls}>
+              {fields.simulation_behavior.enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+            </button>
+            <span className={labelCls}>Sim Behavior</span>
+            <select
+              value={(fields.simulation_behavior.value as string) || ''}
+              onChange={e => setValue('simulation_behavior', e.target.value || null)}
+              disabled={!fields.simulation_behavior.enabled} className={ctrlCls}>
+              <option value="">None</option>
+              <option value="sine">Sine</option>
+              <option value="ramp">Ramp</option>
+              <option value="random">Random</option>
+              <option value="toggle">Toggle</option>
+              <option value="enum_cycle">Enum Cycle</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 hover:bg-slate-600">Cancel</button>
+          <button
+            onClick={handleApply}
+            disabled={enabledCount === 0}
+            className="px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Apply to {tagCount} Tag{tagCount !== 1 ? 's' : ''}{enabledCount > 0 ? ` (${enabledCount} field${enabledCount !== 1 ? 's' : ''})` : ''}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Bulk Label Dialog ───
 function BulkLabelDialog({ mode, tagCount, allLabels, onApply, onClose }: {
   mode: 'add' | 'remove';
@@ -634,6 +815,7 @@ function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClos
 
   // Re-preview when prefix changes for PLC formats
   const prefixTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => () => clearTimeout(prefixTimeoutRef.current), []);
   const handlePrefixChange = useCallback((val: string) => {
     setPrefix(val);
     if (rawContent && format !== 'hmi_csv') {
@@ -946,7 +1128,7 @@ export function SettingsPage({ user }: Props) {
   const [tagLabelFilter, setTagLabelFilter] = useState('all');
   const [tagTypeFilter, setTagTypeFilter] = useState('all');
   const [tagGroupFilter, setTagGroupFilter] = useState('all');
-  const [tagSourceFilter, setTagSourceFilter] = useState('all');
+  const [tagSourceFilter, setTagSourceFilter] = useState<number | 'all' | 'none'>('all');
   const [showAdvFilters, setShowAdvFilters] = useState(false);
   const [allLabels, setAllLabels] = useState<TagLabel[]>([]);
   const [editTag, setEditTag] = useState<(Omit<Tag, 'id'> & { id?: number }) | null>(null);
@@ -959,6 +1141,7 @@ export function SettingsPage({ user }: Props) {
   const [selectedTagIds, setSelectedTagIds] = useState<Set<number>>(new Set());
   const [bulkLabelDialog, setBulkLabelDialog] = useState<'add' | 'remove' | null>(null);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [showBulkEdit, setShowBulkEdit] = useState(false);
 
   // Data source state
   const [editDs, setEditDs] = useState<{ id?: number; name: string; protocol: ProtocolType; enabled: boolean; config: Record<string, unknown> } | null>(null);
@@ -1010,7 +1193,7 @@ export function SettingsPage({ user }: Props) {
       if (tagGroupFilter !== 'all' && (t.group_name || '') !== tagGroupFilter) return false;
       if (tagSourceFilter !== 'all') {
         if (tagSourceFilter === 'none' && t.data_source_id != null) return false;
-        if (tagSourceFilter !== 'none' && t.data_source_id !== Number(tagSourceFilter)) return false;
+        if (tagSourceFilter !== 'none' && t.data_source_id !== tagSourceFilter) return false;
       }
       if (tagSearch) {
         const q = tagSearch.toLowerCase();
@@ -1086,6 +1269,16 @@ export function SettingsPage({ user }: Props) {
         await api.bulkRemoveLabels(Array.from(selectedTagIds), labelIds);
       }
       setBulkLabelDialog(null);
+      loadTags();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
+  }, [selectedTagIds, loadTags]);
+
+  const handleBulkEdit = useCallback(async (fields: Record<string, unknown>) => {
+    try {
+      await api.bulkUpdateTags(Array.from(selectedTagIds), fields);
+      setShowBulkEdit(false);
       loadTags();
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err));
@@ -1313,7 +1506,7 @@ export function SettingsPage({ user }: Props) {
               <Filter size={14} /> Filters
               {(tagTypeFilter !== 'all' || tagGroupFilter !== 'all' || tagSourceFilter !== 'all') && (
                 <span className="ml-1 px-1.5 py-0.5 bg-blue-600 text-white text-[10px] rounded-full font-medium">
-                  {[tagTypeFilter, tagGroupFilter, tagSourceFilter].filter(f => f !== 'all').length}
+                  {[tagTypeFilter, tagGroupFilter, String(tagSourceFilter)].filter(f => f !== 'all').length}
                 </span>
               )}
             </button>
@@ -1359,8 +1552,11 @@ export function SettingsPage({ user }: Props) {
                 {tagGroups.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
               <select
-                value={tagSourceFilter}
-                onChange={e => setTagSourceFilter(e.target.value)}
+                value={String(tagSourceFilter)}
+                onChange={e => {
+                  const v = e.target.value;
+                  setTagSourceFilter(v === 'all' || v === 'none' ? v : Number(v));
+                }}
                 className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-300 outline-none"
               >
                 <option value="all">All Sources</option>
@@ -1394,6 +1590,13 @@ export function SettingsPage({ user }: Props) {
                 className="text-sm text-slate-300 hover:text-white px-2 py-1 rounded hover:bg-slate-700"
               >
                 Remove Labels
+              </button>
+              <div className="h-4 w-px bg-slate-600" />
+              <button
+                onClick={() => setShowBulkEdit(true)}
+                className="text-sm text-slate-300 hover:text-white px-2 py-1 rounded hover:bg-slate-700"
+              >
+                Edit Fields
               </button>
               <div className="h-4 w-px bg-slate-600" />
               <button
@@ -1520,6 +1723,14 @@ export function SettingsPage({ user }: Props) {
               allLabels={allLabels}
               onApply={labelIds => handleBulkLabels(bulkLabelDialog, labelIds)}
               onClose={() => setBulkLabelDialog(null)}
+            />
+          )}
+          {showBulkEdit && (
+            <BulkEditDialog
+              tagCount={selectedTagIds.size}
+              dataSources={dataSources}
+              onApply={handleBulkEdit}
+              onClose={() => setShowBulkEdit(false)}
             />
           )}
 

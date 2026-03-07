@@ -141,6 +141,17 @@ async def delete_tag(
     await session.delete(tag)
 
 
+@router.get("/by-name/{tag_name}", response_model=TagOut)
+async def get_tag_by_name(tag_name: str, session: AsyncSession = Depends(get_db)):
+    result = await session.execute(
+        select(Tag).where(Tag.name == tag_name).options(selectinload(Tag.labels))
+    )
+    tag = result.scalar_one_or_none()
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found")
+    return tag
+
+
 @router.get("/values")
 async def get_all_tag_values():
     return tag_engine.get_all_values()
@@ -463,42 +474,23 @@ async def import_tags_codesys(
         raise HTTPException(status_code=400, detail="Missing 'xml' in body")
 
     try:
-        root = ET.fromstring(xml_str)
+        parsed_tags = _parse_codesys_xml(xml_str, prefix)
     except ET.ParseError as e:
         raise HTTPException(status_code=400, detail=f"Invalid XML: {e}")
 
-    # Build type registry from TypeList
-    ns = CODESYS_NS
-    type_list = root.find("sc:TypeList", ns)
-    if type_list is None:
-        # Try without namespace
-        ns = {}
-        type_list = root.find("TypeList")
-
-    registry: dict[str, dict] = {}
-    if type_list is not None:
-        registry = _codesys_build_type_registry(type_list, ns if ns else {})
-
-    # Walk NodeList
-    node_list = root.find("sc:NodeList", ns) or root.find("NodeList")
-    if node_list is None:
+    if not parsed_tags:
         raise HTTPException(status_code=400, detail="No NodeList found in XML")
-
-    parsed_tags: list[dict] = []
-    for top_node in (node_list.findall("sc:Node", ns) if ns else node_list.findall("Node")):
-        parsed_tags.extend(_codesys_parse_nodes(top_node, [], registry, ns if ns else {}))
 
     created = []
     for td in parsed_tags:
-        tag_name = f"{prefix}.{td['name']}" if prefix else td["name"]
-        enum_mapping = td.get("enum_mapping")
+        enum_mapping_raw = td.get("enum_mapping")
         tag = Tag(
-            name=tag_name,
+            name=td["name"],
             description=td.get("description"),
             group_name=td.get("group_name"),
-            data_type=td["data_type"],
-            access_mode=td["access_mode"],
-            enum_mapping=json.dumps(enum_mapping) if enum_mapping else None,
+            data_type=TagDataType(td["data_type"]),
+            access_mode=TagAccessMode(td["access_mode"]),
+            enum_mapping=json.dumps(enum_mapping_raw) if enum_mapping_raw else None,
         )
         session.add(tag)
         created.append(tag)
@@ -525,6 +517,13 @@ RSLOGIX_FILE_TYPE_MAP: dict[str, TagDataType] = {
     "I": TagDataType.INT,
     "L": TagDataType.INT,
     "A": TagDataType.INT,
+}
+
+RSLOGIX_GROUP_MAP: dict[str, str] = {
+    "B": "Bits", "N": "Integers", "F": "Floats",
+    "T": "Timers", "C": "Counters", "R": "Control",
+    "O": "Outputs", "I": "Inputs", "S": "Status",
+    "ST": "Strings", "L": "Long Integers", "A": "ASCII",
 }
 
 
@@ -566,86 +565,15 @@ async def import_tags_rslogix500(
     if not csv_str:
         raise HTTPException(status_code=400, detail="Missing 'csv' in body")
 
-    lines = csv_str.strip().split("\n")
-    parsed_tags: list[dict] = []
-    seen_names: set[str] = set()
-
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-
-        # Split CSV fields (respecting quoted fields)
-        fields: list[str] = []
-        current = ""
-        in_quotes = False
-        for ch in line:
-            if ch == '"':
-                in_quotes = not in_quotes
-            elif ch == ',' and not in_quotes:
-                fields.append(current)
-                current = ""
-                continue
-            current += ch
-        fields.append(current)
-
-        if len(fields) < 3:
-            continue
-
-        address = fields[0].strip()
-        if not address:
-            continue
-
-        # Skip data file descriptors (DFILE, PFILE) and header-only entries
-        if address.startswith("DFILE") or address.startswith("PFILE"):
-            continue
-
-        symbol = fields[2].strip().strip('"')
-        description = _rslogix_build_description(fields[3:8]) if len(fields) > 3 else ""
-
-        file_letter, _ = _rslogix_parse_address(address)
-        data_type = RSLOGIX_FILE_TYPE_MAP.get(file_letter, TagDataType.INT)
-
-        # Use symbol as tag name if available, otherwise use address
-        tag_name = symbol if symbol else address
-        # Replace characters not suitable for tag names
-        tag_name = tag_name.replace("/", "_").replace(":", "_").replace(".", "_")
-
-        if tag_name in seen_names:
-            continue
-        seen_names.add(tag_name)
-
-        # Skip entries with no symbol and no description (metadata rows)
-        if not symbol and not description:
-            continue
-
-        # Determine group from file type
-        group_map: dict[str, str] = {
-            "B": "Bits", "N": "Integers", "F": "Floats",
-            "T": "Timers", "C": "Counters", "R": "Control",
-            "O": "Outputs", "I": "Inputs", "S": "Status",
-            "ST": "Strings", "L": "Long Integers", "A": "ASCII",
-        }
-        group = group_map.get(file_letter, "Other")
-
-        parsed_tags.append({
-            "name": tag_name,
-            "description": description or None,
-            "group_name": group,
-            "data_type": data_type,
-            "access_mode": TagAccessMode.READ_WRITE,
-            "address": address,
-        })
-
+    parsed_tags = _parse_rslogix500_csv(csv_str, prefix)
     created = []
     for td in parsed_tags:
-        tag_name = f"{prefix}.{td['name']}" if prefix else td["name"]
         tag = Tag(
-            name=tag_name,
+            name=td["name"],
             description=td.get("description"),
             group_name=td.get("group_name"),
-            data_type=td["data_type"],
-            access_mode=td["access_mode"],
+            data_type=TagDataType(td["data_type"]),
+            access_mode=TagAccessMode(td["access_mode"]),
             address=td.get("address"),
         )
         session.add(tag)
@@ -703,13 +631,6 @@ def _parse_rslogix500_csv(csv_str: str, prefix: str = "") -> list[dict]:
     result: list[dict] = []
     seen_names: set[str] = set()
 
-    group_map: dict[str, str] = {
-        "B": "Bits", "N": "Integers", "F": "Floats",
-        "T": "Timers", "C": "Counters", "R": "Control",
-        "O": "Outputs", "I": "Inputs", "S": "Status",
-        "ST": "Strings", "L": "Long Integers", "A": "ASCII",
-    }
-
     for line in lines:
         line = line.strip()
         if not line:
@@ -750,7 +671,7 @@ def _parse_rslogix500_csv(csv_str: str, prefix: str = "") -> list[dict]:
         result.append({
             "name": full_name,
             "description": description or None,
-            "group_name": group_map.get(file_letter, "Other"),
+            "group_name": RSLOGIX_GROUP_MAP.get(file_letter, "Other"),
             "data_type": data_type.value,
             "access_mode": TagAccessMode.READ_WRITE.value,
             "address": address,

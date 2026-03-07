@@ -57,6 +57,7 @@ export const api = {
 
   // Tags
   getTags: () => request<Tag[]>('/tags/'),
+  getTagByName: (name: string) => request<Tag>(`/tags/by-name/${encodeURIComponent(name)}`),
   createTag: (data: Partial<Tag>) =>
     request('/tags/', { method: 'POST', body: JSON.stringify(data) }),
   updateTag: (id: number, data: Partial<Tag>) =>

@@ -716,8 +716,7 @@ function DropdownOptionsEditor({ options, onChange, tagName }: {
   const populateFromEnum = useCallback(async () => {
     if (!tagName) return;
     try {
-      const tags = await api.getTags();
-      const tag = tags.find(t => t.name === tagName);
+      const tag = await api.getTagByName(tagName);
       if (!tag?.enum_mapping) return;
       const mapping = typeof tag.enum_mapping === 'string' ? JSON.parse(tag.enum_mapping) : tag.enum_mapping;
       const opts = Object.entries(mapping as Record<string, string>)
