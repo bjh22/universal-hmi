@@ -86,8 +86,8 @@ function RadialGauge({ value, pct, color, min, max, units, decimalPlaces, valueF
   const dotR = Math.max(2, Math.round(barThickness * 0.5));
 
   return (
-    <div className="flex flex-col items-center justify-center flex-1">
-      <svg viewBox="0 0 100 100" className="w-full" style={{ maxWidth: `${gaugeSize}%` }}>
+    <div className="flex flex-col items-center justify-center flex-1 min-h-0 overflow-hidden">
+      <svg viewBox="0 0 100 100" className="w-full" style={{ maxWidth: `${gaugeSize}%`, maxHeight: '100%' }}>
         <path d={arcPath(CX, CY, R, startAngle, endAngle)} fill="none" stroke="#334155" strokeWidth={barThickness} strokeLinecap="round" />
         <path d={arcPath(CX, CY, R, startAngle, needleAngle)} fill="none" stroke={color} strokeWidth={barThickness} strokeLinecap="round"
           className="transition-all duration-300" />
@@ -116,8 +116,8 @@ function DonutGauge({ value, pct, color, units, decimalPlaces, valueFontSize, ba
   const unitSize = Math.max(4, Math.round(valueFontSize * 0.42));
 
   return (
-    <div className="flex flex-col items-center justify-center flex-1">
-      <svg viewBox="0 0 100 100" className="w-full" style={{ maxWidth: `${gaugeSize}%` }}>
+    <div className="flex flex-col items-center justify-center flex-1 min-h-0 overflow-hidden">
+      <svg viewBox="0 0 100 100" className="w-full" style={{ maxWidth: `${gaugeSize}%`, maxHeight: '100%' }}>
         <circle cx="50" cy="50" r={R} fill="none" stroke="#334155" strokeWidth={barThickness} />
         <circle cx="50" cy="50" r={R} fill="none" stroke={color} strokeWidth={barThickness} strokeLinecap="round"
           strokeDasharray={circumference} strokeDashoffset={offset}
