@@ -210,7 +210,7 @@ export function ReportsPage({ user }: Props) {
         <button
           key={p.label}
           onClick={() => handlePreset(p.label)}
-          className={`px-3 py-1.5 rounded-md text-sm font-medium ${activePreset === p.label ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+          className={`px-3 py-1.5 rounded-md text-sm font-medium ${activePreset === p.label ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
         >
           {p.label}
         </button>
@@ -558,8 +558,8 @@ export function ReportsPage({ user }: Props) {
             </button>
           )}
           <div className="flex gap-1">
-            <button onClick={() => setViewMode('table')} className={`px-3 py-1.5 rounded-md text-sm font-medium ${viewMode === 'table' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>Table</button>
-            <button onClick={() => setViewMode('charts')} className={`px-3 py-1.5 rounded-md text-sm font-medium ${viewMode === 'charts' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>Charts</button>
+            <button onClick={() => setViewMode('table')} className={`px-3 py-1.5 rounded-md text-sm font-medium ${viewMode === 'table' ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>Table</button>
+            <button onClick={() => setViewMode('charts')} className={`px-3 py-1.5 rounded-md text-sm font-medium ${viewMode === 'charts' ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>Charts</button>
           </div>
           <button onClick={exportCsv} disabled={runs.length === 0} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm disabled:opacity-50">
             <Download size={16} /> Export CSV
@@ -838,7 +838,7 @@ function DowntimeDialog({ runId, existing, runStart, onClose, onSaved }: {
       </div>
       <div className="flex justify-end gap-2 mt-4">
         <button onClick={onClose} className="px-3 py-1.5 bg-slate-700 text-slate-300 rounded-lg text-sm">Cancel</button>
-        <button onClick={handleSubmit} disabled={submitting} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm disabled:opacity-50">
+        <button onClick={handleSubmit} disabled={submitting} className="px-3 py-1.5 bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-hover)] text-white rounded-lg text-sm disabled:opacity-50">
           {submitting ? 'Saving...' : existing ? 'Update' : 'Add'}
         </button>
       </div>

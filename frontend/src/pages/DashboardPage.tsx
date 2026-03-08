@@ -338,7 +338,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
                 to={`/screen/${s.slug}`}
                 className={`px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
                   activeScreen?.id === s.id
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-[var(--hmi-accent)] text-white'
                     : 'bg-slate-800 text-slate-400 hover:text-slate-200'
                 }`}
               >
@@ -451,7 +451,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
                 <button
                   onClick={() => setNewScreenMode('grid')}
                   className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    newScreenMode === 'grid' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'
+                    newScreenMode === 'grid' ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   Grid
@@ -459,7 +459,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
                 <button
                   onClick={() => setNewScreenMode('absolute')}
                   className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    newScreenMode === 'absolute' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'
+                    newScreenMode === 'absolute' ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   Absolute
@@ -509,7 +509,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
                 Cancel
               </button>
               <button onClick={handleCreateScreen} disabled={!newScreenName.trim()}
-                className="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-colors">
+                className="px-4 py-2 rounded-lg text-sm bg-[var(--hmi-accent)] text-white hover:bg-[var(--hmi-accent-dark)] disabled:opacity-40 transition-colors">
                 Create
               </button>
             </div>

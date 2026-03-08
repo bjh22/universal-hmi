@@ -13,7 +13,7 @@ interface Props {
 }
 
 const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white outline-none focus:border-blue-500';
-const btnPrimary = 'bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors';
+const btnPrimary = 'bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-dark)] text-white px-4 py-2 rounded-md text-sm font-medium transition-colors';
 const btnSecondary = 'bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2 rounded-md text-sm font-medium transition-colors';
 const btnDanger = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors';
 const btnSuccess = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors';
@@ -260,7 +260,7 @@ export function ProjectsPage({ user }: Props) {
                 onClick={() => setSelectedId(p.id)}
                 className={`w-full text-left p-3 rounded-lg border transition-colors ${
                   selectedId === p.id
-                    ? 'bg-blue-600/20 border-blue-500/50'
+                    ? 'bg-[var(--hmi-accent-bg)] border-[var(--hmi-accent)]/50'
                     : 'bg-slate-800 border-slate-700 hover:border-slate-600'
                 }`}
               >
@@ -384,7 +384,7 @@ export function ProjectsPage({ user }: Props) {
                     key={opt.value}
                     className={`flex items-start gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors ${
                       formTemplate === opt.value
-                        ? 'bg-blue-600/20 border-blue-500/50'
+                        ? 'bg-[var(--hmi-accent-bg)] border-[var(--hmi-accent)]/50'
                         : 'bg-slate-800 border-slate-700 hover:border-slate-600'
                     }`}
                   >

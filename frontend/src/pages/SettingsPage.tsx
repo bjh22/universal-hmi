@@ -3,6 +3,7 @@ import { Search, Download, UserPlus, Plus, Pencil, Trash2, Upload, X, Plug, Unpl
 import { api } from '../lib/api';
 import { PROTOCOL_CONFIGS } from '../lib/protocolConfigs';
 import { IntegrationsTab } from '../components/settings/IntegrationsTab';
+import { THEME_PRESETS, ACCENT_SWATCHES, applyTheme, DEFAULT_ACCENT, DEFAULT_PRESET } from '../lib/theme';
 import type { Tag, TagLabel, DataSourceData, ProtocolType, AuditEntry, UserData, BrowsedTag, UserListEntry, ImportPreviewTag, ImportConflictMode, TagValue } from '../types';
 
 interface Props {
@@ -141,7 +142,7 @@ function DataSourceDialog({ ds, onSave, onClose }: {
 
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 hover:bg-slate-600">Cancel</button>
-            <button type="submit" className="px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-700">{form.id != null ? 'Save' : 'Create'}</button>
+            <button type="submit" className="px-4 py-2 bg-[var(--hmi-accent)] rounded-lg text-sm text-white hover:bg-[var(--hmi-accent-dark)]">{form.id != null ? 'Save' : 'Create'}</button>
           </div>
         </form>
       </div>
@@ -477,7 +478,7 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
 
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 hover:bg-slate-600">Cancel</button>
-            <button type="submit" className="px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-700">{form.id != null ? 'Save' : 'Create'}</button>
+            <button type="submit" className="px-4 py-2 bg-[var(--hmi-accent)] rounded-lg text-sm text-white hover:bg-[var(--hmi-accent-dark)]">{form.id != null ? 'Save' : 'Create'}</button>
           </div>
         </form>
       </div>
@@ -643,7 +644,7 @@ function BulkEditDialog({ tagCount, dataSources, onApply, onClose }: {
           <button
             onClick={handleApply}
             disabled={enabledCount === 0}
-            className="px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-4 py-2 bg-[var(--hmi-accent)] rounded-lg text-sm text-white hover:bg-[var(--hmi-accent-dark)] disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Apply to {tagCount} Tag{tagCount !== 1 ? 's' : ''}{enabledCount > 0 ? ` (${enabledCount} field${enabledCount !== 1 ? 's' : ''})` : ''}
           </button>
@@ -689,7 +690,7 @@ function BulkLabelDialog({ mode, tagCount, allLabels, onApply, onClose }: {
             <button
               key={l.id}
               onClick={() => toggleLabel(l.id)}
-              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition-colors ${selected.has(l.id) ? 'bg-blue-600/20 border border-blue-500/40' : 'hover:bg-slate-700 border border-transparent'}`}
+              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition-colors ${selected.has(l.id) ? 'bg-[var(--hmi-accent-bg)] border border-[var(--hmi-accent)]/40' : 'hover:bg-slate-700 border border-transparent'}`}
             >
               {selected.has(l.id)
                 ? <CheckSquare size={16} className="text-blue-400 flex-shrink-0" />
@@ -706,7 +707,7 @@ function BulkLabelDialog({ mode, tagCount, allLabels, onApply, onClose }: {
           <button
             onClick={() => onApply(Array.from(selected))}
             disabled={selected.size === 0}
-            className="px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-4 py-2 bg-[var(--hmi-accent)] rounded-lg text-sm text-white hover:bg-[var(--hmi-accent-dark)] disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {mode === 'add' ? 'Add' : 'Remove'} {selected.size > 0 ? `${selected.size} Label${selected.size !== 1 ? 's' : ''}` : 'Labels'}
           </button>
@@ -927,7 +928,7 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
             <button
               key={f}
               onClick={() => handleFormatChange(f)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${format === f ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${format === f ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
             >
               {formatInfo[f].label}
             </button>
@@ -950,7 +951,7 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
             </select>
           </div>
           <input ref={fileRef} type="file" accept={fileAccept} onChange={handleFile} className="hidden" />
-          <button type="button" onClick={() => fileRef.current?.click()} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
+          <button type="button" onClick={() => fileRef.current?.click()} className="flex items-center gap-2 px-4 py-2 bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-dark)] text-white text-sm font-medium rounded-lg transition-colors">
             <Upload size={16} />
             {fileRef.current?.files?.length ? fileRef.current.files[0].name : 'Choose File'}
           </button>
@@ -1170,7 +1171,7 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
             <button
               onClick={handleImport}
               disabled={selectedCount === 0 || dataSourceId === null}
-              className="px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-[var(--hmi-accent)] rounded-lg text-sm text-white hover:bg-[var(--hmi-accent-dark)] disabled:opacity-50 disabled:cursor-not-allowed"
               title={dataSourceId === null ? 'Select a data source first' : undefined}
             >
               Import {selectedCount} {selectedCount === 1 ? 'Tag' : 'Tags'}
@@ -1280,7 +1281,7 @@ function BrowseTagsDialog({ dsId, dsName, existingTags, onCreateTag, onClose }: 
                         ) : (
                           <button
                             onClick={() => handleCreate(t)}
-                            className="px-2 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs text-white flex items-center gap-1 ml-auto"
+                            className="px-2 py-1 bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-hover)] rounded text-xs text-white flex items-center gap-1 ml-auto"
                           >
                             <Plus size={12} /> Create Tag
                           </button>
@@ -1317,6 +1318,11 @@ export function SettingsPage({ user, tagValues }: Props) {
   const [brandSaving, setBrandSaving] = useState(false);
   const [brandMsg, setBrandMsg] = useState('');
   const brandFileRef = useRef<HTMLInputElement>(null);
+  // Theme state
+  const [brandAccent, setBrandAccent] = useState(DEFAULT_ACCENT);
+  const [brandPreset, setBrandPreset] = useState(DEFAULT_PRESET);
+  const [savedAccent, setSavedAccent] = useState(DEFAULT_ACCENT);
+  const [savedPreset, setSavedPreset] = useState(DEFAULT_PRESET);
 
   // Preferences state
   const [prefLayout, setPrefLayout] = useState('grid');
@@ -1375,6 +1381,10 @@ export function SettingsPage({ user, tagValues }: Props) {
       if (b.has_favicon) setBrandFaviconPreview('/api/branding/favicon');
       else setBrandFaviconPreview(null);
       setBrandFaviconData(null);
+      setBrandAccent(b.theme_accent);
+      setBrandPreset(b.theme_preset);
+      setSavedAccent(b.theme_accent);
+      setSavedPreset(b.theme_preset);
     }).catch(() => {});
   }, []);
 
@@ -1702,7 +1712,7 @@ export function SettingsPage({ user, tagValues }: Props) {
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              tab === t.key ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
+              tab === t.key ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
             }`}
           >
             {t.label}
@@ -1784,6 +1794,61 @@ export function SettingsPage({ user, tagValues }: Props) {
             <p className="text-xs text-slate-500 mt-1">Recommended: 32x32 or 64x64 PNG, ICO, or SVG.</p>
           </div>
 
+          {/* ── Theme: Accent Color ── */}
+          <div>
+            <label className="text-xs text-slate-400 mb-1.5 block">Accent Color</label>
+            <div className="flex items-center gap-2 flex-wrap">
+              {ACCENT_SWATCHES.map((s) => (
+                <button
+                  key={s.hex}
+                  title={s.label}
+                  onClick={() => { setBrandAccent(s.hex); applyTheme(s.hex, brandPreset); setBrandMsg(''); }}
+                  className="w-8 h-8 rounded-full border-2 transition-transform hover:scale-110"
+                  style={{ backgroundColor: s.hex, borderColor: brandAccent === s.hex ? '#ffffff' : 'transparent' }}
+                />
+              ))}
+              <input
+                type="text"
+                value={brandAccent}
+                onChange={e => {
+                  const v = e.target.value;
+                  setBrandAccent(v);
+                  if (/^#[0-9a-fA-F]{6}$/.test(v)) { applyTheme(v, brandPreset); }
+                  setBrandMsg('');
+                }}
+                placeholder="#2563eb"
+                className="w-24 bg-slate-700 border border-slate-600 rounded-lg px-2 py-1.5 text-sm text-white outline-none focus:border-blue-500 font-mono"
+              />
+            </div>
+            <p className="text-xs text-slate-500 mt-1">Used for active navigation, buttons, and highlights.</p>
+          </div>
+
+          {/* ── Theme: Background Preset ── */}
+          <div>
+            <label className="text-xs text-slate-400 mb-1.5 block">Background Preset</label>
+            <div className="flex items-center gap-3 flex-wrap">
+              {Object.entries(THEME_PRESETS).map(([key, preset]) => (
+                <button
+                  key={key}
+                  onClick={() => { setBrandPreset(key); applyTheme(brandAccent, key); setBrandMsg(''); }}
+                  className={`flex flex-col items-center gap-1.5 p-2 rounded-lg border-2 transition-colors ${
+                    brandPreset === key ? 'border-white' : 'border-transparent hover:border-slate-600'
+                  }`}
+                >
+                  {/* Mini preview */}
+                  <div className="flex w-16 h-10 rounded overflow-hidden border border-slate-600">
+                    <div className="w-4" style={{ backgroundColor: preset.bgSurface }} />
+                    <div className="flex-1 flex flex-col">
+                      <div className="h-2" style={{ backgroundColor: preset.bgSurface }} />
+                      <div className="flex-1" style={{ backgroundColor: preset.bgBody }} />
+                    </div>
+                  </div>
+                  <span className="text-xs text-slate-300">{preset.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="flex items-center gap-3">
             <button
               disabled={brandSaving}
@@ -1791,7 +1856,12 @@ export function SettingsPage({ user, tagValues }: Props) {
                 setBrandSaving(true);
                 setBrandMsg('');
                 try {
-                  const payload: Record<string, string> = { site_title: brandTitle, nav_title: brandNavTitle };
+                  const payload: Record<string, string> = {
+                    site_title: brandTitle,
+                    nav_title: brandNavTitle,
+                    theme_accent: brandAccent,
+                    theme_preset: brandPreset,
+                  };
                   if (brandFaviconData !== null) payload.favicon = brandFaviconData;
                   const res = await api.updateBranding(payload);
                   setBrandFaviconData(null);
@@ -1800,14 +1870,20 @@ export function SettingsPage({ user, tagValues }: Props) {
                   document.title = res.site_title;
                   const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
                   if (link) link.href = res.has_favicon ? '/api/branding/favicon?' + Date.now() : '/vite.svg';
+                  setSavedAccent(res.theme_accent);
+                  setSavedPreset(res.theme_preset);
+                  applyTheme(res.theme_accent, res.theme_preset);
                   setBrandMsg('Saved');
                 } catch (err) {
+                  applyTheme(savedAccent, savedPreset);
+                  setBrandAccent(savedAccent);
+                  setBrandPreset(savedPreset);
                   setBrandMsg(err instanceof Error ? err.message : 'Save failed');
                 } finally {
                   setBrandSaving(false);
                 }
               }}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm rounded-lg font-medium"
+              className="px-4 py-2 bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-dark)] disabled:opacity-50 text-white text-sm rounded-lg font-medium"
             >
               {brandSaving ? 'Saving...' : 'Save'}
             </button>
@@ -1827,7 +1903,7 @@ export function SettingsPage({ user, tagValues }: Props) {
               <button
                 onClick={() => { setPrefLayout('grid'); setPrefMsg(''); }}
                 className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  prefLayout === 'grid' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'
+                  prefLayout === 'grid' ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'
                 }`}
               >
                 Grid
@@ -1835,7 +1911,7 @@ export function SettingsPage({ user, tagValues }: Props) {
               <button
                 onClick={() => { setPrefLayout('absolute'); setPrefMsg(''); }}
                 className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  prefLayout === 'absolute' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'
+                  prefLayout === 'absolute' ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'
                 }`}
               >
                 Absolute
@@ -1880,7 +1956,7 @@ export function SettingsPage({ user, tagValues }: Props) {
                   setPrefSaving(false);
                 }
               }}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm rounded-lg font-medium"
+              className="px-4 py-2 bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-dark)] disabled:opacity-50 text-white text-sm rounded-lg font-medium"
             >
               {prefSaving ? 'Saving...' : 'Save'}
             </button>
@@ -1916,11 +1992,11 @@ export function SettingsPage({ user, tagValues }: Props) {
             </select>
             <button
               onClick={() => setShowAdvFilters(f => !f)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm ${showAdvFilters || tagTypeFilter !== 'all' || tagSourceFilter !== 'all' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/40' : 'bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-300'}`}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm ${showAdvFilters || tagTypeFilter !== 'all' || tagSourceFilter !== 'all' ? 'bg-[var(--hmi-accent-bg)] text-[var(--hmi-accent-text)] border border-[var(--hmi-accent)]/40' : 'bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-300'}`}
             >
               <Filter size={14} /> Filters
               {(tagTypeFilter !== 'all' || tagSourceFilter !== 'all') && (
-                <span className="ml-1 px-1.5 py-0.5 bg-blue-600 text-white text-[10px] rounded-full font-medium">
+                <span className="ml-1 px-1.5 py-0.5 bg-[var(--hmi-accent)] text-white text-[10px] rounded-full font-medium">
                   {[tagTypeFilter, String(tagSourceFilter)].filter(f => f !== 'all').length}
                 </span>
               )}
@@ -1936,7 +2012,7 @@ export function SettingsPage({ user, tagValues }: Props) {
                 </button>
                 <button
                   onClick={() => setEditTag({ ...EMPTY_TAG })}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+                  className="flex items-center gap-1.5 px-3 py-2 bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-dark)] text-white rounded-lg text-sm font-medium"
                 >
                   <Plus size={16} /> New Tag
                 </button>
@@ -1983,7 +2059,7 @@ export function SettingsPage({ user, tagValues }: Props) {
 
           {/* Bulk Action Bar */}
           {canManage && selectedTagIds.size > 0 && (
-            <div className="flex items-center gap-3 mb-2 bg-blue-600/10 border border-blue-500/30 rounded-lg px-4 py-2">
+            <div className="flex items-center gap-3 mb-2 bg-[var(--hmi-accent-bg)] border border-[var(--hmi-accent)]/30 rounded-lg px-4 py-2">
               <span className="text-sm text-blue-300 font-medium">{selectedTagIds.size} selected</span>
               <div className="h-4 w-px bg-slate-600" />
               <button
@@ -2053,7 +2129,7 @@ export function SettingsPage({ user, tagValues }: Props) {
                 {filteredTags.map((tag) => (
                   <tr
                     key={tag.id}
-                    className={`border-b border-slate-700/50 hover:bg-slate-700/30 ${selectedTagIds.has(tag.id) ? 'bg-blue-600/10' : ''}`}
+                    className={`border-b border-slate-700/50 hover:bg-slate-700/30 ${selectedTagIds.has(tag.id) ? 'bg-[var(--hmi-accent-bg)]' : ''}`}
                   >
                     {canManage && (
                       <td className="w-10 px-3 py-2">
@@ -2207,7 +2283,7 @@ export function SettingsPage({ user, tagValues }: Props) {
                   </Field>
                   <div className="flex justify-end gap-2 pt-2">
                     <button onClick={() => setEditLabel(null)} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 hover:bg-slate-600">Cancel</button>
-                    <button onClick={() => editLabel.name.trim() && handleSaveLabel(editLabel)} className="px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-700">
+                    <button onClick={() => editLabel.name.trim() && handleSaveLabel(editLabel)} className="px-4 py-2 bg-[var(--hmi-accent)] rounded-lg text-sm text-white hover:bg-[var(--hmi-accent-dark)]">
                       {editLabel.id != null ? 'Save' : 'Create'}
                     </button>
                   </div>
@@ -2226,7 +2302,7 @@ export function SettingsPage({ user, tagValues }: Props) {
             <div className="flex justify-end mb-3">
               <button
                 onClick={() => setEditDs({ name: '', protocol: 'opcua', enabled: true, config: {} })}
-                className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+                className="flex items-center gap-1.5 px-3 py-2 bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-dark)] text-white rounded-lg text-sm font-medium"
               >
                 <Plus size={16} /> New Data Source
               </button>
@@ -2313,7 +2389,7 @@ export function SettingsPage({ user, tagValues }: Props) {
             {canManage && (
               <button
                 onClick={() => setShowCreateUser(true)}
-                className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+                className="flex items-center gap-1.5 px-3 py-2 bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-dark)] text-white rounded-lg text-sm font-medium"
               >
                 <UserPlus size={16} /> Add User
               </button>
@@ -2358,7 +2434,7 @@ export function SettingsPage({ user, tagValues }: Props) {
                 </div>
               </div>
               <div className="flex gap-2 mt-3">
-                <button onClick={handleCreateUser} className="px-4 py-2 bg-blue-600 rounded-md text-sm text-white">Create</button>
+                <button onClick={handleCreateUser} className="px-4 py-2 bg-[var(--hmi-accent)] rounded-md text-sm text-white">Create</button>
                 <button onClick={() => setShowCreateUser(false)} className="px-4 py-2 bg-slate-700 rounded-md text-sm text-slate-300">Cancel</button>
               </div>
             </div>

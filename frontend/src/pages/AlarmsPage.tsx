@@ -167,7 +167,7 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
         <button
           onClick={() => setTab('active')}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-            tab === 'active' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
+            tab === 'active' ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
           }`}
         >
           Active
@@ -175,7 +175,7 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
         <button
           onClick={() => setTab('history')}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-            tab === 'history' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
+            tab === 'history' ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
           }`}
         >
           History

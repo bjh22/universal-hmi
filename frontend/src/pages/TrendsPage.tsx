@@ -153,7 +153,7 @@ export function TrendsPage() {
               autoFocus
               onKeyDown={e => { if (e.key === 'Enter') handleSaveView(); }}
             />
-            <button onClick={handleSaveView} className="px-4 py-2 bg-blue-600 rounded-md text-sm text-white">Save</button>
+            <button onClick={handleSaveView} className="px-4 py-2 bg-[var(--hmi-accent)] rounded-md text-sm text-white">Save</button>
             <button onClick={() => setShowSaveDialog(false)} className="px-4 py-2 bg-slate-700 rounded-md text-sm text-slate-300">Cancel</button>
           </div>
         </div>
@@ -191,7 +191,7 @@ export function TrendsPage() {
               key={tr.label}
               onClick={() => { setTimeRange(tr.hours); setUseCustomRange(false); }}
               className={`px-3 py-1.5 rounded-md text-sm font-medium ${
-                !useCustomRange && timeRange === tr.hours ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
+                !useCustomRange && timeRange === tr.hours ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
               }`}
             >
               {tr.label}
@@ -202,7 +202,7 @@ export function TrendsPage() {
           <button
             onClick={() => setUseCustomRange(!useCustomRange)}
             className={`px-3 py-1.5 rounded-md text-sm font-medium ${
-              useCustomRange ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
+              useCustomRange ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
             }`}
           >
             Custom
