@@ -11,12 +11,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import alarms, audit, auth, datasources, integrations, jobs, machine_profiles, production, projects, screens, scripts, tags, trends, users
+from app.api import alarms, audit, auth, branding, datasources, integrations, jobs, machine_profiles, production, projects, screens, scripts, tags, trends, users
 from app.api.websocket import router as ws_router
 from app.core.config import settings
 from app.core.database import async_session, init_db
 from app.drivers.driver_manager import driver_manager
 from app.integrations.manager import IntegrationManager
+from app.models.app_setting import AppSetting  # noqa: F401 — ensure table creation
 from app.models.integration import Integration  # noqa: F401 — ensure table creation
 from app.services.alarm_service import AlarmService
 from app.services.tag_engine import tag_engine
@@ -83,6 +84,7 @@ app.add_middleware(
 
 # API routes
 app.include_router(auth.router)
+app.include_router(branding.router)
 app.include_router(users.router)
 app.include_router(tags.router)
 app.include_router(datasources.router)

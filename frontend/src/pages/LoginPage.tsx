@@ -5,9 +5,10 @@ import type { UserData } from '../types';
 
 interface Props {
   onLogin: (token: string, user: UserData) => void;
+  siteTitle?: string;
 }
 
-export function LoginPage({ onLogin }: Props) {
+export function LoginPage({ onLogin, siteTitle }: Props) {
   const [mode, setMode] = useState<'password' | 'pin'>('password');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -42,7 +43,7 @@ export function LoginPage({ onLogin }: Props) {
   return (
     <div className="flex items-center justify-center min-h-[80vh]">
       <div className="w-full max-w-sm bg-slate-800 rounded-2xl p-6 border border-slate-700">
-        <h1 className="text-xl font-bold text-center text-slate-100 mb-1">Industrial HMI</h1>
+        <h1 className="text-xl font-bold text-center text-slate-100 mb-1">{siteTitle || 'Industrial HMI'}</h1>
         <p className="text-sm text-center text-slate-400 mb-6">Sign in to continue</p>
 
         {/* Mode toggle */}

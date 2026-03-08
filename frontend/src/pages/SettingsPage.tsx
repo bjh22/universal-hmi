@@ -1237,11 +1237,19 @@ function BrowseTagsDialog({ dsId, dsName, existingTags, onCreateTag, onClose }: 
 
 // ─── Main SettingsPage ───
 export function SettingsPage({ user, tagValues }: Props) {
-  const [tab, setTab] = useState<'tags' | 'datasources' | 'integrations' | 'users' | 'audit'>('tags');
+  const [tab, setTab] = useState<'branding' | 'tags' | 'datasources' | 'integrations' | 'users' | 'audit'>('tags');
   const [tags, setTags] = useState<Tag[]>([]);
   const [dataSources, setDataSources] = useState<DataSourceData[]>([]);
   const [users, setUsers] = useState<UserListEntry[]>([]);
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
+
+  // Branding state
+  const [brandTitle, setBrandTitle] = useState('Industrial HMI');
+  const [brandFaviconPreview, setBrandFaviconPreview] = useState<string | null>(null);
+  const [brandFaviconData, setBrandFaviconData] = useState<string | null>(null);
+  const [brandSaving, setBrandSaving] = useState(false);
+  const [brandMsg, setBrandMsg] = useState('');
+  const brandFileRef = useRef<HTMLInputElement>(null);
 
   // Tag state
   const [tagSearch, setTagSearch] = useState('');
@@ -1287,14 +1295,24 @@ export function SettingsPage({ user, tagValues }: Props) {
     loadDataSources();
   }, [loadDataSources]);
 
+  const loadBranding = useCallback(() => {
+    api.getBranding().then((b) => {
+      setBrandTitle(b.site_title);
+      if (b.has_favicon) setBrandFaviconPreview('/api/branding/favicon');
+      else setBrandFaviconPreview(null);
+      setBrandFaviconData(null);
+    }).catch(() => {});
+  }, []);
+
   useEffect(() => {
     switch (tab) {
+      case 'branding': loadBranding(); break;
       case 'tags': loadTags(); loadLabels(); break;
       case 'datasources': loadDataSources(); loadTags(); break;
       case 'users': api.getUsers().then(setUsers).catch(() => {}); break;
       case 'audit': api.getAuditLog(500).then(setAuditLog).catch(() => {}); break;
     }
-  }, [tab, loadTags, loadLabels, loadDataSources]);
+  }, [tab, loadTags, loadLabels, loadDataSources, loadBranding]);
 
   const filteredTags = useMemo(() => {
     return tags.filter(t => {
@@ -1574,6 +1592,7 @@ export function SettingsPage({ user, tagValues }: Props) {
   };
 
   const tabList = [
+    { key: 'branding' as const, label: 'Branding' },
     { key: 'tags' as const, label: 'Tags' },
     { key: 'datasources' as const, label: 'Data Sources' },
     { key: 'integrations' as const, label: 'Integrations' },
@@ -1598,6 +1617,102 @@ export function SettingsPage({ user, tagValues }: Props) {
           </button>
         ))}
       </div>
+
+      {/* ═══ Branding ═══ */}
+      {tab === 'branding' && (
+        <div className="max-w-lg space-y-6">
+          <div>
+            <label className="text-xs text-slate-400 mb-1 block">Site Title</label>
+            <input
+              type="text"
+              value={brandTitle}
+              onChange={e => { setBrandTitle(e.target.value); setBrandMsg(''); }}
+              placeholder="Industrial HMI"
+              className={inputCls}
+            />
+            <p className="text-xs text-slate-500 mt-1">Shown in the browser tab and login page.</p>
+          </div>
+
+          <div>
+            <label className="text-xs text-slate-400 mb-1 block">Favicon</label>
+            <div className="flex items-center gap-4">
+              {brandFaviconPreview ? (
+                <img src={brandFaviconPreview} alt="Favicon" className="w-10 h-10 rounded bg-slate-700 p-1 object-contain" />
+              ) : (
+                <div className="w-10 h-10 rounded bg-slate-700 flex items-center justify-center text-slate-500 text-xs">None</div>
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => brandFileRef.current?.click()}
+                  className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-sm text-white rounded-lg"
+                >
+                  Choose Image
+                </button>
+                {(brandFaviconPreview || brandFaviconData) && (
+                  <button
+                    onClick={() => { setBrandFaviconPreview(null); setBrandFaviconData(''); setBrandMsg(''); }}
+                    className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-sm text-red-400 rounded-lg"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              <input
+                ref={brandFileRef}
+                type="file"
+                accept=".ico,.png,.svg,.jpg,.jpeg"
+                className="hidden"
+                onChange={e => {
+                  const file = e.currentTarget.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    const dataUri = reader.result as string;
+                    setBrandFaviconData(dataUri);
+                    setBrandFaviconPreview(dataUri);
+                    setBrandMsg('');
+                  };
+                  reader.readAsDataURL(file);
+                  e.currentTarget.value = '';
+                }}
+              />
+            </div>
+            <p className="text-xs text-slate-500 mt-1">Recommended: 32x32 or 64x64 PNG, ICO, or SVG.</p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              disabled={brandSaving}
+              onClick={async () => {
+                setBrandSaving(true);
+                setBrandMsg('');
+                try {
+                  const payload: Record<string, string> = { site_title: brandTitle };
+                  if (brandFaviconData !== null) payload.favicon = brandFaviconData;
+                  const res = await api.updateBranding(payload);
+                  setBrandFaviconData(null);
+                  if (res.has_favicon) setBrandFaviconPreview('/api/branding/favicon?' + Date.now());
+                  else setBrandFaviconPreview(null);
+                  document.title = res.site_title;
+                  const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+                  if (link) link.href = res.has_favicon ? '/api/branding/favicon?' + Date.now() : '/vite.svg';
+                  setBrandMsg('Saved');
+                } catch (err) {
+                  setBrandMsg(err instanceof Error ? err.message : 'Save failed');
+                } finally {
+                  setBrandSaving(false);
+                }
+              }}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm rounded-lg font-medium"
+            >
+              {brandSaving ? 'Saving...' : 'Save'}
+            </button>
+            {brandMsg && (
+              <span className={`text-sm ${brandMsg === 'Saved' ? 'text-green-400' : 'text-red-400'}`}>{brandMsg}</span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ═══ Tags ═══ */}
       {tab === 'tags' && (

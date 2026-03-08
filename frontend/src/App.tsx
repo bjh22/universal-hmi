@@ -1,9 +1,10 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useAuthState } from './hooks/useAuth';
 import { LoginPage } from './pages/LoginPage';
+import { api } from './lib/api';
 
 // Lazy-load page components for code splitting
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
@@ -22,16 +23,34 @@ function PageLoader() {
   );
 }
 
+function applyBranding(branding: { site_title: string; has_favicon: boolean }) {
+  document.title = branding.site_title;
+  const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+  if (link) {
+    link.href = branding.has_favicon
+      ? '/api/branding/favicon'
+      : '/vite.svg';
+  }
+}
+
 export default function App() {
   const { tagValues, alarms, connected } = useWebSocket();
   const auth = useAuthState();
+  const [siteTitle, setSiteTitle] = useState('Industrial HMI');
+
+  useEffect(() => {
+    api.getBranding().then((b) => {
+      setSiteTitle(b.site_title);
+      applyBranding(b);
+    }).catch(() => {});
+  }, []);
 
   return (
     <BrowserRouter>
       <Routes>
         <Route
           path="/login"
-          element={<LoginPage onLogin={auth.login} />}
+          element={<LoginPage onLogin={auth.login} siteTitle={siteTitle} />}
         />
         <Route
           path="*"
