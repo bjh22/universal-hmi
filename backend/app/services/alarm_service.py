@@ -162,7 +162,7 @@ class AlarmService:
             for config, value in new_alarms:
                 alarm = Alarm(
                     tag_id=config["tag_id"],
-                    message=config.get("message", f"Alarm on {config['tag_name']}"),
+                    message=config.get("tag_description") or config.get("message") or f"Alarm on {config['tag_name']}",
                     severity=AlarmSeverity(config.get("severity", "warning")),
                     state=AlarmState.ACTIVE_UNACKED,
                     trigger_value=str(value),

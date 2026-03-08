@@ -174,9 +174,7 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout }: AppS
                   }`}
                 >
                   <SeverityIcon severity={alarm.severity} />
-                  <span>{alarm.tag_display_name || alarm.tag_name || `Tag ${alarm.tag_id}`}</span>
-                  <span className="text-xs opacity-70">—</span>
-                  <span className="opacity-80">{alarm.message}</span>
+                  <span>{alarm.message}</span>
                   {alarm.state === 'active_acked' && (
                     <span className="text-xs opacity-60 ml-1">(Acked)</span>
                   )}
