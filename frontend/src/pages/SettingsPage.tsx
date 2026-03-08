@@ -156,9 +156,10 @@ function EnumMappingEditor({ mapping, onChange }: {
 }) {
   const entries = useMemo(() => {
     if (!mapping) return [];
-    return Object.entries(mapping)
+    const parsed = typeof mapping === 'string' ? JSON.parse(mapping) : mapping;
+    return Object.entries(parsed)
       .sort(([a], [b]) => Number(a) - Number(b))
-      .map(([k, v]) => ({ key: k, label: v }));
+      .map(([k, v]) => ({ key: k, label: v as string }));
   }, [mapping]);
 
   const update = useCallback((newEntries: { key: string; label: string }[]) => {
@@ -772,13 +773,13 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
         setPreviewTags(result.tags);
         setPreviewGroups(result.groups);
         setPreviewEnumCount(result.enum_count);
-        setSelectedNames(new Set(result.tags.map(t => t.name)));
+        setSelectedNames(new Set(result.tags.filter(t => !existingTagNames.has(t.name)).map(t => t.name)));
       } else if (fmt === 'rslogix500') {
         const result = await api.previewRslogix500Import(content, pfx);
         setPreviewTags(result.tags);
         setPreviewGroups(result.groups);
         setPreviewEnumCount(0);
-        setSelectedNames(new Set(result.tags.map(t => t.name)));
+        setSelectedNames(new Set(result.tags.filter(t => !existingTagNames.has(t.name)).map(t => t.name)));
       }
     } catch (err) {
       setPreviewError(err instanceof Error ? err.message : String(err));
@@ -788,7 +789,7 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
     } finally {
       setPreviewLoading(false);
     }
-  }, []);
+  }, [existingTagNames]);
 
   const handleFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -809,7 +810,7 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
           return row;
         });
         setRows(parsed);
-        setSelectedNames(new Set(parsed.map((r, i) => r.name || String(i))));
+        setSelectedNames(new Set(parsed.filter(r => !existingTagNames.has(r.name)).map((r, i) => r.name || String(i))));
       } else {
         setRawContent(text);
         loadPreview(text, format, prefix);
@@ -978,7 +979,7 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
               </button>
               <span className="text-sm text-slate-400">{selectedCount} of {totalCount} selected</span>
             </div>
-            <div className="max-h-60 overflow-auto mb-4">
+            <div className="overflow-auto mb-4">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-slate-700 text-slate-400">
@@ -994,7 +995,7 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.slice(0, 50).map((row, i) => {
+                  {rows.map((row, i) => {
                     const key = row.name || String(i);
                     const checked = selectedNames.has(key);
                     return (
@@ -1009,9 +1010,6 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
                       </tr>
                     );
                   })}
-                  {rows.length > 50 && (
-                    <tr><td colSpan={headers.length + 1} className="px-2 py-1 text-slate-500 text-center">...and {rows.length - 50} more</td></tr>
-                  )}
                 </tbody>
               </table>
             </div>
@@ -1044,7 +1042,7 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
             </div>
 
             {/* Grouped tree view */}
-            <div className="max-h-72 overflow-auto mb-4 border border-slate-700 rounded-lg">
+            <div className="overflow-auto mb-4 border border-slate-700 rounded-lg">
               {Object.entries(previewGroups)
                 .sort(([, a], [, b]) => b - a)
                 .map(([group]) => {
@@ -1076,7 +1074,7 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
                       </div>
                       {isExpanded && (
                         <div className="bg-slate-900">
-                          {groupTags.slice(0, 100).map((tag, i) => {
+                          {groupTags.map((tag, i) => {
                             const checked = selectedNames.has(tag.name);
                             return (
                               <div
@@ -1107,9 +1105,6 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
                               </div>
                             );
                           })}
-                          {groupTags.length > 100 && (
-                            <div className="px-4 py-1 text-xs text-slate-500">...and {groupTags.length - 100} more</div>
-                          )}
                         </div>
                       )}
                     </div>
@@ -1316,6 +1311,7 @@ export function SettingsPage({ user, tagValues }: Props) {
 
   // Branding state
   const [brandTitle, setBrandTitle] = useState('Industrial HMI');
+  const [brandNavTitle, setBrandNavTitle] = useState('HMI');
   const [brandFaviconPreview, setBrandFaviconPreview] = useState<string | null>(null);
   const [brandFaviconData, setBrandFaviconData] = useState<string | null>(null);
   const [brandSaving, setBrandSaving] = useState(false);
@@ -1369,6 +1365,7 @@ export function SettingsPage({ user, tagValues }: Props) {
   const loadBranding = useCallback(() => {
     api.getBranding().then((b) => {
       setBrandTitle(b.site_title);
+      setBrandNavTitle(b.nav_title);
       if (b.has_favicon) setBrandFaviconPreview('/api/branding/favicon');
       else setBrandFaviconPreview(null);
       setBrandFaviconData(null);
@@ -1713,6 +1710,18 @@ export function SettingsPage({ user, tagValues }: Props) {
           </div>
 
           <div>
+            <label className="text-xs text-slate-400 mb-1 block">Navigation Title</label>
+            <input
+              type="text"
+              value={brandNavTitle}
+              onChange={e => { setBrandNavTitle(e.target.value); setBrandMsg(''); }}
+              placeholder="HMI"
+              className={inputCls}
+            />
+            <p className="text-xs text-slate-500 mt-1">Shown in the sidebar navigation rail.</p>
+          </div>
+
+          <div>
             <label className="text-xs text-slate-400 mb-1 block">Favicon</label>
             <div className="flex items-center gap-4">
               {brandFaviconPreview ? (
@@ -1766,7 +1775,7 @@ export function SettingsPage({ user, tagValues }: Props) {
                 setBrandSaving(true);
                 setBrandMsg('');
                 try {
-                  const payload: Record<string, string> = { site_title: brandTitle };
+                  const payload: Record<string, string> = { site_title: brandTitle, nav_title: brandNavTitle };
                   if (brandFaviconData !== null) payload.favicon = brandFaviconData;
                   const res = await api.updateBranding(payload);
                   setBrandFaviconData(null);

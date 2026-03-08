@@ -15,6 +15,7 @@ from app.models.project import Project
 from app.models.alarm import Alarm, AlarmHistory
 from app.models.screen import Screen, ScreenTemplate
 from app.models.tag import Tag, TagLabel, TagTemplate, tag_label_assignments
+from app.models.app_setting import AppSetting
 from app.models.user import User, UserRole
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -330,6 +331,13 @@ async def _build_snapshot(session: AsyncSession, project: Project) -> dict:
             "download_conditions": _safe_json_parse(job.download_conditions),
         })
 
+    # Branding settings
+    branding_keys = ["site_title", "nav_title", "favicon"]
+    branding_result = await session.execute(
+        select(AppSetting).where(AppSetting.key.in_(branding_keys))
+    )
+    branding = {s.key: s.value for s in branding_result.scalars().all() if s.value}
+
     return {
         "format_version": EXPORT_FORMAT_VERSION,
         "project": {
@@ -338,6 +346,7 @@ async def _build_snapshot(session: AsyncSession, project: Project) -> dict:
             "version": project.version,
         },
         "exported_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "branding": branding,
         "data_sources": data_sources,
         "tag_labels": tag_labels,
         "tags": tags,
@@ -451,6 +460,18 @@ async def load_project(
     job_items = data.get("jobs", [])
     if job_items:
         await _import_jobs(job_items, pid, session, "overwrite", {})
+
+    # Restore branding settings
+    branding = data.get("branding", {})
+    if branding:
+        branding_keys = ["site_title", "nav_title", "favicon"]
+        # Clear existing branding
+        await session.execute(delete(AppSetting).where(AppSetting.key.in_(branding_keys)))
+        await session.flush()
+        for key in branding_keys:
+            val = branding.get(key)
+            if val:
+                session.add(AppSetting(key=key, value=val))
 
     await session.flush()
 
@@ -1223,6 +1244,17 @@ async def import_project(
             job_items, pid, session, get_conflict_mode("jobs"), existing_jobs,
         )
         results.append(job_result)
+
+    # Restore branding settings if present
+    branding = data.get("branding", {})
+    if branding:
+        branding_keys = ["site_title", "nav_title", "favicon"]
+        await session.execute(delete(AppSetting).where(AppSetting.key.in_(branding_keys)))
+        await session.flush()
+        for key in branding_keys:
+            val = branding.get(key)
+            if val:
+                session.add(AppSetting(key=key, value=val))
 
     await session.flush()
     await session.refresh(project)

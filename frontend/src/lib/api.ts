@@ -330,9 +330,9 @@ export const api = {
 
   // Branding
   getBranding: () =>
-    request<{ site_title: string; has_favicon: boolean }>('/branding/'),
-  updateBranding: (data: { site_title?: string; favicon?: string }) =>
-    request<{ site_title: string; has_favicon: boolean }>('/branding/', {
+    request<{ site_title: string; nav_title: string; has_favicon: boolean }>('/branding/'),
+  updateBranding: (data: { site_title?: string; nav_title?: string; favicon?: string }) =>
+    request<{ site_title: string; nav_title: string; has_favicon: boolean }>('/branding/', {
       method: 'PUT',
       body: JSON.stringify(data),
     }),

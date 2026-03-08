@@ -38,10 +38,12 @@ export default function App() {
   const { tagValues, alarms, connected } = useWebSocket();
   const auth = useAuthState();
   const [siteTitle, setSiteTitle] = useState('Industrial HMI');
+  const [navTitle, setNavTitle] = useState('HMI');
 
   useEffect(() => {
     api.getBranding().then((b) => {
       setSiteTitle(b.site_title);
+      setNavTitle(b.nav_title);
       applyBranding(b);
     }).catch(() => {});
   }, []);
@@ -61,6 +63,7 @@ export default function App() {
               wsConnected={connected}
               alarms={alarms}
               onLogout={auth.logout}
+              navTitle={navTitle}
             >
               <Suspense fallback={<PageLoader />}>
                 <Routes>

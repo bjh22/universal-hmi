@@ -122,7 +122,8 @@ export function FactoryConfigPage({ user, tagValues }: Props) {
   const formatValue = (tag: Tag, value: unknown): string => {
     if (value == null || value === '') return '—';
     if (tag.enum_mapping) {
-      const mapped = tag.enum_mapping[String(value)];
+      const em = typeof tag.enum_mapping === 'string' ? JSON.parse(tag.enum_mapping) : tag.enum_mapping;
+      const mapped = em[String(value)];
       if (mapped) return mapped;
     }
     if (tag.engineering_units) return `${value} ${tag.engineering_units}`;
