@@ -168,11 +168,17 @@ async def get_project(project_id: int, session: AsyncSession = Depends(get_db)):
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Count ALL resources (projects are snapshots of the full HMI state)
-    tag_count = len((await session.execute(select(Tag.id))).all())
-    screen_count = len((await session.execute(select(Screen.id))).all())
-    ds_count = len((await session.execute(select(DataSource.id))).all())
-    job_count = len((await session.execute(select(Job.id))).all())
+    # Count resources from the stored snapshot (not the live DB)
+    tag_count = screen_count = ds_count = job_count = 0
+    if project.snapshot:
+        try:
+            snap = json.loads(project.snapshot)
+            tag_count = len(snap.get("tags", []))
+            screen_count = len(snap.get("screens", []))
+            ds_count = len(snap.get("data_sources", []))
+            job_count = len(snap.get("jobs", []))
+        except (json.JSONDecodeError, TypeError):
+            pass
 
     return ProjectDetail(
         id=project.id,
