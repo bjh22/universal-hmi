@@ -228,31 +228,62 @@ async def import_tags_csv(
     session: AsyncSession = Depends(get_db),
     _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
 ):
-    """Import tags from CSV data. Body: {"tags": [...tag dicts...], "data_source_id": int}"""
+    """Import tags from CSV data.
+
+    Body: {"tags": [...], "data_source_id": int, "on_conflict": "skip"|"update", "update_fields": ["display_name", ...]}
+    """
     tags_data = body.get("tags", [])
     default_ds_id = body.get("data_source_id")
+    on_conflict = body.get("on_conflict", "skip")
+    update_fields = set(body.get("update_fields", []))
     if default_ds_id is not None:
         ds = await session.get(DataSource, default_ds_id)
         if not ds:
             raise HTTPException(status_code=400, detail=f"Data source {default_ds_id} not found")
-    created = []
+
+    import_names = [td["name"] for td in tags_data]
+    existing_q = await session.execute(select(Tag).where(Tag.name.in_(import_names)))
+    existing_map = {t.name: t for t in existing_q.scalars().all()}
+
+    created, updated, skipped = [], [], []
     for td in tags_data:
-        tag = Tag(
-            name=td["name"],
-            display_name=td.get("display_name") or td.get("description"),
-            data_type=TagDataType(td.get("data_type", "float")),
-            address=td.get("address"),
-            data_source_id=td.get("data_source_id") or default_ds_id,
-            access_mode=TagAccessMode(td.get("access_mode", "read")),
-            engineering_units=td.get("engineering_units"),
-        )
-        session.add(tag)
-        created.append(tag)
+        existing = existing_map.get(td["name"])
+        if existing:
+            if on_conflict != "update":
+                skipped.append(existing)
+                continue
+            if not update_fields or "display_name" in update_fields:
+                existing.display_name = td.get("display_name") or td.get("description") or existing.display_name
+            if not update_fields or "data_type" in update_fields:
+                existing.data_type = TagDataType(td.get("data_type", "float"))
+            if not update_fields or "access_mode" in update_fields:
+                existing.access_mode = TagAccessMode(td.get("access_mode", "read"))
+            if not update_fields or "address" in update_fields:
+                existing.address = td.get("address") or existing.address
+            if not update_fields or "engineering_units" in update_fields:
+                existing.engineering_units = td.get("engineering_units") or existing.engineering_units
+            ds = td.get("data_source_id") or default_ds_id
+            if ds is not None:
+                existing.data_source_id = ds
+            updated.append(existing)
+        else:
+            tag = Tag(
+                name=td["name"],
+                display_name=td.get("display_name") or td.get("description"),
+                data_type=TagDataType(td.get("data_type", "float")),
+                address=td.get("address"),
+                data_source_id=td.get("data_source_id") or default_ds_id,
+                access_mode=TagAccessMode(td.get("access_mode", "read")),
+                engineering_units=td.get("engineering_units"),
+            )
+            session.add(tag)
+            created.append(tag)
     await session.flush()
     for tag in created:
         await session.refresh(tag)
+    for tag in created + updated:
         tag_engine.register_tag(tag)
-    return {"imported": len(created), "names": [t.name for t in created]}
+    return {"imported": len(created), "updated": len(updated), "skipped": len(skipped)}
 
 
 # ─── CODESYS Symbol Configuration XML Import ───
@@ -449,6 +480,7 @@ def _codesys_parse_nodes(
     registry: dict[str, dict],
     ns: dict[str, str],
     group: str | None = None,
+    address_parts: list[str] | None = None,
 ) -> list[dict]:
     """Recursively walk CODESYS Node elements, collecting leaf tags.
 
@@ -456,7 +488,12 @@ def _codesys_parse_nodes(
     name — only leaf variable names form the dot-path.  This strips OPC-UA
     prefixes like Application, GVL names (Globals, HMIData, IO), etc.
     The most recent container name is passed as *group* for categorisation.
+
+    *address_parts* accumulates the full container hierarchy for building
+    OPC UA addresses (e.g. ``HMIData.auxIOSource.Physical``).
     """
+    if address_parts is None:
+        address_parts = []
     tags: list[dict] = []
     name = node_el.get("name", "")
     type_attr = node_el.get("type")
@@ -464,9 +501,13 @@ def _codesys_parse_nodes(
 
     children = node_el.findall("sc:Node", ns) if ns else node_el.findall("Node")
     if children:
-        # Container node — recurse without adding this node's name to the path
+        # Container node — recurse without adding this node's name to the tag path,
+        # but DO accumulate it in address_parts for OPC UA addressing
+        child_address = address_parts + ([name] if name else [])
         for child in children:
-            tags.extend(_codesys_parse_nodes(child, path_parts, registry, ns, group=name))
+            tags.extend(_codesys_parse_nodes(
+                child, path_parts, registry, ns, group=name, address_parts=child_address,
+            ))
     elif type_attr:
         # Leaf node — only leaf names form the tag path
         current_path = path_parts + [name] if name else path_parts
@@ -477,6 +518,11 @@ def _codesys_parse_nodes(
         expanded = _codesys_expand_type(
             type_attr, current_path, access, registry, group
         )
+
+        # Build OPC UA address for each expanded tag from the container
+        # hierarchy (address_parts) plus the tag's own dot-path name
+        for tag in expanded:
+            tag["address"] = ".".join(address_parts + [tag["name"]])
 
         # Apply the node-level comment as display name to all expanded tags
         # (only if they don't already have one, and only for single-expansion)
@@ -499,13 +545,15 @@ async def import_tags_codesys(
 ):
     """Import tags from a CODESYS symbol configuration XML string.
 
-    Body: {"xml": "<Symbolconfiguration>...</Symbolconfiguration>", "prefix": "optional_prefix", "names": ["tag1", "tag2"], "data_source_id": int}
-    Optional 'names' filters to only import the listed tag names.
+    Body: {"xml": "...", "prefix": "", "names": [...], "data_source_id": int,
+           "on_conflict": "skip"|"update", "update_fields": ["address", ...]}
     """
     xml_str = body.get("xml", "")
     prefix = body.get("prefix", "")
     selected_names = body.get("names")
     ds_id = body.get("data_source_id")
+    on_conflict = body.get("on_conflict", "skip")
+    update_fields = set(body.get("update_fields", []))
     if ds_id is not None:
         ds = await session.get(DataSource, ds_id)
         if not ds:
@@ -525,25 +573,51 @@ async def import_tags_codesys(
         name_set = set(selected_names)
         parsed_tags = [t for t in parsed_tags if t["name"] in name_set]
 
-    created = []
+    import_names = [td["name"] for td in parsed_tags]
+    existing_q = await session.execute(select(Tag).where(Tag.name.in_(import_names)))
+    existing_map = {t.name: t for t in existing_q.scalars().all()}
+
+    created, updated, skipped = [], [], []
     for td in parsed_tags:
         enum_mapping_raw = td.get("enum_mapping")
-        tag = Tag(
-            name=td["name"],
-            display_name=td.get("display_name"),
-            data_type=TagDataType(td["data_type"]),
-            access_mode=TagAccessMode(td["access_mode"]),
-            enum_mapping=json.dumps(enum_mapping_raw) if enum_mapping_raw else None,
-            data_source_id=ds_id,
-        )
-        session.add(tag)
-        created.append(tag)
+        enum_json = json.dumps(enum_mapping_raw) if enum_mapping_raw else None
+        existing = existing_map.get(td["name"])
+        if existing:
+            if on_conflict != "update":
+                skipped.append(existing)
+                continue
+            if not update_fields or "display_name" in update_fields:
+                existing.display_name = td.get("display_name") or existing.display_name
+            if not update_fields or "data_type" in update_fields:
+                existing.data_type = TagDataType(td["data_type"])
+            if not update_fields or "access_mode" in update_fields:
+                existing.access_mode = TagAccessMode(td["access_mode"])
+            if not update_fields or "address" in update_fields:
+                existing.address = td.get("address") or existing.address
+            if not update_fields or "enum_mapping" in update_fields:
+                existing.enum_mapping = enum_json if enum_json is not None else existing.enum_mapping
+            if ds_id is not None:
+                existing.data_source_id = ds_id
+            updated.append(existing)
+        else:
+            tag = Tag(
+                name=td["name"],
+                display_name=td.get("display_name"),
+                data_type=TagDataType(td["data_type"]),
+                access_mode=TagAccessMode(td["access_mode"]),
+                enum_mapping=enum_json,
+                address=td.get("address"),
+                data_source_id=ds_id,
+            )
+            session.add(tag)
+            created.append(tag)
 
     await session.flush()
     for tag in created:
         await session.refresh(tag)
+    for tag in created + updated:
         tag_engine.register_tag(tag)
-    return {"imported": len(created), "names": [t.name for t in created]}
+    return {"imported": len(created), "updated": len(updated), "skipped": len(skipped)}
 
 
 # ─── RSLogix 500 CSV Import ───
@@ -599,16 +673,15 @@ async def import_tags_rslogix500(
 ):
     """Import tags from RSLogix 500 CSV export.
 
-    Body: {"csv": "raw CSV text", "prefix": "optional_prefix", "names": ["tag1", "tag2"], "data_source_id": int}
-    Optional 'names' filters to only import the listed tag names.
-
-    RSLogix 500 CSV format (no header row):
-    address, scope, symbol, desc1, desc2, desc3, desc4, desc5, ...
+    Body: {"csv": "...", "prefix": "", "names": [...], "data_source_id": int,
+           "on_conflict": "skip"|"update", "update_fields": ["address", ...]}
     """
     csv_str = body.get("csv", "")
     prefix = body.get("prefix", "")
     selected_names = body.get("names")
     ds_id = body.get("data_source_id")
+    on_conflict = body.get("on_conflict", "skip")
+    update_fields = set(body.get("update_fields", []))
     if ds_id is not None:
         ds = await session.get(DataSource, ds_id)
         if not ds:
@@ -621,24 +694,46 @@ async def import_tags_rslogix500(
         name_set = set(selected_names)
         parsed_tags = [t for t in parsed_tags if t["name"] in name_set]
 
-    created = []
+    import_names = [td["name"] for td in parsed_tags]
+    existing_q = await session.execute(select(Tag).where(Tag.name.in_(import_names)))
+    existing_map = {t.name: t for t in existing_q.scalars().all()}
+
+    created, updated, skipped = [], [], []
     for td in parsed_tags:
-        tag = Tag(
-            name=td["name"],
-            display_name=td.get("display_name"),
-            data_type=TagDataType(td["data_type"]),
-            access_mode=TagAccessMode(td["access_mode"]),
-            address=td.get("address"),
-            data_source_id=ds_id,
-        )
-        session.add(tag)
-        created.append(tag)
+        existing = existing_map.get(td["name"])
+        if existing:
+            if on_conflict != "update":
+                skipped.append(existing)
+                continue
+            if not update_fields or "display_name" in update_fields:
+                existing.display_name = td.get("display_name") or existing.display_name
+            if not update_fields or "data_type" in update_fields:
+                existing.data_type = TagDataType(td["data_type"])
+            if not update_fields or "access_mode" in update_fields:
+                existing.access_mode = TagAccessMode(td["access_mode"])
+            if not update_fields or "address" in update_fields:
+                existing.address = td.get("address") or existing.address
+            if ds_id is not None:
+                existing.data_source_id = ds_id
+            updated.append(existing)
+        else:
+            tag = Tag(
+                name=td["name"],
+                display_name=td.get("display_name"),
+                data_type=TagDataType(td["data_type"]),
+                access_mode=TagAccessMode(td["access_mode"]),
+                address=td.get("address"),
+                data_source_id=ds_id,
+            )
+            session.add(tag)
+            created.append(tag)
 
     await session.flush()
     for tag in created:
         await session.refresh(tag)
+    for tag in created + updated:
         tag_engine.register_tag(tag)
-    return {"imported": len(created), "names": [t.name for t in created]}
+    return {"imported": len(created), "updated": len(updated), "skipped": len(skipped)}
 
 
 # ─── Import Preview Endpoints ───
@@ -661,8 +756,21 @@ def _parse_codesys_xml(xml_str: str, prefix: str = "") -> list[dict]:
         return []
 
     parsed: list[dict] = []
+    ns_or_empty = ns if ns else {}
     for top_node in (node_list.findall("sc:Node", ns) if ns else node_list.findall("Node")):
-        parsed.extend(_codesys_parse_nodes(top_node, [], registry, ns if ns else {}))
+        # Skip the top-level container name (typically "Application") from OPC UA
+        # address paths — the driver's address_prefix already includes it.
+        top_children = top_node.findall("sc:Node", ns) if ns else top_node.findall("Node")
+        if top_children:
+            top_name = top_node.get("name", "")
+            for child in top_children:
+                parsed.extend(_codesys_parse_nodes(
+                    child, [], registry, ns_or_empty, group=top_name, address_parts=[],
+                ))
+        else:
+            parsed.extend(_codesys_parse_nodes(
+                top_node, [], registry, ns_or_empty, address_parts=[],
+            ))
 
     result = []
     for td in parsed:
@@ -674,6 +782,8 @@ def _parse_codesys_xml(xml_str: str, prefix: str = "") -> list[dict]:
             "group": td.get("group"),
             "data_type": td["data_type"].value,
             "access_mode": td["access_mode"].value,
+            "address": td.get("address"),
+            "enum_mapping": enum_mapping,
             "has_enum": bool(enum_mapping),
             "enum_values": len(enum_mapping) if enum_mapping else 0,
         })
