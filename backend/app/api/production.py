@@ -62,12 +62,19 @@ class DowntimeEventUpdate(BaseModel):
 # Serialization helpers
 # ---------------------------------------------------------------------------
 
+def _utc_iso(dt: datetime | None) -> str | None:
+    """Format a datetime as ISO 8601 with Z suffix so JS treats it as UTC."""
+    if dt is None:
+        return None
+    return dt.isoformat() + ("" if dt.tzinfo else "Z")
+
+
 def _run_out(r: ProductionRun) -> dict:
     return {
         "id": r.id,
         "job_name": r.job_name,
-        "start_time": r.start_time.isoformat(),
-        "end_time": r.end_time.isoformat() if r.end_time else None,
+        "start_time": _utc_iso(r.start_time),
+        "end_time": _utc_iso(r.end_time),
         "good_count": r.good_count,
         "reject_count": r.reject_count,
         "target_count": r.target_count,
@@ -83,8 +90,8 @@ def _downtime_out(e: DowntimeEvent) -> dict:
     return {
         "id": e.id,
         "production_run_id": e.production_run_id,
-        "start_time": e.start_time.isoformat(),
-        "end_time": e.end_time.isoformat() if e.end_time else None,
+        "start_time": _utc_iso(e.start_time),
+        "end_time": _utc_iso(e.end_time),
         "reason_code": e.reason_code,
         "reason_text": e.reason_text,
         "duration_seconds": e.duration_seconds,

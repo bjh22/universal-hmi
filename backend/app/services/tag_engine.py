@@ -41,7 +41,7 @@ class TagValue:
             "name": self.name,
             "value": self.value,
             "quality": self.quality,
-            "timestamp": self.timestamp.isoformat(),
+            "timestamp": self.timestamp.isoformat() + ("" if self.timestamp.tzinfo else "Z"),
         }
         if self.long_description:
             d["long_description"] = self.long_description

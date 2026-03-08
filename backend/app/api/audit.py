@@ -26,4 +26,15 @@ async def get_audit_log(
         query = query.where(AuditLog.user == user)
     query = query.offset(offset).limit(limit)
     result = await session.execute(query)
-    return result.scalars().all()
+    rows = result.scalars().all()
+    return [
+        {
+            "id": r.id,
+            "timestamp": r.timestamp.isoformat() + ("" if r.timestamp.tzinfo else "Z"),
+            "user": r.user,
+            "action": r.action.value if r.action else None,
+            "details": r.details,
+            "source_ip": r.source_ip,
+        }
+        for r in rows
+    ]

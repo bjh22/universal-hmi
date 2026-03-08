@@ -332,9 +332,10 @@ class AlarmService:
                 "message": alarm.message,
                 "severity": alarm.severity.value,
                 "state": alarm.state.value,
-                "triggered_at": alarm.triggered_at.isoformat(),
+                "triggered_at": alarm.triggered_at.isoformat() + ("" if alarm.triggered_at.tzinfo else "Z"),
                 "acknowledged_at": (
-                    alarm.acknowledged_at.isoformat() if alarm.acknowledged_at else None
+                    (alarm.acknowledged_at.isoformat() + ("" if alarm.acknowledged_at.tzinfo else "Z"))
+                    if alarm.acknowledged_at else None
                 ),
                 "acknowledged_by": alarm.acknowledged_by,
                 "trigger_value": alarm.trigger_value,
