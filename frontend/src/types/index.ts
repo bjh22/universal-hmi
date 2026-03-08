@@ -241,3 +241,44 @@ export interface IntegrationData {
   status: 'stopped' | 'running' | 'error';
   status_message: string | null;
 }
+
+// ─── Project Import Preview/Result ───
+
+export interface SectionItemPreview {
+  name: string;
+  conflict: boolean;
+  conflict_project: string | null;
+}
+
+export interface SectionPreview {
+  key: string;
+  label: string;
+  count: number;
+  conflict_count: number;
+  items: SectionItemPreview[];
+  depends_on: string[];
+  warnings: string[];
+}
+
+export interface ImportPreviewResponse {
+  format_version: string;
+  project_name: string;
+  project_version: string;
+  target_project_name: string | null;
+  sections: SectionPreview[];
+  dependency_warnings: string[];
+}
+
+export interface ImportSectionResult {
+  section: string;
+  created: number;
+  updated: number;
+  skipped: number;
+}
+
+export interface ImportResultResponse {
+  project_id: number;
+  project_name: string;
+  results: ImportSectionResult[];
+  warnings: string[];
+}

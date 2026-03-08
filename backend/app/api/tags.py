@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import require_role
 from app.core.database import get_db
+from app.models.datasource import DataSource
 from app.models.screen import Screen
 from app.models.tag import Tag, TagAccessMode, TagDataType, TagLabel, TagTemplate
 from app.models.user import User, UserRole
@@ -198,8 +199,13 @@ async def import_tags_csv(
     session: AsyncSession = Depends(get_db),
     _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
 ):
-    """Import tags from CSV data. Body: {"tags": [...tag dicts...]}"""
+    """Import tags from CSV data. Body: {"tags": [...tag dicts...], "data_source_id": int}"""
     tags_data = body.get("tags", [])
+    default_ds_id = body.get("data_source_id")
+    if default_ds_id is not None:
+        ds = await session.get(DataSource, default_ds_id)
+        if not ds:
+            raise HTTPException(status_code=400, detail=f"Data source {default_ds_id} not found")
     created = []
     for td in tags_data:
         tag = Tag(
@@ -207,7 +213,7 @@ async def import_tags_csv(
             description=td.get("description"),
             data_type=TagDataType(td.get("data_type", "float")),
             address=td.get("address"),
-            data_source_id=td.get("data_source_id"),
+            data_source_id=td.get("data_source_id") or default_ds_id,
             access_mode=TagAccessMode(td.get("access_mode", "read")),
             engineering_units=td.get("engineering_units"),
         )
@@ -464,12 +470,17 @@ async def import_tags_codesys(
 ):
     """Import tags from a CODESYS symbol configuration XML string.
 
-    Body: {"xml": "<Symbolconfiguration>...</Symbolconfiguration>", "prefix": "optional_prefix", "names": ["tag1", "tag2"]}
+    Body: {"xml": "<Symbolconfiguration>...</Symbolconfiguration>", "prefix": "optional_prefix", "names": ["tag1", "tag2"], "data_source_id": int}
     Optional 'names' filters to only import the listed tag names.
     """
     xml_str = body.get("xml", "")
     prefix = body.get("prefix", "")
     selected_names = body.get("names")
+    ds_id = body.get("data_source_id")
+    if ds_id is not None:
+        ds = await session.get(DataSource, ds_id)
+        if not ds:
+            raise HTTPException(status_code=400, detail=f"Data source {ds_id} not found")
     if not xml_str:
         raise HTTPException(status_code=400, detail="Missing 'xml' in body")
 
@@ -494,6 +505,7 @@ async def import_tags_codesys(
             data_type=TagDataType(td["data_type"]),
             access_mode=TagAccessMode(td["access_mode"]),
             enum_mapping=json.dumps(enum_mapping_raw) if enum_mapping_raw else None,
+            data_source_id=ds_id,
         )
         session.add(tag)
         created.append(tag)
@@ -558,7 +570,7 @@ async def import_tags_rslogix500(
 ):
     """Import tags from RSLogix 500 CSV export.
 
-    Body: {"csv": "raw CSV text", "prefix": "optional_prefix", "names": ["tag1", "tag2"]}
+    Body: {"csv": "raw CSV text", "prefix": "optional_prefix", "names": ["tag1", "tag2"], "data_source_id": int}
     Optional 'names' filters to only import the listed tag names.
 
     RSLogix 500 CSV format (no header row):
@@ -567,6 +579,11 @@ async def import_tags_rslogix500(
     csv_str = body.get("csv", "")
     prefix = body.get("prefix", "")
     selected_names = body.get("names")
+    ds_id = body.get("data_source_id")
+    if ds_id is not None:
+        ds = await session.get(DataSource, ds_id)
+        if not ds:
+            raise HTTPException(status_code=400, detail=f"Data source {ds_id} not found")
     if not csv_str:
         raise HTTPException(status_code=400, detail="Missing 'csv' in body")
 
@@ -583,6 +600,7 @@ async def import_tags_rslogix500(
             data_type=TagDataType(td["data_type"]),
             access_mode=TagAccessMode(td["access_mode"]),
             address=td.get("address"),
+            data_source_id=ds_id,
         )
         session.add(tag)
         created.append(tag)

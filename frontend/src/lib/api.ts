@@ -17,6 +17,8 @@ import type {
   ProjectDetail,
   MachineProfile,
   ImportPreviewTag,
+  ImportPreviewResponse,
+  ImportResultResponse,
   IntegrationType,
   IntegrationData,
 } from '../types/index';
@@ -81,20 +83,20 @@ export const api = {
     request<{ updated: number }>('/tags/bulk/remove-labels', { method: 'POST', body: JSON.stringify({ tag_ids: tagIds, label_ids: labelIds }) }),
   bulkUpdateTags: (tagIds: number[], fields: Record<string, unknown>) =>
     request<{ updated: number }>('/tags/bulk/update', { method: 'POST', body: JSON.stringify({ tag_ids: tagIds, fields }) }),
-  importTagsCsv: (tags: Partial<Tag>[]) =>
+  importTagsCsv: (tags: Partial<Tag>[], dataSourceId?: number | null) =>
     request<{ imported: number; names: string[] }>('/tags/import/csv', {
       method: 'POST',
-      body: JSON.stringify({ tags }),
+      body: JSON.stringify({ tags, ...(dataSourceId != null ? { data_source_id: dataSourceId } : {}) }),
     }),
-  importTagsCodesys: (xml: string, prefix?: string, names?: string[]) =>
+  importTagsCodesys: (xml: string, prefix?: string, names?: string[], dataSourceId?: number | null) =>
     request<{ imported: number; names: string[] }>('/tags/import/codesys', {
       method: 'POST',
-      body: JSON.stringify({ xml, prefix: prefix || '', ...(names ? { names } : {}) }),
+      body: JSON.stringify({ xml, prefix: prefix || '', ...(names ? { names } : {}), ...(dataSourceId != null ? { data_source_id: dataSourceId } : {}) }),
     }),
-  importTagsRslogix500: (csv: string, prefix?: string, names?: string[]) =>
+  importTagsRslogix500: (csv: string, prefix?: string, names?: string[], dataSourceId?: number | null) =>
     request<{ imported: number; names: string[] }>('/tags/import/rslogix500', {
       method: 'POST',
-      body: JSON.stringify({ csv, prefix: prefix || '', ...(names ? { names } : {}) }),
+      body: JSON.stringify({ csv, prefix: prefix || '', ...(names ? { names } : {}), ...(dataSourceId != null ? { data_source_id: dataSourceId } : {}) }),
     }),
   previewCodesysImport: (xml: string, prefix?: string) =>
     request<{ total: number; tags: ImportPreviewTag[]; groups: Record<string, number>; enum_count: number }>('/tags/import/codesys/preview', {
@@ -226,6 +228,30 @@ export const api = {
     request<Record<string, unknown>>(`/projects/${id}/export`),
   importProject: (data: Record<string, unknown>) =>
     request<ProjectData>('/projects/import', { method: 'POST', body: JSON.stringify(data) }),
+  previewImport: (data: Record<string, unknown>, targetProjectId?: number | null) =>
+    request<ImportPreviewResponse>('/projects/import/preview', {
+      method: 'POST',
+      body: JSON.stringify({ data, target_project_id: targetProjectId ?? null }),
+    }),
+  importProjectSelective: (params: {
+    data: Record<string, unknown>;
+    targetProjectId?: number | null;
+    nameOverride?: string;
+    sections?: string[];
+    conflictResolution?: Record<string, string>;
+    defaultConflictResolution?: string;
+  }) =>
+    request<ImportResultResponse>('/projects/import', {
+      method: 'POST',
+      body: JSON.stringify({
+        data: params.data,
+        target_project_id: params.targetProjectId ?? null,
+        name_override: params.nameOverride || null,
+        sections: params.sections || null,
+        conflict_resolution: params.conflictResolution || {},
+        default_conflict_resolution: params.defaultConflictResolution || 'skip',
+      }),
+    }),
 
   // Machine Profiles
   getProfiles: (projectId: number) =>

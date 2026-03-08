@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { PROTOCOL_CONFIGS } from '../lib/protocolConfigs';
+import { Dialog } from '../components/Dialog';
+import { ImportWizard } from '../components/ImportWizard';
 import type { ProjectData, ProjectDetail, UserData, MachineProfile, Tag, DataSourceData } from '../types';
 
 interface Props {
@@ -34,8 +36,6 @@ export function ProjectsPage({ user }: Props) {
   const [formName, setFormName] = useState('');
   const [formDesc, setFormDesc] = useState('');
   const [formVersion, setFormVersion] = useState('1.0.0');
-  const [importData, setImportData] = useState<Record<string, unknown> | null>(null);
-  const [importFileName, setImportFileName] = useState('');
 
   // Machine Profiles state
   const [profiles, setProfiles] = useState<MachineProfile[]>([]);
@@ -183,36 +183,6 @@ export function ProjectsPage({ user }: Props) {
       setError(e instanceof Error ? e.message : 'Export failed');
     }
   }, [projects]);
-
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setImportFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const json = JSON.parse(ev.target?.result as string);
-        setImportData(json);
-      } catch {
-        setError('Invalid JSON file');
-        setImportData(null);
-      }
-    };
-    reader.readAsText(file);
-  }, []);
-
-  const handleImport = useCallback(async () => {
-    if (!importData) return;
-    try {
-      await api.importProject(importData);
-      setShowImport(false);
-      setImportData(null);
-      setImportFileName('');
-      await loadProjects();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Import failed');
-    }
-  }, [importData, loadProjects]);
 
   const openEdit = useCallback((p: ProjectData) => {
     setFormName(p.name);
@@ -636,38 +606,13 @@ export function ProjectsPage({ user }: Props) {
         </Dialog>
       )}
 
-      {/* Import Dialog */}
+      {/* Import Wizard */}
       {showImport && (
-        <Dialog title="Import Project" onClose={() => { setShowImport(false); setImportData(null); setImportFileName(''); }}>
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs text-slate-400 mb-1 block">Select .hmi.json file</label>
-              <input
-                type="file"
-                accept=".json,.hmi.json"
-                onChange={handleFileSelect}
-                className="text-sm text-slate-300 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-slate-700 file:text-slate-200 hover:file:bg-slate-600"
-              />
-            </div>
-            {importData && (
-              <div className="bg-slate-900 rounded-md p-3 text-xs space-y-1">
-                <p className="text-slate-400">File: <span className="text-white">{importFileName}</span></p>
-                <p className="text-slate-400">Project: <span className="text-white">{(importData.project as Record<string, unknown>)?.name as string || 'Unknown'}</span></p>
-                <p className="text-slate-400">Version: <span className="text-white">{(importData.project as Record<string, unknown>)?.version as string || '?'}</span></p>
-                <p className="text-slate-400">
-                  Contents: {(importData.tags as unknown[])?.length || 0} tags,
-                  {' '}{(importData.screens as unknown[])?.length || 0} screens,
-                  {' '}{(importData.data_sources as unknown[])?.length || 0} data sources,
-                  {' '}{(importData.jobs as unknown[])?.length || 0} jobs
-                </p>
-              </div>
-            )}
-            <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => { setShowImport(false); setImportData(null); setImportFileName(''); }} className={btnSecondary}>Cancel</button>
-              <button onClick={handleImport} disabled={!importData} className={btnPrimary}>Import</button>
-            </div>
-          </div>
-        </Dialog>
+        <ImportWizard
+          projects={projects}
+          onClose={() => setShowImport(false)}
+          onComplete={() => { setShowImport(false); loadProjects(); }}
+        />
       )}
 
       {/* Create Profile Dialog */}
@@ -847,20 +792,6 @@ export function ProjectsPage({ user }: Props) {
           </div>
         </Dialog>
       )}
-    </div>
-  );
-}
-
-function Dialog({ title, children, onClose, wide }: { title: string; children: React.ReactNode; onClose: () => void; wide?: boolean }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
-      <div className={`bg-slate-800 border border-slate-700 rounded-lg shadow-xl p-5 w-full mx-4 ${wide ? 'max-w-4xl' : 'max-w-md'}`} onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold text-white">{title}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={18} /></button>
-        </div>
-        {children}
-      </div>
     </div>
   );
 }
