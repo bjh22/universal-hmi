@@ -21,7 +21,6 @@ class TagCreate(BaseModel):
     name: str
     description: str | None = None
     long_description: str | None = None
-    group_name: str | None = None
     data_source_id: int | None = None
     address: str | None = None
     data_type: TagDataType = TagDataType.FLOAT
@@ -55,7 +54,6 @@ class TagOut(BaseModel):
     name: str
     description: str | None
     long_description: str | None
-    group_name: str | None
     data_source_id: int | None
     address: str | None
     data_type: TagDataType
@@ -88,13 +86,10 @@ class TagValueOut(BaseModel):
 
 @router.get("/", response_model=list[TagOut])
 async def list_tags(
-    group: str | None = None,
     project_id: int | None = None,
     session: AsyncSession = Depends(get_db),
 ):
-    query = select(Tag).options(selectinload(Tag.labels)).order_by(Tag.group_name, Tag.name)
-    if group:
-        query = query.where(Tag.group_name == group)
+    query = select(Tag).options(selectinload(Tag.labels)).order_by(Tag.name)
     if project_id is not None:
         query = query.where(Tag.project_id == project_id)
     result = await session.execute(query)
@@ -210,7 +205,6 @@ async def import_tags_csv(
         tag = Tag(
             name=td["name"],
             description=td.get("description"),
-            group_name=td.get("group_name"),
             data_type=TagDataType(td.get("data_type", "float")),
             address=td.get("address"),
             data_source_id=td.get("data_source_id"),
@@ -392,7 +386,7 @@ def _codesys_expand_type(
         return [{
             "name": ".".join(path_parts),
             "description": None,
-            "group_name": group,
+            "group": group,
             "data_type": TagDataType.INT,
             "access_mode": access_mode,
             "enum_mapping": _codesys_get_enum_mapping(type_name, registry),
@@ -408,7 +402,7 @@ def _codesys_expand_type(
     return [{
         "name": ".".join(path_parts),
         "description": None,
-        "group_name": group,
+        "group": group,
         "data_type": data_type,
         "access_mode": access_mode,
     }]
@@ -497,7 +491,6 @@ async def import_tags_codesys(
         tag = Tag(
             name=td["name"],
             description=td.get("description"),
-            group_name=td.get("group_name"),
             data_type=TagDataType(td["data_type"]),
             access_mode=TagAccessMode(td["access_mode"]),
             enum_mapping=json.dumps(enum_mapping_raw) if enum_mapping_raw else None,
@@ -587,7 +580,6 @@ async def import_tags_rslogix500(
         tag = Tag(
             name=td["name"],
             description=td.get("description"),
-            group_name=td.get("group_name"),
             data_type=TagDataType(td["data_type"]),
             access_mode=TagAccessMode(td["access_mode"]),
             address=td.get("address"),
@@ -632,7 +624,7 @@ def _parse_codesys_xml(xml_str: str, prefix: str = "") -> list[dict]:
         result.append({
             "name": tag_name,
             "description": td.get("description"),
-            "group_name": td.get("group_name"),
+            "group": td.get("group"),
             "data_type": td["data_type"].value,
             "access_mode": td["access_mode"].value,
             "has_enum": bool(enum_mapping),
@@ -687,7 +679,7 @@ def _parse_rslogix500_csv(csv_str: str, prefix: str = "") -> list[dict]:
         result.append({
             "name": full_name,
             "description": description or None,
-            "group_name": RSLOGIX_GROUP_MAP.get(file_letter, "Other"),
+            "group": RSLOGIX_GROUP_MAP.get(file_letter, "Other"),
             "data_type": data_type.value,
             "access_mode": TagAccessMode.READ_WRITE.value,
             "address": address,
@@ -713,7 +705,7 @@ async def preview_codesys_import(
     groups: dict[str, int] = {}
     enum_count = 0
     for t in tags:
-        g = t.get("group_name") or "Ungrouped"
+        g = t.get("group") or "Ungrouped"
         groups[g] = groups.get(g, 0) + 1
         if t.get("has_enum"):
             enum_count += 1
@@ -733,7 +725,7 @@ async def preview_rslogix500_import(
     tags = _parse_rslogix500_csv(csv_str, prefix)
     groups: dict[str, int] = {}
     for t in tags:
-        g = t.get("group_name") or "Ungrouped"
+        g = t.get("group") or "Ungrouped"
         groups[g] = groups.get(g, 0) + 1
     return {"total": len(tags), "tags": tags, "groups": groups}
 
@@ -900,7 +892,7 @@ async def bulk_update_tags(
     if not body.tag_ids or not body.fields:
         return {"updated": 0}
     allowed = {
-        "group_name", "data_type", "access_mode", "engineering_units",
+        "data_type", "access_mode", "engineering_units",
         "trending_enabled", "alarm_enabled", "simulation_enabled",
         "simulation_behavior", "data_source_id",
     }

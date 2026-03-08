@@ -14,7 +14,6 @@ const EMPTY_TAG: Omit<Tag, 'id'> = {
   name: '',
   description: null,
   long_description: null,
-  group_name: null,
   data_source_id: null,
   address: null,
   data_type: 'float',
@@ -449,7 +448,6 @@ function BulkEditDialog({ tagCount, dataSources, onApply, onClose }: {
   onClose: () => void;
 }) {
   const [fields, setFields] = useState<Record<string, BulkFieldState>>({
-    group_name:          { enabled: false, value: '' },
     data_type:           { enabled: false, value: 'float' },
     access_mode:         { enabled: false, value: 'read_write' },
     engineering_units:   { enabled: false, value: '' },
@@ -493,18 +491,6 @@ function BulkEditDialog({ tagCount, dataSources, onApply, onClose }: {
         </p>
 
         <div className="space-y-0 mb-5">
-          {/* Group Name */}
-          <div className={rowCls}>
-            <button onClick={() => toggle('group_name')} className={checkCls}>
-              {fields.group_name.enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
-            </button>
-            <span className={labelCls}>Group</span>
-            <input type="text" value={fields.group_name.value as string}
-              onChange={e => setValue('group_name', e.target.value)}
-              disabled={!fields.group_name.enabled}
-              className={ctrlCls} placeholder="e.g. Pumps" />
-          </div>
-
           {/* Data Type */}
           <div className={rowCls}>
             <button onClick={() => toggle('data_type')} className={checkCls}>
@@ -816,7 +802,7 @@ function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClos
   }, [format, rows, previewTags]);
 
   const toggleGroupSelection = useCallback((group: string) => {
-    const groupTagNames = previewTags.filter(t => (t.group_name || 'Ungrouped') === group).map(t => t.name);
+    const groupTagNames = previewTags.filter(t => (t.group || 'Ungrouped') === group).map(t => t.name);
     setSelectedNames(prev => {
       const next = new Set(prev);
       const allSelected = groupTagNames.every(n => next.has(n));
@@ -854,7 +840,7 @@ function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClos
   const fileAccept = format === 'codesys_xml' ? '.xml' : '.csv,.CSV';
 
   const formatInfo: Record<ImportFormat, { label: string; desc: string }> = {
-    hmi_csv: { label: 'HMI CSV', desc: 'CSV with header row. Columns: name, description (Display Name), group_name, data_type, access_mode, engineering_units, min_value, max_value, address' },
+    hmi_csv: { label: 'HMI CSV', desc: 'CSV with header row. Columns: name, description (Display Name), data_type, access_mode, engineering_units, min_value, max_value, address' },
     codesys_xml: { label: 'CODESYS XML', desc: 'CODESYS symbol configuration XML exported from the PLC IDE. Structures, function blocks, enums, and arrays are expanded into flat tags.' },
     rslogix500: { label: 'RSLogix 500', desc: 'RSLogix 500 database CSV export. Addresses are mapped to typed tags grouped by data file (B=Bits, N=Integers, F=Floats, T=Timers, C=Counters).' },
   };
@@ -980,7 +966,7 @@ function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClos
                 .sort(([, a], [, b]) => b - a)
                 .map(([group]) => {
                   const isExpanded = expandedGroups.has(group);
-                  const groupTags = previewTags.filter(t => (t.group_name || 'Ungrouped') === group);
+                  const groupTags = previewTags.filter(t => (t.group || 'Ungrouped') === group);
                   const groupSelectedCount = groupTags.filter(t => selectedNames.has(t.name)).length;
                   const allGroupSelected = groupSelectedCount === groupTags.length;
                   const someGroupSelected = groupSelectedCount > 0 && !allGroupSelected;
@@ -1195,7 +1181,6 @@ export function SettingsPage({ user, tagValues }: Props) {
   const [tagSearch, setTagSearch] = useState('');
   const [tagLabelFilter, setTagLabelFilter] = useState('all');
   const [tagTypeFilter, setTagTypeFilter] = useState('all');
-  const [tagGroupFilter, setTagGroupFilter] = useState('all');
   const [tagSourceFilter, setTagSourceFilter] = useState<number | 'all' | 'none'>('all');
   const [showAdvFilters, setShowAdvFilters] = useState(false);
   const [allLabels, setAllLabels] = useState<TagLabel[]>([]);
@@ -1245,12 +1230,6 @@ export function SettingsPage({ user, tagValues }: Props) {
     }
   }, [tab, loadTags, loadLabels, loadDataSources]);
 
-  const tagGroups = useMemo(() => {
-    const groups = new Set<string>();
-    tags.forEach(t => { if (t.group_name) groups.add(t.group_name); });
-    return Array.from(groups).sort();
-  }, [tags]);
-
   const filteredTags = useMemo(() => {
     return tags.filter(t => {
       if (tagLabelFilter !== 'all') {
@@ -1258,7 +1237,6 @@ export function SettingsPage({ user, tagValues }: Props) {
         if (!(t.labels || []).some(l => l.id === labelId)) return false;
       }
       if (tagTypeFilter !== 'all' && t.data_type !== tagTypeFilter) return false;
-      if (tagGroupFilter !== 'all' && (t.group_name || '') !== tagGroupFilter) return false;
       if (tagSourceFilter !== 'all') {
         if (tagSourceFilter === 'none' && t.data_source_id != null) return false;
         if (tagSourceFilter !== 'none' && t.data_source_id !== tagSourceFilter) return false;
@@ -1267,18 +1245,17 @@ export function SettingsPage({ user, tagValues }: Props) {
         const q = tagSearch.toLowerCase();
         return t.name.toLowerCase().includes(q) ||
                (t.description || '').toLowerCase().includes(q) ||
-               (t.group_name || '').toLowerCase().includes(q) ||
                (t.address || '').toLowerCase().includes(q) ||
                (t.labels || []).some(l => l.name.toLowerCase().includes(q));
       }
       return true;
     });
-  }, [tags, tagSearch, tagLabelFilter, tagTypeFilter, tagGroupFilter, tagSourceFilter]);
+  }, [tags, tagSearch, tagLabelFilter, tagTypeFilter, tagSourceFilter]);
 
   // Clear selection when filters change
   useEffect(() => {
     setSelectedTagIds(new Set());
-  }, [tagSearch, tagLabelFilter, tagTypeFilter, tagGroupFilter, tagSourceFilter]);
+  }, [tagSearch, tagLabelFilter, tagTypeFilter, tagSourceFilter]);
 
   // Tag handlers
   const handleSaveTag = useCallback(async (data: Omit<Tag, 'id'> & { id?: number }) => {
@@ -1581,12 +1558,12 @@ export function SettingsPage({ user, tagValues }: Props) {
             </select>
             <button
               onClick={() => setShowAdvFilters(f => !f)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm ${showAdvFilters || tagTypeFilter !== 'all' || tagGroupFilter !== 'all' || tagSourceFilter !== 'all' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/40' : 'bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-300'}`}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm ${showAdvFilters || tagTypeFilter !== 'all' || tagSourceFilter !== 'all' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/40' : 'bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-300'}`}
             >
               <Filter size={14} /> Filters
-              {(tagTypeFilter !== 'all' || tagGroupFilter !== 'all' || tagSourceFilter !== 'all') && (
+              {(tagTypeFilter !== 'all' || tagSourceFilter !== 'all') && (
                 <span className="ml-1 px-1.5 py-0.5 bg-blue-600 text-white text-[10px] rounded-full font-medium">
-                  {[tagTypeFilter, tagGroupFilter, String(tagSourceFilter)].filter(f => f !== 'all').length}
+                  {[tagTypeFilter, String(tagSourceFilter)].filter(f => f !== 'all').length}
                 </span>
               )}
             </button>
@@ -1624,14 +1601,6 @@ export function SettingsPage({ user, tagValues }: Props) {
                 <option value="string">String</option>
               </select>
               <select
-                value={tagGroupFilter}
-                onChange={e => setTagGroupFilter(e.target.value)}
-                className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-300 outline-none"
-              >
-                <option value="all">All Groups</option>
-                {tagGroups.map(g => <option key={g} value={g}>{g}</option>)}
-              </select>
-              <select
                 value={String(tagSourceFilter)}
                 onChange={e => {
                   const v = e.target.value;
@@ -1643,9 +1612,9 @@ export function SettingsPage({ user, tagValues }: Props) {
                 <option value="none">Simulation</option>
                 {dataSources.map(ds => <option key={ds.id} value={ds.id}>{ds.name}</option>)}
               </select>
-              {(tagTypeFilter !== 'all' || tagGroupFilter !== 'all' || tagSourceFilter !== 'all') && (
+              {(tagTypeFilter !== 'all' || tagSourceFilter !== 'all') && (
                 <button
-                  onClick={() => { setTagTypeFilter('all'); setTagGroupFilter('all'); setTagSourceFilter('all'); }}
+                  onClick={() => { setTagTypeFilter('all'); setTagSourceFilter('all'); }}
                   className="text-xs text-slate-500 hover:text-slate-300"
                 >
                   Clear filters
