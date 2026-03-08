@@ -263,6 +263,25 @@ class TagEngine:
                 value = self._system_values.get(name)
         return TagValue(tag_id=0, name=name, value=value, data_type="string")
 
+    async def reload(self, session: AsyncSession):
+        """Reload all tags from the database (e.g. after a project load/switch)."""
+        await self.stop_simulation()
+        self._tags.clear()
+        self._values.clear()
+        self._sim_configs.clear()
+        self._snapshot_cache = None
+        self._poll_tags = None
+        await self.load_tags(session)
+        await self.start_simulation()
+        # Push full snapshot to all WebSocket subscribers
+        snapshot = self.get_all_values()
+        msg = {"type": "snapshot", "data": snapshot}
+        for q in self._subscribers:
+            try:
+                q.put_nowait(msg)
+            except asyncio.QueueFull:
+                pass
+
     async def start_simulation(self):
         if self._running:
             return

@@ -11,7 +11,6 @@ from app.api.deps import require_role
 from app.core.database import get_db
 from app.models.datasource import DataSource
 from app.models.job import Job
-from app.models.machine_profile import MachineProfile
 from app.models.project import Project
 from app.models.screen import Screen, ScreenTemplate
 from app.models.tag import Tag, TagLabel, TagTemplate, tag_label_assignments
@@ -42,7 +41,8 @@ class ProjectOut(BaseModel):
     name: str
     description: str | None
     version: str
-    is_active: bool
+    has_snapshot: bool = False
+    snapshot_saved_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -54,7 +54,6 @@ class ProjectDetail(ProjectOut):
     screen_count: int = 0
     data_source_count: int = 0
     job_count: int = 0
-    profile_count: int = 0
 
 
 class ImportOptions(BaseModel):
@@ -66,7 +65,7 @@ class ImportOptions(BaseModel):
 
 SECTION_KEYS = [
     "data_sources", "tag_labels", "tags", "tag_templates",
-    "screens", "screen_templates", "jobs", "machine_profiles",
+    "screens", "screen_templates", "jobs",
 ]
 
 SECTION_LABELS = {
@@ -77,7 +76,6 @@ SECTION_LABELS = {
     "screens": "Screens",
     "screen_templates": "Screen Templates",
     "jobs": "Jobs",
-    "machine_profiles": "Machine Profiles",
 }
 
 SECTION_DEPENDS_ON: dict[str, list[str]] = {
@@ -88,7 +86,6 @@ SECTION_DEPENDS_ON: dict[str, list[str]] = {
     "screens": [],
     "screen_templates": [],
     "jobs": [],
-    "machine_profiles": ["data_sources"],
 }
 
 
@@ -137,7 +134,16 @@ class ImportResultResponse(BaseModel):
 @router.get("/", response_model=list[ProjectOut])
 async def list_projects(session: AsyncSession = Depends(get_db)):
     result = await session.execute(select(Project).order_by(Project.name))
-    return result.scalars().all()
+    projects = result.scalars().all()
+    return [
+        ProjectOut(
+            id=p.id, name=p.name, description=p.description, version=p.version,
+            has_snapshot=p.snapshot is not None,
+            snapshot_saved_at=p.snapshot_saved_at,
+            created_at=p.created_at, updated_at=p.updated_at,
+        )
+        for p in projects
+    ]
 
 
 @router.post("/", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)
@@ -155,47 +161,31 @@ async def create_project(
     return project
 
 
-@router.get("/active", response_model=ProjectOut | None)
-async def get_active_project(session: AsyncSession = Depends(get_db)):
-    result = await session.execute(select(Project).where(Project.is_active == True))
-    return result.scalar_one_or_none()
-
-
 @router.get("/{project_id}", response_model=ProjectDetail)
 async def get_project(project_id: int, session: AsyncSession = Depends(get_db)):
     project = await session.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    tag_count = len((await session.execute(
-        select(Tag.id).where(Tag.project_id == project_id)
-    )).all())
-    screen_count = len((await session.execute(
-        select(Screen.id).where(Screen.project_id == project_id)
-    )).all())
-    ds_count = len((await session.execute(
-        select(DataSource.id).where(DataSource.project_id == project_id)
-    )).all())
-    job_count = len((await session.execute(
-        select(Job.id).where(Job.project_id == project_id)
-    )).all())
-    profile_count = len((await session.execute(
-        select(MachineProfile.id).where(MachineProfile.project_id == project_id)
-    )).all())
+    # Count ALL resources (projects are snapshots of the full HMI state)
+    tag_count = len((await session.execute(select(Tag.id))).all())
+    screen_count = len((await session.execute(select(Screen.id))).all())
+    ds_count = len((await session.execute(select(DataSource.id))).all())
+    job_count = len((await session.execute(select(Job.id))).all())
 
     return ProjectDetail(
         id=project.id,
         name=project.name,
         description=project.description,
         version=project.version,
-        is_active=project.is_active,
+        has_snapshot=project.snapshot is not None,
+        snapshot_saved_at=project.snapshot_saved_at,
         created_at=project.created_at,
         updated_at=project.updated_at,
         tag_count=tag_count,
         screen_count=screen_count,
         data_source_count=ds_count,
         job_count=job_count,
-        profile_count=profile_count,
     )
 
 
@@ -224,64 +214,9 @@ async def delete_project(
     project = await session.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    # Unlink all resources (set project_id to NULL) rather than deleting them
-    for model in [Tag, Screen, DataSource, Job, TagLabel, TagTemplate, ScreenTemplate]:
-        await session.execute(
-            update(model).where(model.project_id == project_id).values(project_id=None)
-        )
-    # Delete machine profiles (CASCADE handles this, but be explicit)
-    await session.execute(
-        delete(MachineProfile).where(MachineProfile.project_id == project_id)
-    )
     await session.delete(project)
 
 
-@router.post("/{project_id}/activate", response_model=ProjectOut)
-async def activate_project(
-    project_id: int,
-    session: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
-):
-    project = await session.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    # Deactivate all other projects
-    await session.execute(update(Project).values(is_active=False))
-    project.is_active = True
-    await session.flush()
-    return project
-
-
-@router.post("/{project_id}/deactivate", response_model=ProjectOut)
-async def deactivate_project(
-    project_id: int,
-    session: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
-):
-    project = await session.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    project.is_active = False
-    await session.flush()
-    return project
-
-
-@router.post("/{project_id}/assign-all", response_model=ProjectOut)
-async def assign_unlinked_resources(
-    project_id: int,
-    session: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
-):
-    """Assign all resources with no project to this project."""
-    project = await session.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    for model in [Tag, Screen, DataSource, Job, TagLabel, TagTemplate, ScreenTemplate]:
-        await session.execute(
-            update(model).where(model.project_id == None).values(project_id=project_id)
-        )
-    await session.flush()
-    return project
 
 
 # ─── Export ───
@@ -296,23 +231,13 @@ def _safe_json_parse(val: str | None, default=None):
         return default
 
 
-@router.get("/{project_id}/export")
-async def export_project(
-    project_id: int,
-    profile_id: int | None = None,
-    session: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
-):
-    project = await session.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    # Gather data sources
-    ds_result = await session.execute(
-        select(DataSource).where(DataSource.project_id == project_id)
-    )
+async def _build_snapshot(session: AsyncSession, project: Project) -> dict:
+    """Build a full HMI snapshot dict from all resources in the database."""
+    ds_result = await session.execute(select(DataSource))
     data_sources = []
+    ds_id_map: dict[int, str] = {}
     for ds in ds_result.scalars().all():
+        ds_id_map[ds.id] = ds.name
         data_sources.append({
             "name": ds.name,
             "protocol": ds.protocol.value,
@@ -320,10 +245,7 @@ async def export_project(
             "config": _safe_json_parse(ds.config, {}),
         })
 
-    # Gather tag labels
-    label_result = await session.execute(
-        select(TagLabel).where(TagLabel.project_id == project_id)
-    )
+    label_result = await session.execute(select(TagLabel))
     tag_labels = []
     for lbl in label_result.scalars().all():
         tag_labels.append({
@@ -332,17 +254,8 @@ async def export_project(
             "description": lbl.description,
         })
 
-    # Gather tags with their label names
-    tag_result = await session.execute(
-        select(Tag).where(Tag.project_id == project_id).order_by(Tag.name)
-    )
+    tag_result = await session.execute(select(Tag).order_by(Tag.name))
     tags = []
-    # Build data source ID→name map
-    ds_id_map = {}
-    ds_all = await session.execute(select(DataSource))
-    for ds in ds_all.scalars().all():
-        ds_id_map[ds.id] = ds.name
-
     for tag in tag_result.scalars().all():
         tags.append({
             "name": tag.name,
@@ -368,10 +281,7 @@ async def export_project(
             "labels": [lbl.name for lbl in tag.labels],
         })
 
-    # Gather tag templates
-    tt_result = await session.execute(
-        select(TagTemplate).where(TagTemplate.project_id == project_id)
-    )
+    tt_result = await session.execute(select(TagTemplate))
     tag_templates = []
     for tt in tt_result.scalars().all():
         tag_templates.append({
@@ -380,10 +290,7 @@ async def export_project(
             "fields": _safe_json_parse(tt.fields, []),
         })
 
-    # Gather screens
-    scr_result = await session.execute(
-        select(Screen).where(Screen.project_id == project_id).order_by(Screen.sort_order)
-    )
+    scr_result = await session.execute(select(Screen).order_by(Screen.sort_order))
     screens = []
     for scr in scr_result.scalars().all():
         screens.append({
@@ -396,10 +303,7 @@ async def export_project(
             "is_default": scr.is_default,
         })
 
-    # Gather screen templates
-    st_result = await session.execute(
-        select(ScreenTemplate).where(ScreenTemplate.project_id == project_id)
-    )
+    st_result = await session.execute(select(ScreenTemplate))
     screen_templates = []
     for st in st_result.scalars().all():
         screen_templates.append({
@@ -409,10 +313,7 @@ async def export_project(
             "placeholders": _safe_json_parse(st.placeholders, []),
         })
 
-    # Gather jobs
-    job_result = await session.execute(
-        select(Job).where(Job.project_id == project_id)
-    )
+    job_result = await session.execute(select(Job))
     jobs = []
     for job in job_result.scalars().all():
         jobs.append({
@@ -422,39 +323,13 @@ async def export_project(
             "download_conditions": _safe_json_parse(job.download_conditions),
         })
 
-    # Handle machine profile overrides for deployment export
-    profile_name = None
-    if profile_id is not None:
-        profile = await session.get(MachineProfile, profile_id)
-        if not profile or profile.project_id != project_id:
-            raise HTTPException(status_code=404, detail="Machine profile not found")
-        profile_name = profile.name
-
-        # Apply data source overrides
-        ds_overrides = _safe_json_parse(profile.data_source_overrides, {})
-        for ds in data_sources:
-            override = ds_overrides.get(ds["name"])
-            if override and "config" in override:
-                ds["config"] = {**ds["config"], **override["config"]}
-
-        # Apply tag address overrides
-        tag_overrides = _safe_json_parse(profile.tag_overrides, {})
-        for tag in tags:
-            override = tag_overrides.get(tag["name"])
-            if override and "address" in override:
-                tag["address"] = override["address"]
-
-    project_meta = {
-        "name": project.name,
-        "description": project.description,
-        "version": project.version,
-    }
-    if profile_name:
-        project_meta["deployed_for"] = profile_name
-
-    export_data = {
+    return {
         "format_version": EXPORT_FORMAT_VERSION,
-        "project": project_meta,
+        "project": {
+            "name": project.name,
+            "description": project.description,
+            "version": project.version,
+        },
         "exported_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "data_sources": data_sources,
         "tag_labels": tag_labels,
@@ -465,30 +340,191 @@ async def export_project(
         "jobs": jobs,
     }
 
-    # Include machine profiles in full export (not deployment export)
-    if profile_id is None:
-        mp_result = await session.execute(
-            select(MachineProfile)
-            .where(MachineProfile.project_id == project_id)
-            .order_by(MachineProfile.name)
-        )
-        machine_profiles = []
-        for mp in mp_result.scalars().all():
-            machine_profiles.append({
-                "name": mp.name,
-                "description": mp.description,
-                "data_source_overrides": _safe_json_parse(mp.data_source_overrides, {}),
-                "tag_overrides": _safe_json_parse(mp.tag_overrides, {}),
-            })
-        export_data["machine_profiles"] = machine_profiles
 
-    filename = f"{project.name}-{profile_name}.hmi.json" if profile_name else f"{project.name}.hmi.json"
+async def _wipe_all_resources(session: AsyncSession):
+    """Delete all HMI resources from the database."""
+    await session.execute(delete(tag_label_assignments))
+    for model in [Tag, Screen, Job, TagTemplate, ScreenTemplate, TagLabel, DataSource]:
+        await session.execute(delete(model))
+    await session.flush()
+
+
+@router.get("/{project_id}/export")
+async def export_project(
+    project_id: int,
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    """Export a full snapshot of ALL HMI resources as a downloadable JSON file."""
+    project = await session.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    export_data = await _build_snapshot(session, project)
+    filename = f"{project.name}.hmi.json"
 
     return JSONResponse(
         content=export_data,
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
         },
+    )
+
+
+@router.post("/{project_id}/save")
+async def save_project(
+    project_id: int,
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    """Save the current HMI state as this project's snapshot."""
+    project = await session.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    snapshot_data = await _build_snapshot(session, project)
+    project.snapshot = json.dumps(snapshot_data)
+    project.snapshot_saved_at = datetime.now(timezone.utc)
+    await session.flush()
+    return {"status": "saved", "snapshot_saved_at": project.snapshot_saved_at.isoformat()}
+
+
+@router.post("/{project_id}/load")
+async def load_project(
+    project_id: int,
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    """Load a project's snapshot, replacing all current HMI resources."""
+    from app.services.tag_engine import tag_engine
+
+    project = await session.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if not project.snapshot:
+        raise HTTPException(status_code=400, detail="Project has no saved snapshot")
+
+    data = json.loads(project.snapshot)
+
+    # Wipe everything
+    await _wipe_all_resources(session)
+
+    # Import all sections from snapshot
+    pid = project.id
+    ds_name_map: dict[str, int] = {}
+    label_name_map: dict[str, int] = {}
+
+    ds_items = data.get("data_sources", [])
+    if ds_items:
+        ds_name_map, _ = await _import_data_sources(ds_items, pid, session, "overwrite", {})
+
+    label_items = data.get("tag_labels", [])
+    if label_items:
+        label_name_map, _ = await _import_tag_labels(label_items, pid, session, "overwrite", {})
+
+    tag_items = data.get("tags", [])
+    if tag_items:
+        await _import_tags(tag_items, pid, session, "overwrite", {}, ds_name_map, label_name_map)
+
+    tt_items = data.get("tag_templates", [])
+    if tt_items:
+        await _import_tag_templates(tt_items, pid, session, "overwrite", {})
+
+    scr_items = data.get("screens", [])
+    if scr_items:
+        await _import_screens(scr_items, pid, session, "overwrite", {})
+
+    st_items = data.get("screen_templates", [])
+    if st_items:
+        await _import_screen_templates(st_items, pid, session, "overwrite", {})
+
+    job_items = data.get("jobs", [])
+    if job_items:
+        await _import_jobs(job_items, pid, session, "overwrite", {})
+
+    await session.flush()
+
+    # Reload tag engine so in-memory state matches new DB
+    await tag_engine.reload(session)
+
+    return {"status": "loaded", "project_name": project.name}
+
+
+@router.post("/create-blank", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)
+async def create_blank_project(
+    body: ProjectCreate,
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    """Create a new project and wipe all current HMI resources."""
+    from app.services.tag_engine import tag_engine
+
+    existing = await session.execute(select(Project).where(Project.name == body.name))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="Project name already exists")
+
+    project = Project(**body.model_dump())
+    session.add(project)
+    await session.flush()
+
+    # Wipe all resources
+    await _wipe_all_resources(session)
+
+    # Save empty snapshot
+    empty_snapshot = {
+        "format_version": EXPORT_FORMAT_VERSION,
+        "project": {"name": project.name, "description": project.description, "version": project.version},
+        "data_sources": [], "tag_labels": [], "tags": [], "tag_templates": [],
+        "screens": [], "screen_templates": [], "jobs": [],
+    }
+    project.snapshot = json.dumps(empty_snapshot)
+    project.snapshot_saved_at = datetime.now(timezone.utc)
+    await session.flush()
+
+    await tag_engine.reload(session)
+
+    return ProjectOut(
+        id=project.id, name=project.name, description=project.description, version=project.version,
+        has_snapshot=True, snapshot_saved_at=project.snapshot_saved_at,
+        created_at=project.created_at, updated_at=project.updated_at,
+    )
+
+
+@router.post("/create-demo", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)
+async def create_demo_project(
+    body: ProjectCreate,
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    """Create a new project with demo packaging machine data."""
+    from app.seed import create_demo_resources
+    from app.services.tag_engine import tag_engine
+
+    existing = await session.execute(select(Project).where(Project.name == body.name))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="Project name already exists")
+
+    project = Project(**body.model_dump())
+    session.add(project)
+    await session.flush()
+
+    # Wipe all resources, then create demo data
+    await _wipe_all_resources(session)
+    await create_demo_resources(session)
+    await session.flush()
+
+    # Save snapshot of demo state
+    snapshot_data = await _build_snapshot(session, project)
+    project.snapshot = json.dumps(snapshot_data)
+    project.snapshot_saved_at = datetime.now(timezone.utc)
+    await session.flush()
+
+    await tag_engine.reload(session)
+
+    return ProjectOut(
+        id=project.id, name=project.name, description=project.description, version=project.version,
+        has_snapshot=True, snapshot_saved_at=project.snapshot_saved_at,
+        created_at=project.created_at, updated_at=project.updated_at,
     )
 
 
@@ -570,21 +606,6 @@ async def _get_existing_job_names(
     query = select(Job.id, Job.name, Project.name.label("pname")).outerjoin(
         Project, Job.project_id == Project.id
     ).where(Job.name.in_(names), Job.project_id == project_id)
-    rows = (await session.execute(query)).all()
-    return {row[1]: (row[0], row[2]) for row in rows}
-
-
-async def _get_existing_profile_names(
-    session: AsyncSession,
-    names: set[str],
-    project_id: int | None,
-) -> dict[str, tuple[int, str | None]]:
-    """Batch-query existing machine profiles by name within a project."""
-    if not names or project_id is None:
-        return {}
-    query = select(MachineProfile.id, MachineProfile.name, Project.name.label("pname")).outerjoin(
-        Project, MachineProfile.project_id == Project.id
-    ).where(MachineProfile.name.in_(names), MachineProfile.project_id == project_id)
     rows = (await session.execute(query)).all()
     return {row[1]: (row[0], row[2]) for row in rows}
 
@@ -911,38 +932,6 @@ async def _import_jobs(
     return result
 
 
-async def _import_machine_profiles(
-    items: list[dict], pid: int, session: AsyncSession,
-    conflict_mode: str, existing: dict[str, tuple[int, str | None]],
-) -> ImportSectionResult:
-    result = ImportSectionResult(section="machine_profiles")
-    for mp_data in items:
-        mp_name = mp_data["name"]
-        if mp_name in existing:
-            mp_id, _ = existing[mp_name]
-            if conflict_mode == "overwrite":
-                mp = await session.get(MachineProfile, mp_id)
-                if mp:
-                    mp.description = mp_data.get("description")
-                    mp.data_source_overrides = json.dumps(mp_data.get("data_source_overrides", {}))
-                    mp.tag_overrides = json.dumps(mp_data.get("tag_overrides", {}))
-                    result.updated += 1
-            else:
-                result.skipped += 1
-        else:
-            mp = MachineProfile(
-                name=mp_name,
-                description=mp_data.get("description"),
-                data_source_overrides=json.dumps(mp_data.get("data_source_overrides", {})),
-                tag_overrides=json.dumps(mp_data.get("tag_overrides", {})),
-                project_id=pid,
-            )
-            session.add(mp)
-            result.created += 1
-    await session.flush()
-    return result
-
-
 # ─── Import endpoints ───
 
 
@@ -995,11 +984,6 @@ async def preview_import(
         {j["name"] for j in data.get("jobs", [])},
         target_pid,
     )
-    existing_profiles = await _get_existing_profile_names(
-        session,
-        {m["name"] for m in data.get("machine_profiles", [])},
-        target_pid,
-    )
 
     # Also query all existing tag/ds names in the database for dependency checking
     all_db_tag_names = set((await session.execute(select(Tag.name))).scalars().all())
@@ -1038,7 +1022,6 @@ async def preview_import(
     sections.append(build_section("screens", data.get("screens", []), existing_screens, name_field="slug"))
     sections.append(build_section("screen_templates", data.get("screen_templates", []), existing_st))
     sections.append(build_section("jobs", data.get("jobs", []), existing_jobs))
-    sections.append(build_section("machine_profiles", data.get("machine_profiles", []), existing_profiles))
 
     # Compute dependency warnings
     # Tags → data sources
@@ -1166,7 +1149,6 @@ async def import_project(
     scr_items = data.get("screens", []) if "screens" in sections_to_import else []
     st_items = data.get("screen_templates", []) if "screen_templates" in sections_to_import else []
     job_items = data.get("jobs", []) if "jobs" in sections_to_import else []
-    mp_items = data.get("machine_profiles", []) if "machine_profiles" in sections_to_import else []
 
     # Query existing for each section
     existing_ds = await _get_existing_names_simple(session, DataSource, {d["name"] for d in ds_items}) if ds_items else {}
@@ -1176,7 +1158,6 @@ async def import_project(
     existing_screens = await _get_existing_screen_slugs(session, {s["slug"] for s in scr_items}) if scr_items else {}
     existing_st = await _get_existing_names_simple(session, ScreenTemplate, {s["name"] for s in st_items}) if st_items else {}
     existing_jobs = await _get_existing_job_names(session, {j["name"] for j in job_items}, pid) if job_items else {}
-    existing_profiles = await _get_existing_profile_names(session, {m["name"] for m in mp_items}, pid) if mp_items else {}
 
     # Import in dependency order
     ds_name_map: dict[str, int] = {}
@@ -1224,12 +1205,6 @@ async def import_project(
             job_items, pid, session, get_conflict_mode("jobs"), existing_jobs,
         )
         results.append(job_result)
-
-    if mp_items:
-        mp_result = await _import_machine_profiles(
-            mp_items, pid, session, get_conflict_mode("machine_profiles"), existing_profiles,
-        )
-        results.append(mp_result)
 
     await session.flush()
     await session.refresh(project)

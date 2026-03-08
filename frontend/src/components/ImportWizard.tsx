@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import {
   ChevronDown, ChevronRight, AlertTriangle, Check,
-  X, Database, Tag as TagIcon, Monitor, ClipboardList, Server,
+  X, Database, Tag as TagIcon, Monitor, ClipboardList,
   Layers, LayoutTemplate, FileText,
 } from 'lucide-react';
 import { api } from '../lib/api';
@@ -26,7 +26,6 @@ const SECTION_ICONS: Record<string, React.ReactNode> = {
   screens: <Monitor size={16} className="text-purple-400" />,
   screen_templates: <LayoutTemplate size={16} className="text-purple-300" />,
   jobs: <ClipboardList size={16} className="text-green-400" />,
-  machine_profiles: <Server size={16} className="text-cyan-400" />,
 };
 
 type Step = 'file' | 'preview' | 'importing' | 'results';

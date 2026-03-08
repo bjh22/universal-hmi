@@ -1,14 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
-  FolderOpen, Plus, Trash2, Edit, Download, Upload, Check, X,
-  Package, Tag as TagIcon, Monitor, Database, ClipboardList, FolderInput,
-  Server, ChevronDown, Copy, Search,
+  FolderOpen, Plus, Trash2, Edit, Download, Upload, Save, PlayCircle, X,
+  Package, Tag as TagIcon, Monitor, Database, ClipboardList,
 } from 'lucide-react';
 import { api } from '../lib/api';
-import { PROTOCOL_CONFIGS } from '../lib/protocolConfigs';
 import { Dialog } from '../components/Dialog';
 import { ImportWizard } from '../components/ImportWizard';
-import type { ProjectData, ProjectDetail, UserData, MachineProfile, Tag, DataSourceData } from '../types';
+import type { ProjectData, ProjectDetail, UserData } from '../types';
 
 interface Props {
   user: UserData | null;
@@ -18,6 +16,9 @@ const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-md px-3 py
 const btnPrimary = 'bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors';
 const btnSecondary = 'bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2 rounded-md text-sm font-medium transition-colors';
 const btnDanger = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors';
+const btnSuccess = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors';
+
+type CreateTemplate = 'empty' | 'blank' | 'demo';
 
 export function ProjectsPage({ user }: Props) {
   const [projects, setProjects] = useState<ProjectData[]>([]);
@@ -25,38 +26,21 @@ export function ProjectsPage({ user }: Props) {
   const [detail, setDetail] = useState<ProjectDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   // Dialog state
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showLoadConfirm, setShowLoadConfirm] = useState(false);
 
   // Form state
   const [formName, setFormName] = useState('');
   const [formDesc, setFormDesc] = useState('');
   const [formVersion, setFormVersion] = useState('1.0.0');
-
-  // Machine Profiles state
-  const [profiles, setProfiles] = useState<MachineProfile[]>([]);
-  const [profilesExpanded, setProfilesExpanded] = useState(false);
-  const [showCreateProfile, setShowCreateProfile] = useState(false);
-  const [showEditProfile, setShowEditProfile] = useState(false);
-  const [showCloneProfile, setShowCloneProfile] = useState(false);
-  const [showDeleteProfile, setShowDeleteProfile] = useState(false);
-  const [editingProfile, setEditingProfile] = useState<MachineProfile | null>(null);
-  const [profileFormName, setProfileFormName] = useState('');
-  const [profileFormDesc, setProfileFormDesc] = useState('');
-
-  // Profile override editor state
-  const [profileTab, setProfileTab] = useState<'datasources' | 'tags'>('datasources');
-  const [profileOverrides, setProfileOverrides] = useState<{
-    ds: Record<string, { config?: Record<string, unknown> }>;
-    tags: Record<string, { address?: string }>;
-  }>({ ds: {}, tags: {} });
-  const [projectDataSources, setProjectDataSources] = useState<DataSourceData[]>([]);
-  const [projectTags, setProjectTags] = useState<Tag[]>([]);
-  const [tagFilter, setTagFilter] = useState('');
+  const [formTemplate, setFormTemplate] = useState<CreateTemplate>('empty');
 
   const canEdit = user && (user.role === 'engineer' || user.role === 'designer');
 
@@ -81,38 +65,46 @@ export function ProjectsPage({ user }: Props) {
     }
   }, []);
 
-  const loadProfiles = useCallback(async (projectId: number) => {
-    try {
-      const data = await api.getProfiles(projectId);
-      setProfiles(data);
-    } catch {
-      setProfiles([]);
-    }
-  }, []);
-
   useEffect(() => { loadProjects(); }, [loadProjects]);
 
   useEffect(() => {
     if (selectedId) {
       loadDetail(selectedId);
-      loadProfiles(selectedId);
     } else {
       setDetail(null);
-      setProfiles([]);
-      setProfilesExpanded(false);
     }
-  }, [selectedId, loadDetail, loadProfiles]);
+  }, [selectedId, loadDetail]);
+
+  const showSuccessMsg = useCallback((msg: string) => {
+    setSuccess(msg);
+    setTimeout(() => setSuccess(null), 3000);
+  }, []);
 
   const handleCreate = useCallback(async () => {
     try {
-      await api.createProject({ name: formName, description: formDesc || undefined, version: formVersion });
+      setBusy(true);
+      const data = { name: formName, description: formDesc || undefined, version: formVersion };
+      let created: ProjectData;
+      if (formTemplate === 'blank') {
+        created = await api.createBlankProject(data);
+      } else if (formTemplate === 'demo') {
+        created = await api.createDemoProject(data);
+      } else {
+        created = await api.createProject(data);
+      }
       setShowCreate(false);
-      setFormName(''); setFormDesc(''); setFormVersion('1.0.0');
+      setFormName(''); setFormDesc(''); setFormVersion('1.0.0'); setFormTemplate('empty');
       await loadProjects();
+      setSelectedId(created.id);
+      if (formTemplate !== 'empty') {
+        showSuccessMsg(`Project "${created.name}" created and loaded`);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Create failed');
+    } finally {
+      setBusy(false);
     }
-  }, [formName, formDesc, formVersion, loadProjects]);
+  }, [formName, formDesc, formVersion, formTemplate, loadProjects, showSuccessMsg]);
 
   const handleUpdate = useCallback(async () => {
     if (!selectedId) return;
@@ -139,34 +131,50 @@ export function ProjectsPage({ user }: Props) {
     }
   }, [selectedId, loadProjects]);
 
-  const handleActivate = useCallback(async (id: number) => {
+  const handleSave = useCallback(async (id: number) => {
     try {
-      await api.activateProject(id);
+      setBusy(true);
+      await api.saveProject(id);
       await loadProjects();
-      if (selectedId === id) await loadDetail(id);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Activate failed');
-    }
-  }, [selectedId, loadProjects, loadDetail]);
-
-  const handleDeactivate = useCallback(async (id: number) => {
-    try {
-      await api.deactivateProject(id);
-      await loadProjects();
-      if (selectedId === id) await loadDetail(id);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Deactivate failed');
-    }
-  }, [selectedId, loadProjects, loadDetail]);
-
-  const handleAssignAll = useCallback(async (id: number) => {
-    try {
-      await api.assignAllToProject(id);
       await loadDetail(id);
+      showSuccessMsg('Project saved');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Assign failed');
+      setError(e instanceof Error ? e.message : 'Save failed');
+    } finally {
+      setBusy(false);
     }
-  }, [loadDetail]);
+  }, [loadProjects, loadDetail, showSuccessMsg]);
+
+  const handleLoad = useCallback(async (id: number) => {
+    try {
+      setBusy(true);
+      await api.loadProject(id);
+      await loadProjects();
+      await loadDetail(id);
+      setShowLoadConfirm(false);
+      showSuccessMsg('Project loaded');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Load failed');
+    } finally {
+      setBusy(false);
+    }
+  }, [loadProjects, loadDetail, showSuccessMsg]);
+
+  const handleSaveAndLoad = useCallback(async (saveId: number, loadId: number) => {
+    try {
+      setBusy(true);
+      await api.saveProject(saveId);
+      await api.loadProject(loadId);
+      await loadProjects();
+      await loadDetail(loadId);
+      setShowLoadConfirm(false);
+      showSuccessMsg('Saved current state and loaded project');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Save & Load failed');
+    } finally {
+      setBusy(false);
+    }
+  }, [loadProjects, loadDetail, showSuccessMsg]);
 
   const handleExport = useCallback(async (id: number) => {
     try {
@@ -191,145 +199,12 @@ export function ProjectsPage({ user }: Props) {
     setShowEdit(true);
   }, []);
 
-  // ─── Machine Profile Handlers ───
-
-  const handleCreateProfile = useCallback(async () => {
-    if (!selectedId) return;
-    try {
-      await api.createProfile(selectedId, { name: profileFormName, description: profileFormDesc || undefined });
-      setShowCreateProfile(false);
-      setProfileFormName(''); setProfileFormDesc('');
-      await loadProfiles(selectedId);
-      await loadDetail(selectedId);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Create profile failed');
-    }
-  }, [selectedId, profileFormName, profileFormDesc, loadProfiles, loadDetail]);
-
-  const handleUpdateProfile = useCallback(async () => {
-    if (!selectedId || !editingProfile) return;
-    try {
-      await api.updateProfile(selectedId, editingProfile.id, {
-        name: profileFormName,
-        description: profileFormDesc || undefined,
-        data_source_overrides: profileOverrides.ds,
-        tag_overrides: profileOverrides.tags,
-      });
-      setShowEditProfile(false);
-      await loadProfiles(selectedId);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Update profile failed');
-    }
-  }, [selectedId, editingProfile, profileFormName, profileFormDesc, profileOverrides, loadProfiles]);
-
-  const handleDeleteProfile = useCallback(async () => {
-    if (!selectedId || !editingProfile) return;
-    try {
-      await api.deleteProfile(selectedId, editingProfile.id);
-      setShowDeleteProfile(false);
-      setEditingProfile(null);
-      await loadProfiles(selectedId);
-      await loadDetail(selectedId);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Delete profile failed');
-    }
-  }, [selectedId, editingProfile, loadProfiles, loadDetail]);
-
-  const handleCloneProfile = useCallback(async () => {
-    if (!selectedId || !editingProfile) return;
-    try {
-      await api.cloneProfile(selectedId, editingProfile.id, profileFormName);
-      setShowCloneProfile(false);
-      setProfileFormName('');
-      await loadProfiles(selectedId);
-      await loadDetail(selectedId);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Clone profile failed');
-    }
-  }, [selectedId, editingProfile, profileFormName, loadProfiles, loadDetail]);
-
-  const handleExportForMachine = useCallback(async (profile: MachineProfile) => {
-    if (!selectedId) return;
-    try {
-      const data = await api.exportForMachine(selectedId, profile.id);
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      const proj = projects.find(p => p.id === selectedId);
-      a.href = url;
-      a.download = `${proj?.name || 'project'}-${profile.name}.hmi.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Export failed');
-    }
-  }, [selectedId, projects]);
-
-  const openEditProfile = useCallback(async (profile: MachineProfile) => {
-    if (!selectedId) return;
-    setEditingProfile(profile);
-    setProfileFormName(profile.name);
-    setProfileFormDesc(profile.description || '');
-    setProfileOverrides({
-      ds: profile.data_source_overrides,
-      tags: profile.tag_overrides,
-    });
-    setProfileTab('datasources');
-    setTagFilter('');
-    try {
-      const [dsList, tagList] = await Promise.all([
-        api.getDataSources(selectedId),
-        api.getTags(selectedId),
-      ]);
-      setProjectDataSources(dsList);
-      setProjectTags(tagList);
-    } catch { /* ignore */ }
-    setShowEditProfile(true);
-  }, [selectedId]);
-
-  const openCloneProfile = useCallback((profile: MachineProfile) => {
-    setEditingProfile(profile);
-    setProfileFormName('');
-    setShowCloneProfile(true);
-  }, []);
-
-  // ─── Override editor helpers ───
-
-  const setDsOverride = useCallback((dsName: string, fieldKey: string, value: string, fieldType: string) => {
-    setProfileOverrides(prev => {
-      const newDs = { ...prev.ds };
-      if (value === '') {
-        // Remove this field override
-        if (newDs[dsName]?.config) {
-          const newConfig = { ...newDs[dsName].config };
-          delete newConfig[fieldKey];
-          if (Object.keys(newConfig).length === 0) {
-            delete newDs[dsName];
-          } else {
-            newDs[dsName] = { config: newConfig };
-          }
-        }
-      } else {
-        const parsed = fieldType === 'number' ? Number(value) : value;
-        newDs[dsName] = {
-          config: { ...newDs[dsName]?.config, [fieldKey]: parsed },
-        };
-      }
-      return { ...prev, ds: newDs };
-    });
-  }, []);
-
-  const setTagOverride = useCallback((tagName: string, address: string) => {
-    setProfileOverrides(prev => {
-      const newTags = { ...prev.tags };
-      if (address === '') {
-        delete newTags[tagName];
-      } else {
-        newTags[tagName] = { address };
-      }
-      return { ...prev, tags: newTags };
-    });
-  }, []);
+  // Find which project currently has the most recent snapshot_saved_at (the "active" one)
+  const activeProject = projects.reduce<ProjectData | null>((best, p) => {
+    if (!p.snapshot_saved_at) return best;
+    if (!best || !best.snapshot_saved_at) return p;
+    return p.snapshot_saved_at > best.snapshot_saved_at ? p : best;
+  }, null);
 
   return (
     <div className="space-y-4">
@@ -344,12 +219,20 @@ export function ProjectsPage({ user }: Props) {
             <button onClick={() => setShowImport(true)} className={btnSecondary}>
               <span className="flex items-center gap-1.5"><Upload size={16} /> Import</span>
             </button>
-            <button onClick={() => { setFormName(''); setFormDesc(''); setFormVersion('1.0.0'); setShowCreate(true); }} className={btnPrimary}>
+            <button onClick={() => { setFormName(''); setFormDesc(''); setFormVersion('1.0.0'); setFormTemplate('empty'); setShowCreate(true); }} className={btnPrimary}>
               <span className="flex items-center gap-1.5"><Plus size={16} /> New Project</span>
             </button>
           </div>
         )}
       </div>
+
+      {/* Success banner */}
+      {success && (
+        <div className="bg-green-500/20 border border-green-500/30 rounded-md px-4 py-2 flex justify-between items-center">
+          <span className="text-green-300 text-sm">{success}</span>
+          <button onClick={() => setSuccess(null)} className="text-green-300 hover:text-white"><X size={16} /></button>
+        </div>
+      )}
 
       {/* Error banner */}
       {error && (
@@ -365,7 +248,7 @@ export function ProjectsPage({ user }: Props) {
         <div className="text-center py-12">
           <Package size={48} className="mx-auto text-slate-600 mb-3" />
           <p className="text-slate-400">No projects yet</p>
-          <p className="text-slate-500 text-sm mt-1">Create a project to organize your HMI configuration</p>
+          <p className="text-slate-500 text-sm mt-1">Create a project to save your HMI configuration</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -385,8 +268,8 @@ export function ProjectsPage({ user }: Props) {
                   <span className="font-medium text-white text-sm">{p.name}</span>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-slate-400">v{p.version}</span>
-                    {p.is_active && (
-                      <span className="text-xs bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded">Active</span>
+                    {p.has_snapshot && (
+                      <span className="text-xs bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">Saved</span>
                     )}
                   </div>
                 </div>
@@ -401,22 +284,20 @@ export function ProjectsPage({ user }: Props) {
           <div className="lg:col-span-2">
             {detail ? (
               <div className="bg-slate-800 rounded-lg border border-slate-700 p-5 space-y-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h2 className="text-lg font-bold text-white">{detail.name}</h2>
-                    {detail.description && <p className="text-sm text-slate-400 mt-1">{detail.description}</p>}
-                    <div className="flex items-center gap-3 mt-2">
-                      <span className="text-xs text-slate-500">Version {detail.version}</span>
-                      <span className="text-xs text-slate-500">Created {new Date(detail.created_at).toLocaleDateString()}</span>
-                    </div>
+                <div>
+                  <h2 className="text-lg font-bold text-white">{detail.name}</h2>
+                  {detail.description && <p className="text-sm text-slate-400 mt-1">{detail.description}</p>}
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className="text-xs text-slate-500">Version {detail.version}</span>
+                    <span className="text-xs text-slate-500">Created {new Date(detail.created_at).toLocaleDateString()}</span>
+                    {detail.snapshot_saved_at && (
+                      <span className="text-xs text-slate-500">Last saved {new Date(detail.snapshot_saved_at).toLocaleString()}</span>
+                    )}
                   </div>
-                  {detail.is_active && (
-                    <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded text-xs font-medium">Active</span>
-                  )}
                 </div>
 
                 {/* Resource counts */}
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="bg-slate-900 rounded-lg p-3 text-center">
                     <TagIcon size={20} className="mx-auto text-blue-400 mb-1" />
                     <div className="text-lg font-bold text-white">{detail.tag_count}</div>
@@ -437,91 +318,21 @@ export function ProjectsPage({ user }: Props) {
                     <div className="text-lg font-bold text-white">{detail.job_count}</div>
                     <div className="text-xs text-slate-400">Jobs</div>
                   </div>
-                  <div className="bg-slate-900 rounded-lg p-3 text-center">
-                    <Server size={20} className="mx-auto text-cyan-400 mb-1" />
-                    <div className="text-lg font-bold text-white">{detail.profile_count}</div>
-                    <div className="text-xs text-slate-400">Profiles</div>
-                  </div>
-                </div>
-
-                {/* Machine Profiles */}
-                <div className="border border-slate-700 rounded-lg">
-                  <button
-                    onClick={() => setProfilesExpanded(!profilesExpanded)}
-                    className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-slate-700/50 rounded-lg transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Server size={18} className="text-cyan-400" />
-                      <span className="text-sm font-medium text-white">Machine Profiles</span>
-                      <span className="text-xs bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded">
-                        {profiles.length}
-                      </span>
-                    </div>
-                    <ChevronDown size={16} className={`text-slate-400 transition-transform ${profilesExpanded ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {profilesExpanded && (
-                    <div className="px-4 pb-4 space-y-2">
-                      {profiles.length === 0 ? (
-                        <p className="text-xs text-slate-500 py-2">
-                          No machine profiles. Create one to configure per-machine overrides for deployment.
-                        </p>
-                      ) : (
-                        profiles.map(p => (
-                          <div key={p.id} className="flex items-center justify-between bg-slate-900 rounded-md px-3 py-2">
-                            <div className="min-w-0 flex-1">
-                              <span className="text-sm text-white">{p.name}</span>
-                              {p.description && <span className="text-xs text-slate-500 ml-2">{p.description}</span>}
-                              <div className="text-xs text-slate-500 mt-0.5">
-                                {Object.keys(p.data_source_overrides).length} data source override{Object.keys(p.data_source_overrides).length !== 1 ? 's' : ''},
-                                {' '}{Object.keys(p.tag_overrides).length} tag override{Object.keys(p.tag_overrides).length !== 1 ? 's' : ''}
-                              </div>
-                            </div>
-                            {canEdit && (
-                              <div className="flex items-center gap-1 ml-2 shrink-0">
-                                <button onClick={() => openEditProfile(p)} title="Edit overrides" className="p-1 hover:bg-slate-700 rounded">
-                                  <Edit size={14} className="text-slate-400 hover:text-white" />
-                                </button>
-                                <button onClick={() => openCloneProfile(p)} title="Clone" className="p-1 hover:bg-slate-700 rounded">
-                                  <Copy size={14} className="text-slate-400 hover:text-white" />
-                                </button>
-                                <button onClick={() => handleExportForMachine(p)} title="Export for machine" className="p-1 hover:bg-slate-700 rounded">
-                                  <Download size={14} className="text-cyan-400 hover:text-cyan-300" />
-                                </button>
-                                <button onClick={() => { setEditingProfile(p); setShowDeleteProfile(true); }} title="Delete" className="p-1 hover:bg-slate-700 rounded">
-                                  <Trash2 size={14} className="text-slate-400 hover:text-red-400" />
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        ))
-                      )}
-                      {canEdit && (
-                        <button
-                          onClick={() => { setProfileFormName(''); setProfileFormDesc(''); setShowCreateProfile(true); }}
-                          className="w-full flex items-center justify-center gap-1 py-1.5 text-xs text-slate-400 hover:text-white border border-dashed border-slate-700 rounded-md hover:border-slate-500 transition-colors"
-                        >
-                          <Plus size={14} /> Add Profile
-                        </button>
-                      )}
-                    </div>
-                  )}
                 </div>
 
                 {/* Actions */}
                 {canEdit && (
                   <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-700">
-                    {!detail.is_active ? (
-                      <button onClick={() => handleActivate(detail.id)} className={btnPrimary}>
-                        <span className="flex items-center gap-1.5"><Check size={16} /> Set Active</span>
-                      </button>
-                    ) : (
-                      <button onClick={() => handleDeactivate(detail.id)} className={btnSecondary}>
-                        <span className="flex items-center gap-1.5"><X size={16} /> Deactivate</span>
-                      </button>
-                    )}
-                    <button onClick={() => handleAssignAll(detail.id)} className={btnSecondary}>
-                      <span className="flex items-center gap-1.5"><FolderInput size={16} /> Assign Unlinked</span>
+                    <button onClick={() => handleSave(detail.id)} disabled={busy} className={btnSuccess}>
+                      <span className="flex items-center gap-1.5"><Save size={16} /> Save</span>
+                    </button>
+                    <button
+                      onClick={() => setShowLoadConfirm(true)}
+                      disabled={busy || !detail.has_snapshot}
+                      className={btnPrimary}
+                      title={!detail.has_snapshot ? 'No saved snapshot to load' : undefined}
+                    >
+                      <span className="flex items-center gap-1.5"><PlayCircle size={16} /> Load</span>
                     </button>
                     <button onClick={() => handleExport(detail.id)} className={btnSecondary}>
                       <span className="flex items-center gap-1.5"><Download size={16} /> Export</span>
@@ -561,9 +372,42 @@ export function ProjectsPage({ user }: Props) {
               <label className="text-xs text-slate-400 mb-1 block">Version</label>
               <input value={formVersion} onChange={e => setFormVersion(e.target.value)} className={inputCls} placeholder="1.0.0" />
             </div>
+            <div>
+              <label className="text-xs text-slate-400 mb-2 block">Template</label>
+              <div className="space-y-2">
+                {([
+                  { value: 'empty' as const, label: 'Empty', desc: 'Just create the project label (no changes to current HMI)' },
+                  { value: 'blank' as const, label: 'Blank', desc: 'Wipe all current tags, screens, and resources' },
+                  { value: 'demo' as const, label: 'Demo', desc: 'Load demo packaging machine with tags, screens, and alarms' },
+                ]).map(opt => (
+                  <label
+                    key={opt.value}
+                    className={`flex items-start gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors ${
+                      formTemplate === opt.value
+                        ? 'bg-blue-600/20 border-blue-500/50'
+                        : 'bg-slate-800 border-slate-700 hover:border-slate-600'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="template"
+                      checked={formTemplate === opt.value}
+                      onChange={() => setFormTemplate(opt.value)}
+                      className="mt-0.5 accent-blue-500"
+                    />
+                    <div>
+                      <div className="text-sm text-white font-medium">{opt.label}</div>
+                      <div className="text-xs text-slate-400">{opt.desc}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
             <div className="flex justify-end gap-2 pt-2">
               <button onClick={() => setShowCreate(false)} className={btnSecondary}>Cancel</button>
-              <button onClick={handleCreate} disabled={!formName.trim()} className={btnPrimary}>Create</button>
+              <button onClick={handleCreate} disabled={!formName.trim() || busy} className={btnPrimary}>
+                {busy ? 'Creating...' : 'Create'}
+              </button>
             </div>
           </div>
         </Dialog>
@@ -597,11 +441,38 @@ export function ProjectsPage({ user }: Props) {
       {showDelete && detail && (
         <Dialog title="Delete Project" onClose={() => setShowDelete(false)}>
           <p className="text-sm text-slate-300 mb-4">
-            Delete <strong>{detail.name}</strong>? Resources (tags, screens, etc.) will be unlinked but not deleted.
+            Delete <strong>{detail.name}</strong>? This removes the project and its saved snapshot. Current tags, screens, and resources are not affected.
           </p>
           <div className="flex justify-end gap-2">
             <button onClick={() => setShowDelete(false)} className={btnSecondary}>Cancel</button>
             <button onClick={handleDelete} className={btnDanger}>Delete</button>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Load Confirm */}
+      {showLoadConfirm && detail && (
+        <Dialog title="Load Project" onClose={() => setShowLoadConfirm(false)}>
+          <p className="text-sm text-slate-300 mb-4">
+            Loading <strong>{detail.name}</strong> will replace all current tags, screens, data sources, and jobs with this project's saved snapshot.
+          </p>
+          <p className="text-sm text-amber-400 mb-4">
+            Any unsaved changes to the current HMI state will be lost.
+          </p>
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setShowLoadConfirm(false)} className={btnSecondary} disabled={busy}>Cancel</button>
+            {activeProject && activeProject.id !== detail.id && (
+              <button
+                onClick={() => handleSaveAndLoad(activeProject.id, detail.id)}
+                disabled={busy}
+                className={btnSecondary}
+              >
+                {busy ? 'Working...' : `Save "${activeProject.name}" & Load`}
+              </button>
+            )}
+            <button onClick={() => handleLoad(detail.id)} disabled={busy} className={btnDanger}>
+              {busy ? 'Loading...' : 'Discard & Load'}
+            </button>
           </div>
         </Dialog>
       )}
@@ -613,184 +484,6 @@ export function ProjectsPage({ user }: Props) {
           onClose={() => setShowImport(false)}
           onComplete={() => { setShowImport(false); loadProjects(); }}
         />
-      )}
-
-      {/* Create Profile Dialog */}
-      {showCreateProfile && (
-        <Dialog title="New Machine Profile" onClose={() => setShowCreateProfile(false)}>
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs text-slate-400 mb-1 block">Profile Name</label>
-              <input value={profileFormName} onChange={e => setProfileFormName(e.target.value)}
-                className={inputCls} placeholder="Machine 01" autoFocus />
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 mb-1 block">Description</label>
-              <input value={profileFormDesc} onChange={e => setProfileFormDesc(e.target.value)}
-                className={inputCls} placeholder="Line 1, Bay 3" />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setShowCreateProfile(false)} className={btnSecondary}>Cancel</button>
-              <button onClick={handleCreateProfile} disabled={!profileFormName.trim()} className={btnPrimary}>Create</button>
-            </div>
-          </div>
-        </Dialog>
-      )}
-
-      {/* Edit Profile Dialog */}
-      {showEditProfile && editingProfile && (
-        <Dialog title={`Edit Profile: ${editingProfile.name}`} onClose={() => setShowEditProfile(false)} wide>
-          <div className="space-y-4">
-            {/* Name & Description */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-slate-400 mb-1 block">Profile Name</label>
-                <input value={profileFormName} onChange={e => setProfileFormName(e.target.value)}
-                  className={inputCls} />
-              </div>
-              <div>
-                <label className="text-xs text-slate-400 mb-1 block">Description</label>
-                <input value={profileFormDesc} onChange={e => setProfileFormDesc(e.target.value)}
-                  className={inputCls} placeholder="Optional" />
-              </div>
-            </div>
-
-            {/* Tabs */}
-            <div className="flex gap-1 border-b border-slate-700">
-              <button
-                onClick={() => setProfileTab('datasources')}
-                className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  profileTab === 'datasources'
-                    ? 'border-cyan-400 text-cyan-400'
-                    : 'border-transparent text-slate-400 hover:text-white'
-                }`}
-              >
-                Data Source Overrides
-              </button>
-              <button
-                onClick={() => setProfileTab('tags')}
-                className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  profileTab === 'tags'
-                    ? 'border-cyan-400 text-cyan-400'
-                    : 'border-transparent text-slate-400 hover:text-white'
-                }`}
-              >
-                Tag Address Overrides
-              </button>
-            </div>
-
-            {/* Data Source Overrides Tab */}
-            {profileTab === 'datasources' && (
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {projectDataSources.length === 0 ? (
-                  <p className="text-xs text-slate-500 py-4 text-center">No data sources in this project.</p>
-                ) : (
-                  projectDataSources.map(ds => {
-                    const proto = PROTOCOL_CONFIGS[ds.protocol];
-                    const fields = proto?.fields || [];
-                    if (fields.length === 0) return null;
-                    const dsConfig = (ds.config || {}) as Record<string, unknown>;
-                    const dsOverride = profileOverrides.ds[ds.name]?.config || {};
-
-                    return (
-                      <div key={ds.id} className="bg-slate-900 rounded-md p-3 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-white">{ds.name}</span>
-                          <span className="text-xs bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded">{proto?.label || ds.protocol}</span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          {fields.map(field => (
-                            <div key={field.key}>
-                              <label className="text-xs text-slate-500">{field.label}</label>
-                              <input
-                                className={inputCls}
-                                type={field.type === 'password' ? 'text' : field.type}
-                                placeholder={String(dsConfig[field.key] ?? field.placeholder ?? '')}
-                                value={String(dsOverride[field.key] ?? '')}
-                                onChange={e => setDsOverride(ds.name, field.key, e.target.value, field.type)}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            )}
-
-            {/* Tag Address Overrides Tab */}
-            {profileTab === 'tags' && (
-              <div className="space-y-2">
-                <div className="relative">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                  <input
-                    className="w-full bg-slate-700 border border-slate-600 rounded-md pl-8 pr-3 py-2 text-sm text-white outline-none focus:border-blue-500"
-                    placeholder="Filter tags..."
-                    value={tagFilter}
-                    onChange={e => setTagFilter(e.target.value)}
-                  />
-                </div>
-                <div className="max-h-80 overflow-y-auto space-y-1">
-                  {projectTags
-                    .filter(t => !tagFilter || t.name.toLowerCase().includes(tagFilter.toLowerCase()) || (t.display_name || '').toLowerCase().includes(tagFilter.toLowerCase()))
-                    .map(tag => (
-                      <div key={tag.id} className="flex items-center gap-2 bg-slate-900 rounded px-3 py-1.5">
-                        <span className="text-xs text-white flex-1 truncate" title={tag.name}>{tag.display_name || tag.name}</span>
-                        <span className="text-xs text-slate-500 w-36 truncate shrink-0" title={tag.address || ''}>
-                          {tag.address || '\u2014'}
-                        </span>
-                        <input
-                          className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-48 shrink-0 outline-none focus:border-blue-500"
-                          placeholder={tag.address || 'No base address'}
-                          value={profileOverrides.tags[tag.name]?.address ?? ''}
-                          onChange={e => setTagOverride(tag.name, e.target.value)}
-                        />
-                      </div>
-                    ))}
-                  {projectTags.length === 0 && (
-                    <p className="text-xs text-slate-500 py-4 text-center">No tags in this project.</p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-700">
-              <button onClick={() => setShowEditProfile(false)} className={btnSecondary}>Cancel</button>
-              <button onClick={handleUpdateProfile} disabled={!profileFormName.trim()} className={btnPrimary}>Save</button>
-            </div>
-          </div>
-        </Dialog>
-      )}
-
-      {/* Clone Profile Dialog */}
-      {showCloneProfile && editingProfile && (
-        <Dialog title="Clone Profile" onClose={() => setShowCloneProfile(false)}>
-          <div className="space-y-3">
-            <p className="text-sm text-slate-400">
-              Clone <strong className="text-white">{editingProfile.name}</strong> with a new name:
-            </p>
-            <input value={profileFormName} onChange={e => setProfileFormName(e.target.value)}
-              className={inputCls} placeholder="Machine 02" autoFocus />
-            <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setShowCloneProfile(false)} className={btnSecondary}>Cancel</button>
-              <button onClick={handleCloneProfile} disabled={!profileFormName.trim()} className={btnPrimary}>Clone</button>
-            </div>
-          </div>
-        </Dialog>
-      )}
-
-      {/* Delete Profile Confirm */}
-      {showDeleteProfile && editingProfile && (
-        <Dialog title="Delete Profile" onClose={() => setShowDeleteProfile(false)}>
-          <p className="text-sm text-slate-300 mb-4">
-            Delete machine profile <strong>{editingProfile.name}</strong>? This cannot be undone.
-          </p>
-          <div className="flex justify-end gap-2">
-            <button onClick={() => setShowDeleteProfile(false)} className={btnSecondary}>Cancel</button>
-            <button onClick={handleDeleteProfile} className={btnDanger}>Delete</button>
-          </div>
-        </Dialog>
       )}
     </div>
   );

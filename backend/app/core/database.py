@@ -53,6 +53,9 @@ async def init_db():
         await _add_column_if_missing(conn, "screen_templates", "project_id", "INTEGER REFERENCES projects(id) ON DELETE SET NULL")
         await _add_column_if_missing(conn, "data_sources", "project_id", "INTEGER REFERENCES projects(id) ON DELETE SET NULL")
         await _add_column_if_missing(conn, "jobs", "project_id", "INTEGER REFERENCES projects(id) ON DELETE SET NULL")
+        # Projects
+        await _add_column_if_missing(conn, "projects", "snapshot", "TEXT")
+        await _add_column_if_missing(conn, "projects", "snapshot_saved_at", "DATETIME")
         # Alarm history
         await _add_column_if_missing(conn, "alarm_history", "tag_display_name", "VARCHAR(300)")
 
