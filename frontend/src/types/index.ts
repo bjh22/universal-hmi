@@ -163,11 +163,28 @@ export interface ProductionRun {
   end_time: string | null;
   good_count: number;
   reject_count: number;
+  target_count: number | null;
   availability: number | null;
   performance: number | null;
   quality: number | null;
   oee: number | null;
   shift: string | null;
+}
+
+export interface DowntimeEvent {
+  id: number;
+  production_run_id: number;
+  start_time: string;
+  end_time: string | null;
+  reason_code: string | null;
+  reason_text: string | null;
+  duration_seconds: number | null;
+}
+
+export interface DowntimeSummary {
+  reason_code: string;
+  count: number;
+  total_duration: number;
 }
 
 export interface BrowsedTag {

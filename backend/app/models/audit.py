@@ -24,6 +24,10 @@ class AuditAction(str, enum.Enum):
     SCREEN_DELETE = "screen_delete"
     CONFIG_CHANGE = "config_change"
     SCRIPT_EXECUTE = "script_execute"
+    PRODUCTION_START = "production_start"
+    PRODUCTION_STOP = "production_stop"
+    PRODUCTION_UPDATE = "production_update"
+    PRODUCTION_DELETE = "production_delete"
 
 
 class AuditLog(Base):
