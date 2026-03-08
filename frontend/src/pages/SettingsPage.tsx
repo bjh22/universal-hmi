@@ -672,13 +672,15 @@ function BulkLabelDialog({ mode, tagCount, allLabels, onApply, onClose }: {
 // ─── Tag Import Dialog (HMI CSV, CODESYS XML, RSLogix 500) ───
 type ImportFormat = 'hmi_csv' | 'codesys_xml' | 'rslogix500';
 
-function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClose }: {
-  onImportCsv: (tags: Record<string, unknown>[]) => void;
-  onImportCodesys: (xml: string, prefix: string, names: string[]) => void;
-  onImportRslogix: (csv: string, prefix: string, names: string[]) => void;
+function TagImportDialog({ dataSources, onImportCsv, onImportCodesys, onImportRslogix, onClose }: {
+  dataSources: DataSourceData[];
+  onImportCsv: (tags: Record<string, unknown>[], dataSourceId: number | null) => void;
+  onImportCodesys: (xml: string, prefix: string, names: string[], dataSourceId: number | null) => void;
+  onImportRslogix: (csv: string, prefix: string, names: string[], dataSourceId: number | null) => void;
   onClose: () => void;
 }) {
   const [format, setFormat] = useState<ImportFormat>('hmi_csv');
+  const [dataSourceId, setDataSourceId] = useState<number | null>(null);
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [rawContent, setRawContent] = useState('');
@@ -828,13 +830,13 @@ function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClos
     const names = [...selectedNames];
     if (format === 'hmi_csv') {
       const selected = rows.filter((r, i) => selectedNames.has(r.name || String(i)));
-      onImportCsv(selected);
+      onImportCsv(selected, dataSourceId);
     } else if (format === 'codesys_xml') {
-      onImportCodesys(rawContent, prefix, names);
+      onImportCodesys(rawContent, prefix, names, dataSourceId);
     } else if (format === 'rslogix500') {
-      onImportRslogix(rawContent, prefix, names);
+      onImportRslogix(rawContent, prefix, names, dataSourceId);
     }
-  }, [format, rows, rawContent, prefix, selectedNames, onImportCsv, onImportCodesys, onImportRslogix]);
+  }, [format, rows, rawContent, prefix, selectedNames, dataSourceId, onImportCsv, onImportCodesys, onImportRslogix]);
 
   const hasData = format === 'hmi_csv' ? rows.length > 0 : previewTags.length > 0;
   const fileAccept = format === 'codesys_xml' ? '.xml' : '.csv,.CSV';
@@ -872,6 +874,19 @@ function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClos
 
         <div className="mb-4">
           <p className="text-xs text-slate-400 mb-2">{formatInfo[format].desc}</p>
+          <div className="mb-3">
+            <label className="block text-xs text-slate-400 mb-1">Data Source <span className="text-red-400">*</span></label>
+            <select
+              value={dataSourceId ?? ''}
+              onChange={e => setDataSourceId(e.target.value ? Number(e.target.value) : null)}
+              className="w-64 px-3 py-1.5 bg-slate-900 border border-slate-600 rounded-lg text-sm text-slate-200"
+            >
+              <option value="">Select a data source...</option>
+              {dataSources.map(ds => (
+                <option key={ds.id} value={ds.id}>{ds.name} ({ds.protocol})</option>
+              ))}
+            </select>
+          </div>
           <input ref={fileRef} type="file" accept={fileAccept} onChange={handleFile} className="text-sm text-slate-300" />
         </div>
 
@@ -1038,8 +1053,9 @@ function TagImportDialog({ onImportCsv, onImportCodesys, onImportRslogix, onClos
             <button onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300">Cancel</button>
             <button
               onClick={handleImport}
-              disabled={selectedCount === 0}
+              disabled={selectedCount === 0 || dataSourceId === null}
               className="px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              title={dataSourceId === null ? 'Select a data source first' : undefined}
             >
               Import {selectedCount} {selectedCount === 1 ? 'Tag' : 'Tags'}
             </button>
@@ -1357,9 +1373,9 @@ export function SettingsPage({ user, tagValues }: Props) {
     });
   }, [filteredTags]);
 
-  const handleCsvImport = useCallback(async (rows: Record<string, unknown>[]) => {
+  const handleCsvImport = useCallback(async (rows: Record<string, unknown>[], dataSourceId: number | null) => {
     try {
-      const result = await api.importTagsCsv(rows);
+      const result = await api.importTagsCsv(rows as Partial<Tag>[], dataSourceId);
       setShowTagImport(false);
       alert(`Imported ${result.imported} tags`);
       loadTags();
@@ -1368,9 +1384,9 @@ export function SettingsPage({ user, tagValues }: Props) {
     }
   }, [loadTags]);
 
-  const handleCodesysImport = useCallback(async (xml: string, prefix: string, names: string[]) => {
+  const handleCodesysImport = useCallback(async (xml: string, prefix: string, names: string[], dataSourceId: number | null) => {
     try {
-      const result = await api.importTagsCodesys(xml, prefix, names);
+      const result = await api.importTagsCodesys(xml, prefix, names, dataSourceId);
       setShowTagImport(false);
       alert(`Imported ${result.imported} tags from CODESYS`);
       loadTags();
@@ -1379,9 +1395,9 @@ export function SettingsPage({ user, tagValues }: Props) {
     }
   }, [loadTags]);
 
-  const handleRslogixImport = useCallback(async (csv: string, prefix: string, names: string[]) => {
+  const handleRslogixImport = useCallback(async (csv: string, prefix: string, names: string[], dataSourceId: number | null) => {
     try {
-      const result = await api.importTagsRslogix500(csv, prefix, names);
+      const result = await api.importTagsRslogix500(csv, prefix, names, dataSourceId);
       setShowTagImport(false);
       alert(`Imported ${result.imported} tags from RSLogix 500`);
       loadTags();
@@ -1752,7 +1768,7 @@ export function SettingsPage({ user, tagValues }: Props) {
 
           {editTag && <TagDialog tag={editTag} dataSources={dataSources} allLabels={allLabels} onSave={handleSaveTag} onClose={() => setEditTag(null)} />}
           {deleteTagTarget && <DeleteConfirmDialog title="Delete Tag" name={deleteTagTarget.name} onConfirm={handleDeleteTag} onCancel={() => setDeleteTagTarget(null)} />}
-          {showTagImport && <TagImportDialog onImportCsv={handleCsvImport} onImportCodesys={handleCodesysImport} onImportRslogix={handleRslogixImport} onClose={() => setShowTagImport(false)} />}
+          {showTagImport && <TagImportDialog dataSources={dataSources} onImportCsv={handleCsvImport} onImportCodesys={handleCodesysImport} onImportRslogix={handleRslogixImport} onClose={() => setShowTagImport(false)} />}
           {bulkDeleteConfirm && (
             <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setBulkDeleteConfirm(false)}>
               <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 max-w-sm" onClick={e => e.stopPropagation()}>
