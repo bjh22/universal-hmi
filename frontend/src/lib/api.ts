@@ -13,6 +13,8 @@ import type {
   TrendDataPoint,
   AuditEntry,
   ProductionRun,
+  DowntimeEvent,
+  DowntimeSummary,
   ProjectData,
   ProjectDetail,
   MachineProfile,
@@ -199,7 +201,39 @@ export const api = {
   getAuditLog: (limit = 100) => request<AuditEntry[]>(`/audit/?limit=${limit}`),
 
   // Production
-  getProductionRuns: (limit = 50) => request<ProductionRun[]>(`/production/runs?limit=${limit}`),
+  getProductionRuns: (params?: { limit?: number; start?: string; end?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.start) qs.set('start', params.start);
+    if (params?.end) qs.set('end', params.end);
+    const q = qs.toString();
+    return request<ProductionRun[]>(`/production/runs${q ? `?${q}` : ''}`);
+  },
+  getProductionRun: (id: number) => request<ProductionRun>(`/production/runs/${id}`),
+  startProductionRun: (data: { job_name?: string; shift?: string; target_count?: number }) =>
+    request<ProductionRun>('/production/runs', { method: 'POST', body: JSON.stringify(data) }),
+  stopProductionRun: (id: number, data: { good_count: number; reject_count: number; target_count?: number }) =>
+    request<ProductionRun>(`/production/runs/${id}/stop`, { method: 'POST', body: JSON.stringify(data) }),
+  updateProductionRun: (id: number, data: Partial<ProductionRun>) =>
+    request<ProductionRun>(`/production/runs/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteProductionRun: (id: number) =>
+    request(`/production/runs/${id}`, { method: 'DELETE' }),
+
+  // Downtime
+  getDowntimeEvents: (runId: number) => request<DowntimeEvent[]>(`/production/runs/${runId}/downtime`),
+  createDowntimeEvent: (data: { production_run_id: number; start_time: string; end_time?: string; reason_code?: string; reason_text?: string }) =>
+    request<DowntimeEvent>('/production/downtime', { method: 'POST', body: JSON.stringify(data) }),
+  updateDowntimeEvent: (id: number, data: Partial<DowntimeEvent>) =>
+    request<DowntimeEvent>(`/production/downtime/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteDowntimeEvent: (id: number) =>
+    request(`/production/downtime/${id}`, { method: 'DELETE' }),
+  getDowntimeSummary: (params?: { start?: string; end?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.start) qs.set('start', params.start);
+    if (params?.end) qs.set('end', params.end);
+    const q = qs.toString();
+    return request<DowntimeSummary[]>(`/production/downtime/summary${q ? `?${q}` : ''}`);
+  },
 
   // Scripts
   executeScript: (script: string) =>

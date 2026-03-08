@@ -68,7 +68,7 @@ export default function App() {
                   <Route path="/alarms" element={<AlarmsPage realtimeAlarms={alarms} />} />
                   <Route path="/trends" element={<TrendsPage />} />
                   <Route path="/jobs" element={<JobsPage user={auth.user} />} />
-                  <Route path="/reports" element={<ReportsPage />} />
+                  <Route path="/reports" element={<ReportsPage user={auth.user} />} />
                   <Route path="/projects" element={<ProjectsPage user={auth.user} />} />
                   <Route path="/settings" element={<SettingsPage user={auth.user} tagValues={tagValues} />} />
                 </Routes>
