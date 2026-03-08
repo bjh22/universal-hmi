@@ -37,7 +37,7 @@ async def get_trend_data(
     rows = result.scalars().all()
     return [
         {
-            "timestamp": r.timestamp.isoformat(),
+            "timestamp": r.timestamp.isoformat() + ("" if r.timestamp.tzinfo else "Z"),
             "value": r.value,
             "string_value": r.string_value,
         }

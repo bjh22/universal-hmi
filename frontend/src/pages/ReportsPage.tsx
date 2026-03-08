@@ -35,6 +35,13 @@ function fmtPct(v: number | null): string {
   return v != null ? `${(v * 100).toFixed(1)}%` : '\u2014';
 }
 
+/** Format an ISO date string as a local datetime-local input value. */
+function toLocalInput(iso: string): string {
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 interface Props {
   user: UserData | null;
 }
@@ -215,14 +222,14 @@ export function ReportsPage({ user }: Props) {
       <div className="flex items-center gap-1.5 ml-2">
         <input
           type="datetime-local"
-          value={dateStart ? dateStart.slice(0, 16) : ''}
+          value={dateStart ? toLocalInput(dateStart) : ''}
           onChange={e => { setActivePreset(''); setDateStart(e.target.value ? new Date(e.target.value).toISOString() : undefined); }}
           className="bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-sm text-slate-300"
         />
         <span className="text-slate-500 text-sm">to</span>
         <input
           type="datetime-local"
-          value={dateEnd ? dateEnd.slice(0, 16) : ''}
+          value={dateEnd ? toLocalInput(dateEnd) : ''}
           onChange={e => { setActivePreset(''); setDateEnd(e.target.value ? new Date(e.target.value).toISOString() : undefined); }}
           className="bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-sm text-slate-300"
         />
@@ -657,9 +664,11 @@ function StartRunDialog({ jobs, onClose, onStarted }: { jobs: JobData[]; onClose
   const [shift, setShift] = useState('');
   const [targetCount, setTargetCount] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = useCallback(async () => {
     setSubmitting(true);
+    setError('');
     try {
       await api.startProductionRun({
         job_name: jobName || undefined,
@@ -667,7 +676,8 @@ function StartRunDialog({ jobs, onClose, onStarted }: { jobs: JobData[]; onClose
         target_count: targetCount ? parseInt(targetCount, 10) : undefined,
       });
       onStarted();
-    } catch {
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to start run');
       setSubmitting(false);
     }
   }, [jobName, shift, targetCount, onStarted]);
@@ -707,6 +717,7 @@ function StartRunDialog({ jobs, onClose, onStarted }: { jobs: JobData[]; onClose
           />
         </div>
       </div>
+      {error && <div className="text-red-400 text-sm mt-2">{error}</div>}
       <div className="flex justify-end gap-2 mt-4">
         <button onClick={onClose} className="px-3 py-1.5 bg-slate-700 text-slate-300 rounded-lg text-sm">Cancel</button>
         <button onClick={handleSubmit} disabled={submitting} className="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm disabled:opacity-50">
@@ -772,10 +783,10 @@ function DowntimeDialog({ runId, existing, runStart, onClose, onSaved }: {
   onSaved: () => void;
 }) {
   const defaultStart = existing?.start_time
-    ? new Date(existing.start_time).toISOString().slice(0, 16)
-    : new Date(runStart).toISOString().slice(0, 16);
+    ? toLocalInput(existing.start_time)
+    : toLocalInput(runStart);
   const defaultEnd = existing?.end_time
-    ? new Date(existing.end_time).toISOString().slice(0, 16)
+    ? toLocalInput(existing.end_time)
     : '';
 
   const [startTime, setStartTime] = useState(defaultStart);

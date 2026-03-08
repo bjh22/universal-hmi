@@ -455,7 +455,7 @@ async def export_project(
     export_data = {
         "format_version": EXPORT_FORMAT_VERSION,
         "project": project_meta,
-        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "exported_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "data_sources": data_sources,
         "tag_labels": tag_labels,
         "tags": tags,
