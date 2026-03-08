@@ -254,10 +254,23 @@ export function TrendsPage() {
         <div className="flex-1 bg-slate-800 rounded-xl p-4 border border-slate-700 min-h-[400px]">
           {displayChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={400}>
-              <LineChart data={displayChartData}>
+              <LineChart data={displayChartData} margin={{ left: selectedTags.length > 2 ? (Math.floor((selectedTags.length - 1) / 2)) * 60 : 0, right: selectedTags.length > 2 ? (Math.floor(selectedTags.length / 2) - 1) * 60 : 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis dataKey="time" stroke="#64748b" tick={{ fontSize: 11 }} />
-                <YAxis stroke="#64748b" tick={{ fontSize: 11 }} />
+                {selectedTags.map((id, i) => {
+                  const color = COLORS[i % COLORS.length];
+                  return (
+                    <YAxis
+                      key={id}
+                      yAxisId={id}
+                      orientation={i % 2 === 0 ? 'left' : 'right'}
+                      stroke={color}
+                      tick={{ fontSize: 11, fill: color }}
+                      width={50}
+                      hide={selectedTags.length > 4 && i >= 4}
+                    />
+                  );
+                })}
                 <Tooltip
                   contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
                   labelStyle={{ color: '#94a3b8' }}
@@ -275,6 +288,7 @@ export function TrendsPage() {
                       dot={false}
                       strokeWidth={2}
                       connectNulls
+                      yAxisId={id}
                     />
                   );
                 })}
