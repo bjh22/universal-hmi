@@ -1303,7 +1303,7 @@ function BrowseTagsDialog({ dsId, dsName, existingTags, onCreateTag, onClose }: 
 
 // ─── Main SettingsPage ───
 export function SettingsPage({ user, tagValues }: Props) {
-  const [tab, setTab] = useState<'branding' | 'tags' | 'datasources' | 'integrations' | 'users' | 'audit'>('tags');
+  const [tab, setTab] = useState<'branding' | 'preferences' | 'tags' | 'datasources' | 'integrations' | 'users' | 'audit'>('tags');
   const [tags, setTags] = useState<Tag[]>([]);
   const [dataSources, setDataSources] = useState<DataSourceData[]>([]);
   const [users, setUsers] = useState<UserListEntry[]>([]);
@@ -1317,6 +1317,12 @@ export function SettingsPage({ user, tagValues }: Props) {
   const [brandSaving, setBrandSaving] = useState(false);
   const [brandMsg, setBrandMsg] = useState('');
   const brandFileRef = useRef<HTMLInputElement>(null);
+
+  // Preferences state
+  const [prefLayout, setPrefLayout] = useState('grid');
+  const [prefResolution, setPrefResolution] = useState('1920x1080');
+  const [prefSaving, setPrefSaving] = useState(false);
+  const [prefMsg, setPrefMsg] = useState('');
 
   // Tag state
   const [tagSearch, setTagSearch] = useState('');
@@ -1372,15 +1378,24 @@ export function SettingsPage({ user, tagValues }: Props) {
     }).catch(() => {});
   }, []);
 
+  const loadPreferences = useCallback(() => {
+    api.getPreferences().then((p) => {
+      setPrefLayout(p.default_screen_layout);
+      setPrefResolution(p.default_screen_resolution);
+      setPrefMsg('');
+    }).catch(() => {});
+  }, []);
+
   useEffect(() => {
     switch (tab) {
       case 'branding': loadBranding(); break;
+      case 'preferences': loadPreferences(); break;
       case 'tags': loadTags(); loadLabels(); break;
       case 'datasources': loadDataSources(); loadTags(); break;
       case 'users': api.getUsers().then(setUsers).catch(() => {}); break;
       case 'audit': api.getAuditLog(500).then(setAuditLog).catch(() => {}); break;
     }
-  }, [tab, loadTags, loadLabels, loadDataSources, loadBranding]);
+  }, [tab, loadTags, loadLabels, loadDataSources, loadBranding, loadPreferences]);
 
   const filteredTags = useMemo(() => {
     return tags.filter(t => {
@@ -1669,6 +1684,7 @@ export function SettingsPage({ user, tagValues }: Props) {
 
   const tabList = [
     { key: 'branding' as const, label: 'Branding' },
+    { key: 'preferences' as const, label: 'Preferences' },
     { key: 'tags' as const, label: 'Tags' },
     { key: 'datasources' as const, label: 'Data Sources' },
     { key: 'integrations' as const, label: 'Integrations' },
@@ -1797,6 +1813,79 @@ export function SettingsPage({ user, tagValues }: Props) {
             </button>
             {brandMsg && (
               <span className={`text-sm ${brandMsg === 'Saved' ? 'text-green-400' : 'text-red-400'}`}>{brandMsg}</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Preferences ═══ */}
+      {tab === 'preferences' && (
+        <div className="max-w-lg space-y-6">
+          <div>
+            <label className="text-xs text-slate-400 mb-1.5 block">Default Screen Layout</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setPrefLayout('grid'); setPrefMsg(''); }}
+                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  prefLayout === 'grid' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Grid
+              </button>
+              <button
+                onClick={() => { setPrefLayout('absolute'); setPrefMsg(''); }}
+                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  prefLayout === 'absolute' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Absolute
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              {prefLayout === 'grid' ? 'Responsive 12-column grid layout' : 'Fixed pixel positioning for panel PCs'}
+            </p>
+          </div>
+
+          {prefLayout === 'absolute' && (
+            <div>
+              <label className="text-xs text-slate-400 mb-1.5 block">Default Target Resolution</label>
+              <select
+                value={prefResolution}
+                onChange={e => { setPrefResolution(e.target.value); setPrefMsg(''); }}
+                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+              >
+                <option value="1920x1080">1920 × 1080 (Full HD)</option>
+                <option value="1366x768">1366 × 768 (HD)</option>
+                <option value="1024x768">1024 × 768 (XGA)</option>
+              </select>
+              <p className="text-xs text-slate-500 mt-1">Default resolution for new absolute-layout screens.</p>
+            </div>
+          )}
+
+          <div className="flex items-center gap-3">
+            <button
+              disabled={prefSaving}
+              onClick={async () => {
+                setPrefSaving(true);
+                setPrefMsg('');
+                try {
+                  await api.updatePreferences({
+                    default_screen_layout: prefLayout,
+                    default_screen_resolution: prefResolution,
+                  });
+                  setPrefMsg('Saved');
+                } catch (err) {
+                  setPrefMsg(err instanceof Error ? err.message : 'Save failed');
+                } finally {
+                  setPrefSaving(false);
+                }
+              }}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm rounded-lg font-medium"
+            >
+              {prefSaving ? 'Saving...' : 'Save'}
+            </button>
+            {prefMsg && (
+              <span className={`text-sm ${prefMsg === 'Saved' ? 'text-green-400' : 'text-red-400'}`}>{prefMsg}</span>
             )}
           </div>
         </div>

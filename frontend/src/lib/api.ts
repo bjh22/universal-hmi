@@ -337,6 +337,15 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  // Preferences
+  getPreferences: () =>
+    request<{ default_screen_layout: string; default_screen_resolution: string }>('/preferences/'),
+  updatePreferences: (data: { default_screen_layout?: string; default_screen_resolution?: string }) =>
+    request<{ default_screen_layout: string; default_screen_resolution: string }>('/preferences/', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
   // Health
   health: () => request<Record<string, unknown>>('/health'),
 };

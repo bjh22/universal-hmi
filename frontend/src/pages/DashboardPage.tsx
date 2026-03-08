@@ -27,7 +27,9 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
   const [paletteCollapsed, setPaletteCollapsed] = useState(false);
   const [showNewScreenDialog, setShowNewScreenDialog] = useState(false);
   const [newScreenName, setNewScreenName] = useState('');
-  const [newScreenMode, setNewScreenMode] = useState<LayoutMode>('absolute');
+  const [defaultLayout, setDefaultLayout] = useState<LayoutMode>('grid');
+  const [defaultResolution, setDefaultResolution] = useState('1920x1080');
+  const [newScreenMode, setNewScreenMode] = useState<LayoutMode>('grid');
   const [newScreenResolution, setNewScreenResolution] = useState('1920x1080');
   const [newScreenCustomW, setNewScreenCustomW] = useState(1920);
   const [newScreenCustomH, setNewScreenCustomH] = useState(1080);
@@ -47,6 +49,17 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
 
   const refreshScreens = useCallback(() => {
     api.getScreens().then(setScreens).catch(() => {});
+  }, []);
+
+  // Load preferences for default screen layout
+  useEffect(() => {
+    api.getPreferences().then((p) => {
+      const layout = (p.default_screen_layout === 'absolute' ? 'absolute' : 'grid') as LayoutMode;
+      setDefaultLayout(layout);
+      setDefaultResolution(p.default_screen_resolution || '1920x1080');
+      setNewScreenMode(layout);
+      setNewScreenResolution(p.default_screen_resolution || '1920x1080');
+    }).catch(() => {});
   }, []);
 
   // Load screens
@@ -148,11 +161,11 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
     });
     setShowNewScreenDialog(false);
     setNewScreenName('');
-    setNewScreenMode('grid');
-    setNewScreenResolution('1920x1080');
+    setNewScreenMode(defaultLayout);
+    setNewScreenResolution(defaultResolution);
     refreshScreens();
     navigate(`/screen/${screenSlug}`);
-  }, [newScreenName, screens.length, refreshScreens, newScreenMode, newScreenResolution, newScreenCustomW, newScreenCustomH]);
+  }, [newScreenName, screens.length, refreshScreens, newScreenMode, newScreenResolution, newScreenCustomW, newScreenCustomH, defaultLayout, defaultResolution]);
 
   // Delete current screen
   const handleDeleteScreen = useCallback(async () => {
