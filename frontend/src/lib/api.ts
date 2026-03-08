@@ -17,7 +17,6 @@ import type {
   DowntimeSummary,
   ProjectData,
   ProjectDetail,
-  MachineProfile,
   ImportPreviewTag,
   ImportPreviewResponse,
   ImportResultResponse,
@@ -245,19 +244,20 @@ export const api = {
   // Projects
   getProjects: () => request<ProjectData[]>('/projects/'),
   getProject: (id: number) => request<ProjectDetail>(`/projects/${id}`),
-  getActiveProject: () => request<ProjectData | null>('/projects/active'),
   createProject: (data: { name: string; description?: string; version?: string }) =>
     request<ProjectData>('/projects/', { method: 'POST', body: JSON.stringify(data) }),
   updateProject: (id: number, data: { name?: string; description?: string; version?: string }) =>
     request<ProjectData>(`/projects/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteProject: (id: number) =>
     request(`/projects/${id}`, { method: 'DELETE' }),
-  activateProject: (id: number) =>
-    request<ProjectData>(`/projects/${id}/activate`, { method: 'POST' }),
-  deactivateProject: (id: number) =>
-    request<ProjectData>(`/projects/${id}/deactivate`, { method: 'POST' }),
-  assignAllToProject: (id: number) =>
-    request<ProjectData>(`/projects/${id}/assign-all`, { method: 'POST' }),
+  saveProject: (id: number) =>
+    request<{ status: string; snapshot_saved_at: string }>(`/projects/${id}/save`, { method: 'POST' }),
+  loadProject: (id: number) =>
+    request<{ status: string; project_name: string }>(`/projects/${id}/load`, { method: 'POST' }),
+  createBlankProject: (data: { name: string; description?: string; version?: string }) =>
+    request<ProjectData>('/projects/create-blank', { method: 'POST', body: JSON.stringify(data) }),
+  createDemoProject: (data: { name: string; description?: string; version?: string }) =>
+    request<ProjectData>('/projects/create-demo', { method: 'POST', body: JSON.stringify(data) }),
   exportProject: (id: number) =>
     request<Record<string, unknown>>(`/projects/${id}/export`),
   importProject: (data: Record<string, unknown>) =>
@@ -286,32 +286,6 @@ export const api = {
         default_conflict_resolution: params.defaultConflictResolution || 'skip',
       }),
     }),
-
-  // Machine Profiles
-  getProfiles: (projectId: number) =>
-    request<MachineProfile[]>(`/projects/${projectId}/profiles/`),
-  createProfile: (projectId: number, data: { name: string; description?: string }) =>
-    request<MachineProfile>(`/projects/${projectId}/profiles/`, {
-      method: 'POST', body: JSON.stringify(data),
-    }),
-  getProfile: (projectId: number, profileId: number) =>
-    request<MachineProfile>(`/projects/${projectId}/profiles/${profileId}`),
-  updateProfile: (projectId: number, profileId: number, data: {
-    name?: string; description?: string;
-    data_source_overrides?: Record<string, { config?: Record<string, unknown> }>;
-    tag_overrides?: Record<string, { address?: string }>;
-  }) =>
-    request<MachineProfile>(`/projects/${projectId}/profiles/${profileId}`, {
-      method: 'PUT', body: JSON.stringify(data),
-    }),
-  deleteProfile: (projectId: number, profileId: number) =>
-    request(`/projects/${projectId}/profiles/${profileId}`, { method: 'DELETE' }),
-  cloneProfile: (projectId: number, profileId: number, name: string) =>
-    request<MachineProfile>(`/projects/${projectId}/profiles/${profileId}/clone`, {
-      method: 'POST', body: JSON.stringify({ name }),
-    }),
-  exportForMachine: (projectId: number, profileId: number) =>
-    request<Record<string, unknown>>(`/projects/${projectId}/export?profile_id=${profileId}`),
 
   // Integrations
   getIntegrationTypes: () =>

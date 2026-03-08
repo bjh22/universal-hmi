@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
-  BarChart3, Download, Play, Square, Plus, Pencil, Trash2, X, Clock, ChevronLeft,
+  BarChart3, Download, Play, Square, Plus, Pencil, Trash2, Clock, ChevronLeft,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell,
@@ -29,10 +29,6 @@ function formatDuration(start: string, end: string | null): string {
   const h = Math.floor(ms / 3600000);
   const m = Math.floor((ms % 3600000) / 60000);
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
-
-function fmtPct(v: number | null): string {
-  return v != null ? `${(v * 100).toFixed(1)}%` : '\u2014';
 }
 
 /** Format an ISO date string as a local datetime-local input value. */
