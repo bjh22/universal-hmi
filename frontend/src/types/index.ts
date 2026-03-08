@@ -20,7 +20,6 @@ export interface Tag {
   name: string;
   description: string | null;
   long_description: string | null;
-  group_name: string | null;
   data_source_id: number | null;
   address: string | null;
   data_type: 'bool' | 'int' | 'float' | 'string';
@@ -44,7 +43,7 @@ export interface Tag {
 export interface ImportPreviewTag {
   name: string;
   description: string | null;
-  group_name: string | null;
+  group: string | null;
   data_type: string;
   access_mode: string;
   has_enum?: boolean;

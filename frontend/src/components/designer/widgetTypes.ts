@@ -1,6 +1,6 @@
 import {
   Activity, Gauge, Hash, ToggleLeft, MousePointerClick,
-  SlidersHorizontal, Type, FileText, Bell, ChevronDown, BarChart3, LayoutGrid, Square,
+  SlidersHorizontal, Type, FileText, Bell, ChevronDown, BarChart3, LayoutGrid, Square, Circle, Sparkles,
 } from 'lucide-react';
 
 export interface WidgetTypeInfo {
@@ -70,6 +70,16 @@ export const WIDGET_TYPES: WidgetTypeInfo[] = [
     type: 'control_group', label: 'Control Group', icon: LayoutGrid, category: 'input',
     defaultW: 4, defaultH: 4, defaultAbsW: 280, defaultAbsH: 200,
     defaultProps: { title: 'Controls', controls: [], columns: 1 },
+  },
+  {
+    type: 'auto_fill', label: 'Auto Fill', icon: Sparkles, category: 'display',
+    defaultW: 4, defaultH: 4, defaultAbsW: 280, defaultAbsH: 200,
+    defaultProps: { title: 'Auto Fill', labelName: '', columns: 2, onColor: '#22c55e', offColor: '#6b7280', decimalPlaces: 1 },
+  },
+  {
+    type: 'light_indicator', label: 'Light Indicator', icon: Circle, category: 'display',
+    defaultW: 3, defaultH: 2, defaultAbsW: 160, defaultAbsH: 50,
+    defaultProps: { title: 'Indicator', tag: '', onColor: '#22c55e', offColor: '#6b7280', size: 'medium' },
   },
   {
     type: 'text_label', label: 'Text Label', icon: Type, category: 'layout',

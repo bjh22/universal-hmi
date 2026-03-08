@@ -13,6 +13,8 @@ import { DropdownSelectWidget } from './DropdownSelectWidget';
 import { OeeWidget } from './OeeWidget';
 import { ControlGroupWidget, type ControlItem } from './ControlGroupWidget';
 import { ContainerWidget } from './ContainerWidget';
+import { LightIndicator } from './LightIndicator';
+import { AutoFillWidget } from './AutoFillWidget';
 
 interface Props {
   widget: Widget;
@@ -26,6 +28,7 @@ function getWidgetTagNames(widget: Widget): string[] {
   const tags: string[] = [];
   // Single-tag widgets
   if (typeof p.tag === 'string' && p.tag) tags.push(p.tag);
+  if (typeof p.writeTag === 'string' && p.writeTag) tags.push(p.writeTag);
   // OEE widget
   if (typeof p.availabilityTag === 'string' && p.availabilityTag) tags.push(p.availabilityTag);
   if (typeof p.performanceTag === 'string' && p.performanceTag) tags.push(p.performanceTag);
@@ -76,6 +79,10 @@ export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, 
       return <DropdownSelectWidget title={p.title as string} tag={p.tag as string} tagValues={tagValues} options={p.options as Array<{ label: string; value: unknown }>} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
     case 'oee':
       return <OeeWidget title={p.title as string} availabilityTag={p.availabilityTag as string} performanceTag={p.performanceTag as string} qualityTag={p.qualityTag as string} oeeTag={p.oeeTag as string} tagValues={tagValues} decimalPlaces={p.decimalPlaces as number} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
+    case 'auto_fill':
+      return <AutoFillWidget title={p.title as string} labelName={p.labelName as string} columns={p.columns as number} onColor={p.onColor as string} offColor={p.offColor as string} decimalPlaces={p.decimalPlaces as number} tagOrder={p.tagOrder as string[]} tagValues={tagValues} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
+    case 'light_indicator':
+      return <LightIndicator title={p.title as string} tag={p.tag as string} writeTag={p.writeTag as string} onColor={p.onColor as string} offColor={p.offColor as string} size={p.size as 'small' | 'medium' | 'large'} tagValues={tagValues} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
     case 'control_group':
       return <ControlGroupWidget title={p.title as string} controls={p.controls as ControlItem[] || []} tagValues={tagValues} columns={p.columns as number} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
     case 'container':

@@ -20,7 +20,23 @@ function parseTypedValue(val: string): unknown {
   return val;
 }
 
-// ─── Setpoint Editor (structured tag picker) ───
+// ─── Helper: group setpoint entries by tag label (excluding "Job Setpoint") ───
+function groupEntries(entries: [string, unknown][], tags: Tag[]): { group: string; items: [string, unknown, number][] }[] {
+  const tagMap = new Map(tags.map(t => [t.name, t]));
+  const groups = new Map<string, [string, unknown, number][]>();
+  entries.forEach(([key, val], idx) => {
+    const tag = tagMap.get(key);
+    const labelNames = tag?.labels?.filter(l => l.name !== 'Job Setpoint').map(l => l.name).sort() || [];
+    const group = labelNames.length > 0 ? labelNames.join(', ') : 'Other';
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group)!.push([key, val, idx]);
+  });
+  return Array.from(groups.entries())
+    .sort(([a], [b]) => a === 'Other' ? 1 : b === 'Other' ? -1 : a.localeCompare(b))
+    .map(([group, items]) => ({ group, items }));
+}
+
+// ─── Setpoint Editor (structured tag picker, grouped) ───
 function SetpointEditor({ value, onChange, tags }: {
   value: Record<string, unknown>;
   onChange: (v: Record<string, unknown>) => void;
@@ -28,11 +44,11 @@ function SetpointEditor({ value, onChange, tags }: {
 }) {
   const entries = Object.entries(value);
   const [keypad, setKeypad] = useState<{ key: string; kind: 'numeric' | 'alpha' } | null>(null);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const tagMap = useMemo(() => new Map(tags.map(t => [t.name, t])), [tags]);
 
-  const tagDisplayName = (name: string) => {
-    const t = tags.find(t => t.name === name);
-    return t?.description || name;
-  };
+  const tagDisplayName = (name: string) => tagMap.get(name)?.description || name;
+  const isBoolTag = (name: string) => tagMap.get(name)?.data_type === 'bool';
 
   const addRow = () => {
     onChange({ ...value, '': '' });
@@ -62,6 +78,30 @@ function SetpointEditor({ value, onChange, tags }: {
     setKeypad({ key, kind: isNumeric || current === '' ? 'numeric' : 'alpha' });
   };
 
+  const toggleGroup = (group: string) => {
+    setCollapsed(prev => {
+      const next = new Set(prev);
+      if (next.has(group)) next.delete(group); else next.add(group);
+      return next;
+    });
+  };
+
+  // Group tag options for <select> by label (excluding "Job Setpoint")
+  const writableTags = tags.filter(t => t.access_mode !== 'read' && !t.name.startsWith('$'));
+  const tagGroups = useMemo(() => {
+    const groups = new Map<string, Tag[]>();
+    for (const t of writableTags) {
+      const labelNames = t.labels?.filter(l => l.name !== 'Job Setpoint').map(l => l.name).sort() || [];
+      const g = labelNames.length > 0 ? labelNames.join(', ') : 'Other';
+      if (!groups.has(g)) groups.set(g, []);
+      groups.get(g)!.push(t);
+    }
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => a === 'Other' ? 1 : b === 'Other' ? -1 : a.localeCompare(b));
+  }, [writableTags]);
+
+  const grouped = groupEntries(entries, tags);
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
@@ -69,34 +109,69 @@ function SetpointEditor({ value, onChange, tags }: {
         <button type="button" onClick={addRow} className="text-sm text-blue-400 hover:text-blue-300 min-h-[44px] px-2 active:scale-95 transition-transform">+ Add setpoint</button>
       </div>
       {entries.length === 0 && <p className="text-xs text-slate-500 italic">No setpoints defined</p>}
-      {entries.map(([key, val], idx) => (
-        <div key={idx} className="flex gap-2 items-center">
-          <div className="flex-1">
-            <select
-              value={key}
-              onChange={e => updateKey(key, e.target.value, idx)}
-              className={inputCls + ' text-xs'}
+      {grouped.map(({ group, items }) => (
+        <div key={group}>
+          {grouped.length > 1 && (
+            <button
+              type="button"
+              onClick={() => toggleGroup(group)}
+              className="flex items-center gap-1.5 w-full py-2 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors"
             >
-              <option value="">Select tag…</option>
-              {tags.filter(t => t.access_mode !== 'read' && !t.name.startsWith('$')).map(t => (
-                <option key={t.id} value={t.name}>{t.description || t.name}</option>
-              ))}
-            </select>
-          </div>
-          <button
-            type="button"
-            onClick={() => openKeypad(key)}
-            className="w-32 min-h-[44px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white text-left hover:border-blue-500 active:scale-95 transition-all"
-          >
-            {val !== '' && val != null ? (
-              <span>{String(val)}</span>
-            ) : (
-              <span className="text-slate-500">Tap to set</span>
-            )}
-          </button>
-          <button type="button" onClick={() => removeRow(key)} className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:text-red-400 active:scale-95 transition-transform">
-            <X size={18} />
-          </button>
+              {collapsed.has(group) ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+              {group}
+              <span className="text-slate-600 ml-1">({items.length})</span>
+            </button>
+          )}
+          {!collapsed.has(group) && items.map(([key, val, idx]) => (
+            <div key={idx} className="flex gap-2 items-center mb-2">
+              <div className="flex-1">
+                <select
+                  value={key}
+                  onChange={e => updateKey(key, e.target.value, idx)}
+                  className={inputCls + ' text-xs'}
+                >
+                  <option value="">Select tag…</option>
+                  {tagGroups.map(([gName, gTags]) => (
+                    <optgroup key={gName} label={gName}>
+                      {gTags.map(t => (
+                        <option key={t.id} value={t.name}>{t.description || t.name}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+              {isBoolTag(key) ? (
+                <button
+                  type="button"
+                  onClick={() => onChange({ ...value, [key]: !Boolean(val) })}
+                  className="w-32 min-h-[44px] flex items-center gap-2 px-3 py-2"
+                >
+                  <div className={`w-10 h-5 rounded-full transition-colors relative flex-shrink-0 ${Boolean(val) ? 'bg-green-500' : 'bg-slate-600'}`}>
+                    <span className="absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow-sm"
+                      style={{ left: Boolean(val) ? '1.25rem' : '0.125rem' }} />
+                  </div>
+                  <span className={`text-xs font-medium ${Boolean(val) ? 'text-green-400' : 'text-slate-500'}`}>
+                    {Boolean(val) ? 'ON' : 'OFF'}
+                  </span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => openKeypad(key)}
+                  className="w-32 min-h-[44px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white text-left hover:border-blue-500 active:scale-95 transition-all"
+                >
+                  {val !== '' && val != null ? (
+                    <span>{String(val)}</span>
+                  ) : (
+                    <span className="text-slate-500">Tap to set</span>
+                  )}
+                </button>
+              )}
+              <button type="button" onClick={() => removeRow(key)} className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:text-red-400 active:scale-95 transition-transform">
+                <X size={18} />
+              </button>
+            </div>
+          ))}
         </div>
       ))}
       {keypad?.kind === 'numeric' && (
@@ -115,6 +190,68 @@ function SetpointEditor({ value, onChange, tags }: {
           onClose={() => setKeypad(null)}
         />
       )}
+    </div>
+  );
+}
+
+// ─── Read-only Setpoint Display (grouped, collapsible) ───
+function JobSetpointDisplay({ setpoints, tags }: { setpoints: string | null; tags: Tag[] }) {
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const sp = JSON.parse(setpoints || '{}');
+  const entries = Object.entries(sp);
+  if (entries.length === 0) return <p className="text-xs text-slate-500 italic mb-3">No setpoints</p>;
+  const grouped = groupEntries(entries, tags);
+
+  const toggleGroup = (group: string) => {
+    setCollapsed(prev => {
+      const next = new Set(prev);
+      if (next.has(group)) next.delete(group); else next.add(group);
+      return next;
+    });
+  };
+
+  return (
+    <div className="space-y-2 mb-3">
+      {grouped.map(({ group, items }) => (
+        <div key={group}>
+          {grouped.length > 1 && (
+            <button
+              onClick={() => toggleGroup(group)}
+              className="flex items-center gap-1.5 w-full py-1.5 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors"
+            >
+              {collapsed.has(group) ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+              {group}
+              <span className="text-slate-600 ml-1">({items.length})</span>
+            </button>
+          )}
+          {!collapsed.has(group) && (
+            <div className="bg-slate-900 rounded-lg border border-slate-700 overflow-hidden">
+              <table className="w-full text-sm">
+                <tbody>
+                  {items.map(([k, v]) => {
+                    const tag = tags.find(t => t.name === k);
+                    const isBool = tag?.data_type === 'bool';
+                    return (
+                      <tr key={k} className="border-b border-slate-700/50">
+                        <td className="px-4 py-3 text-slate-300 text-sm">{getTagDisplayName(k, tags)}</td>
+                        <td className="px-4 py-3 text-right text-sm">
+                          {isBool ? (
+                            <span className={`font-medium ${Boolean(v) ? 'text-green-400' : 'text-slate-500'}`}>
+                              {Boolean(v) ? 'ON' : 'OFF'}
+                            </span>
+                          ) : (
+                            <span className="text-slate-200">{String(v)}</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -310,7 +447,7 @@ function UploadDialog({ tags, onClose, onUploaded }: {
   const filteredTags = useMemo(() => {
     if (!tagSearch) return writableTags;
     const q = tagSearch.toLowerCase();
-    return writableTags.filter(t => t.name.toLowerCase().includes(q) || (t.description || '').toLowerCase().includes(q) || (t.group_name || '').toLowerCase().includes(q));
+    return writableTags.filter(t => t.name.toLowerCase().includes(q) || (t.description || '').toLowerCase().includes(q) || (t.labels || []).some(l => l.name.toLowerCase().includes(q)));
   }, [writableTags, tagSearch]);
 
   const toggleAll = () => {
@@ -414,6 +551,7 @@ export function JobsPage({ user }: Props) {
   const [newDescription, setNewDescription] = useState('');
   const [editMode, setEditMode] = useState(false);
   const [editSetpoints, setEditSetpoints] = useState<Record<string, unknown>>({});
+  const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editConditions, setEditConditions] = useState<{ guards: { tag: string; value: unknown }[] }>({ guards: [] });
   const [jobSearch, setJobSearch] = useState('');
@@ -499,6 +637,7 @@ export function JobsPage({ user }: Props) {
 
   const startEdit = (job: JobData) => {
     setEditMode(true);
+    setEditName(job.name);
     setEditSetpoints(JSON.parse(job.setpoints || '{}'));
     setEditDescription(job.description || '');
     const conditions = job.download_conditions ? JSON.parse(job.download_conditions) : { guards: [] };
@@ -506,9 +645,9 @@ export function JobsPage({ user }: Props) {
   };
 
   const handleSaveEdit = async () => {
-    if (!selectedJob) return;
+    if (!selectedJob || !editName.trim()) return;
     await api.updateJob(selectedJob.id, {
-      name: selectedJob.name,
+      name: editName.trim(),
       description: editDescription,
       setpoints: editSetpoints,
       download_conditions: editConditions.guards.length > 0 ? editConditions : null,
@@ -712,6 +851,15 @@ export function JobsPage({ user }: Props) {
             {editMode ? (
               <div className="space-y-4">
                 <div>
+                  <label className="text-xs text-slate-400 font-medium">Name</label>
+                  <input
+                    value={editName}
+                    onChange={e => setEditName(e.target.value)}
+                    className={inputCls + ' mt-1'}
+                    placeholder="Job name"
+                  />
+                </div>
+                <div>
                   <label className="text-xs text-slate-400 font-medium">Description</label>
                   <input
                     value={editDescription}
@@ -743,31 +891,7 @@ export function JobsPage({ user }: Props) {
                 )}
 
                 <h3 className="text-sm font-medium text-slate-300 mb-2">Setpoints</h3>
-                {(() => {
-                  const sp = JSON.parse(selectedJob.setpoints || '{}');
-                  const entries = Object.entries(sp);
-                  if (entries.length === 0) return <p className="text-xs text-slate-500 italic mb-3">No setpoints</p>;
-                  return (
-                    <div className="bg-slate-900 rounded-lg border border-slate-700 mb-3 overflow-hidden">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-slate-700 text-slate-500">
-                            <th className="text-left px-4 py-3 font-medium text-xs">Tag</th>
-                            <th className="text-right px-4 py-3 font-medium text-xs">Value</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {entries.map(([k, v]) => (
-                            <tr key={k} className="border-b border-slate-700/50">
-                              <td className="px-4 py-3 text-slate-300 text-sm">{getTagDisplayName(k, tags)}</td>
-                              <td className="px-4 py-3 text-slate-200 text-right text-sm">{String(v)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  );
-                })()}
+                <JobSetpointDisplay setpoints={selectedJob.setpoints} tags={tags} />
 
                 {selectedJob.download_conditions && (() => {
                   const conds = JSON.parse(selectedJob.download_conditions);

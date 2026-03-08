@@ -29,7 +29,7 @@ function TagPicker({ value, onChange }: { value: string; onChange: (tag: string)
   const filtered = tags.filter(t =>
     t.name.toLowerCase().includes(lowerSearch) ||
     (t.description || '').toLowerCase().includes(lowerSearch) ||
-    (t.group_name || '').toLowerCase().includes(lowerSearch)
+    (t.labels || []).some(l => l.name.toLowerCase().includes(lowerSearch))
   );
   // Cap visible items to avoid rendering 1000+ DOM nodes
   const MAX_VISIBLE = 50;
@@ -70,6 +70,78 @@ function TagPicker({ value, onChange }: { value: string; onChange: (tag: string)
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function LabelPicker({ value, onChange }: { value: string; onChange: (label: string) => void }) {
+  const [labels, setLabels] = useState<{ id: number; name: string; color: string | null }[]>([]);
+
+  useEffect(() => {
+    api.getTagLabels().then(setLabels).catch(() => {});
+  }, []);
+
+  return (
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+    >
+      <option value="">Select label...</option>
+      {labels.map(l => (
+        <option key={l.id} value={l.name}>{l.name}</option>
+      ))}
+    </select>
+  );
+}
+
+function TagOrderEditor({ labelName, order, onChange }: { labelName: string; order: string[]; onChange: (order: string[]) => void }) {
+  const [tags, setTags] = useState<Tag[]>([]);
+
+  useEffect(() => {
+    if (!labelName) { setTags([]); return; }
+    api.getTags().then(all => {
+      setTags(all.filter(t => t.labels?.some(l => l.name === labelName)));
+    }).catch(() => {});
+  }, [labelName]);
+
+  // Build sorted list: ordered tags first, then unordered (alphabetical)
+  const sorted = (() => {
+    const byName = new Map(tags.map(t => [t.name, t]));
+    const result: Tag[] = [];
+    for (const name of order) {
+      const t = byName.get(name);
+      if (t) { result.push(t); byName.delete(name); }
+    }
+    const remaining = [...byName.values()].sort((a, b) => (a.description || a.name).localeCompare(b.description || b.name));
+    return [...result, ...remaining];
+  })();
+
+  const moveUp = (idx: number) => {
+    if (idx === 0) return;
+    const names = sorted.map(t => t.name);
+    [names[idx - 1], names[idx]] = [names[idx], names[idx - 1]];
+    onChange(names);
+  };
+  const moveDown = (idx: number) => {
+    if (idx >= sorted.length - 1) return;
+    const names = sorted.map(t => t.name);
+    [names[idx], names[idx + 1]] = [names[idx + 1], names[idx]];
+    onChange(names);
+  };
+
+  if (sorted.length === 0) return null;
+
+  return (
+    <div className="space-y-1">
+      <div className="text-[10px] text-slate-500 font-medium">Tag Order</div>
+      {sorted.map((t, i) => (
+        <div key={t.name} className="flex items-center gap-1 px-2 py-1 bg-slate-800 rounded border border-slate-700 text-xs text-slate-300">
+          <span className="flex-1 truncate">{t.description || t.name}</span>
+          <button onClick={() => moveUp(i)} className="text-slate-500 hover:text-slate-300 text-[10px] px-1" title="Move up">&uarr;</button>
+          <button onClick={() => moveDown(i)} className="text-slate-500 hover:text-slate-300 text-[10px] px-1" title="Move down">&darr;</button>
+        </div>
+      ))}
     </div>
   );
 }
@@ -255,7 +327,7 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
         </Section>
 
         {/* Tag Binding */}
-        {widget.type !== 'text_label' && widget.type !== 'alarm_summary' && widget.type !== 'multi_value' && widget.type !== 'control_group' && widget.type !== 'container' && (
+        {widget.type !== 'text_label' && widget.type !== 'alarm_summary' && widget.type !== 'multi_value' && widget.type !== 'control_group' && widget.type !== 'auto_fill' && widget.type !== 'container' && (
           <Section title="Tag Binding">
             <Field label="Tag Name">
               <TagPicker value={p.tag || ''} onChange={v => setProp('tag', v)} />
@@ -362,6 +434,68 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
                 rows={3}
                 className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white font-mono" />
             </Field>
+          </Section>
+        )}
+
+        {widget.type === 'light_indicator' && (
+          <Section title="Light Indicator">
+            <Field label="Write Tag (optional)">
+              <TagPicker value={p.writeTag as string || ''} onChange={v => setProp('writeTag', v)} />
+            </Field>
+            <p className="text-[10px] text-slate-500 -mt-1">If set, clicking the indicator toggles this tag</p>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="On Color">
+                <input type="color" value={p.onColor as string || '#22c55e'} onChange={e => setProp('onColor', e.target.value)}
+                  className="w-full h-7 bg-slate-700 border border-slate-600 rounded cursor-pointer" />
+              </Field>
+              <Field label="Off Color">
+                <input type="color" value={p.offColor as string || '#6b7280'} onChange={e => setProp('offColor', e.target.value)}
+                  className="w-full h-7 bg-slate-700 border border-slate-600 rounded cursor-pointer" />
+              </Field>
+            </div>
+            <Field label="Size">
+              <select value={p.size as string || 'medium'} onChange={e => setProp('size', e.target.value)}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white">
+                <option value="small">Small</option>
+                <option value="medium">Medium</option>
+                <option value="large">Large</option>
+              </select>
+            </Field>
+          </Section>
+        )}
+
+        {widget.type === 'auto_fill' && (
+          <Section title="Auto Fill">
+            <Field label="Tag Label">
+              <LabelPicker value={p.labelName as string || ''} onChange={v => setProp('labelName', v)} />
+            </Field>
+            <Field label="Columns">
+              <select value={p.columns as number || 2} onChange={e => setProp('columns', Number(e.target.value))}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white">
+                <option value={1}>1</option>
+                <option value={2}>2</option>
+                <option value={3}>3</option>
+                <option value={4}>4</option>
+              </select>
+            </Field>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="On Color">
+                <input type="color" value={p.onColor as string || '#22c55e'} onChange={e => setProp('onColor', e.target.value)}
+                  className="w-full h-7 bg-slate-700 border border-slate-600 rounded cursor-pointer" />
+              </Field>
+              <Field label="Off Color">
+                <input type="color" value={p.offColor as string || '#6b7280'} onChange={e => setProp('offColor', e.target.value)}
+                  className="w-full h-7 bg-slate-700 border border-slate-600 rounded cursor-pointer" />
+              </Field>
+            </div>
+            <Field label="Decimal Places">
+              <input type="number" value={p.decimalPlaces ?? 1} onChange={e => setProp('decimalPlaces', Number(e.target.value))}
+                min={0} max={6}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
+            </Field>
+            {p.labelName && (
+              <TagOrderEditor labelName={p.labelName as string} order={(p.tagOrder as string[]) || []} onChange={v => setProp('tagOrder', v)} />
+            )}
           </Section>
         )}
 
@@ -653,8 +787,7 @@ function ControlGroupEditor({ controls, onChange }: {
           </div>
           <input type="text" value={ctrl.label} onChange={e => updateControl(i, { label: e.target.value })}
             placeholder="Label" className="w-full bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
-          <input type="text" value={ctrl.tag} onChange={e => updateControl(i, { tag: e.target.value })}
-            placeholder="Tag name" className="w-full bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+          <TagPicker value={ctrl.tag} onChange={v => updateControl(i, { tag: v })} />
 
           {ctrl.type === 'button' && (
             <div className="flex gap-1">
