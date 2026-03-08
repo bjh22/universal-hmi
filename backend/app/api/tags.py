@@ -1,7 +1,7 @@
 import json
 import xml.etree.ElementTree as ET
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,8 +20,8 @@ router = APIRouter(prefix="/api/tags", tags=["tags"])
 
 class TagCreate(BaseModel):
     name: str
+    display_name: str | None = None
     description: str | None = None
-    long_description: str | None = None
     data_source_id: int | None = None
     address: str | None = None
     data_type: TagDataType = TagDataType.FLOAT
@@ -53,8 +53,8 @@ class TagLabelOut(BaseModel):
 class TagOut(BaseModel):
     id: int
     name: str
+    display_name: str | None
     description: str | None
-    long_description: str | None
     data_source_id: int | None
     address: str | None
     data_type: TagDataType
@@ -99,6 +99,7 @@ async def list_tags(
 
 @router.post("/", response_model=TagOut, status_code=status.HTTP_201_CREATED)
 async def create_tag(
+    request: Request,
     body: TagCreate,
     session: AsyncSession = Depends(get_db),
     _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
@@ -108,11 +109,19 @@ async def create_tag(
     await session.flush()
     await session.refresh(tag, ["labels"])
     tag_engine.register_tag(tag)
+    needs_commit = tag.alarm_enabled or tag.trending_enabled
+    if needs_commit:
+        await session.commit()
+    if tag.alarm_enabled:
+        await request.app.state.alarm_service.reload_alarm_configs()
+    if tag.trending_enabled:
+        await request.app.state.trend_service.reload_trending_tags()
     return tag
 
 
 @router.put("/{tag_id}", response_model=TagOut)
 async def update_tag(
+    request: Request,
     tag_id: int,
     body: TagCreate,
     session: AsyncSession = Depends(get_db),
@@ -121,16 +130,28 @@ async def update_tag(
     tag = await session.get(Tag, tag_id)
     if not tag:
         raise HTTPException(status_code=404, detail="Tag not found")
+    alarm_changed = (tag.alarm_enabled != body.alarm_enabled or
+                     tag.alarm_config != body.alarm_config)
+    trending_changed = (tag.trending_enabled != body.trending_enabled or
+                        tag.trending_sample_rate_ms != body.trending_sample_rate_ms or
+                        tag.deadband != body.deadband)
     for key, val in body.model_dump().items():
         setattr(tag, key, val)
     await session.flush()
     await session.refresh(tag, ["labels"])
     tag_engine.register_tag(tag)
+    if alarm_changed or trending_changed:
+        await session.commit()
+    if alarm_changed:
+        await request.app.state.alarm_service.reload_alarm_configs()
+    if trending_changed:
+        await request.app.state.trend_service.reload_trending_tags()
     return tag
 
 
 @router.delete("/{tag_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_tag(
+    request: Request,
     tag_id: int,
     session: AsyncSession = Depends(get_db),
     _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
@@ -138,7 +159,15 @@ async def delete_tag(
     tag = await session.get(Tag, tag_id)
     if not tag:
         raise HTTPException(status_code=404, detail="Tag not found")
+    had_alarm = tag.alarm_enabled
+    had_trending = tag.trending_enabled
     await session.delete(tag)
+    if had_alarm or had_trending:
+        await session.commit()
+    if had_alarm:
+        await request.app.state.alarm_service.reload_alarm_configs()
+    if had_trending:
+        await request.app.state.trend_service.reload_trending_tags()
 
 
 @router.get("/by-name/{tag_name}", response_model=TagOut)
@@ -210,7 +239,7 @@ async def import_tags_csv(
     for td in tags_data:
         tag = Tag(
             name=td["name"],
-            description=td.get("description"),
+            display_name=td.get("display_name") or td.get("description"),
             data_type=TagDataType(td.get("data_type", "float")),
             address=td.get("address"),
             data_source_id=td.get("data_source_id") or default_ds_id,
@@ -391,7 +420,7 @@ def _codesys_expand_type(
             access_mode = TagAccessMode.WRITE
         return [{
             "name": ".".join(path_parts),
-            "description": None,
+            "display_name": None,
             "group": group,
             "data_type": TagDataType.INT,
             "access_mode": access_mode,
@@ -407,7 +436,7 @@ def _codesys_expand_type(
         access_mode = TagAccessMode.WRITE
     return [{
         "name": ".".join(path_parts),
-        "description": None,
+        "display_name": None,
         "group": group,
         "data_type": data_type,
         "access_mode": access_mode,
@@ -443,19 +472,19 @@ def _codesys_parse_nodes(
         current_path = path_parts + [name] if name else path_parts
 
         comment_el = node_el.find("sc:Comment", ns) if ns else node_el.find("Comment")
-        description = comment_el.text.strip() if comment_el is not None and comment_el.text else None
+        display_name = comment_el.text.strip() if comment_el is not None and comment_el.text else None
 
         expanded = _codesys_expand_type(
             type_attr, current_path, access, registry, group
         )
 
-        # Apply the node-level comment as description to all expanded tags
+        # Apply the node-level comment as display name to all expanded tags
         # (only if they don't already have one, and only for single-expansion)
-        if description and len(expanded) == 1:
-            expanded[0]["description"] = description
-        elif description and expanded:
-            # For struct expansion, set description on the first field
-            expanded[0]["description"] = description
+        if display_name and len(expanded) == 1:
+            expanded[0]["display_name"] = display_name
+        elif display_name and expanded:
+            # For struct expansion, set display name on the first field
+            expanded[0]["display_name"] = display_name
 
         tags.extend(expanded)
 
@@ -501,7 +530,7 @@ async def import_tags_codesys(
         enum_mapping_raw = td.get("enum_mapping")
         tag = Tag(
             name=td["name"],
-            description=td.get("description"),
+            display_name=td.get("display_name"),
             data_type=TagDataType(td["data_type"]),
             access_mode=TagAccessMode(td["access_mode"]),
             enum_mapping=json.dumps(enum_mapping_raw) if enum_mapping_raw else None,
@@ -556,8 +585,8 @@ def _rslogix_parse_address(address: str) -> tuple[str, str]:
     return file_letter.upper(), address
 
 
-def _rslogix_build_description(fields: list[str]) -> str:
-    """Build description from RSLogix 500 CSV descriptor columns (columns 3-7)."""
+def _rslogix_build_display_name(fields: list[str]) -> str:
+    """Build display name from RSLogix 500 CSV descriptor columns (columns 3-7)."""
     parts = [f.strip().strip('"') for f in fields if f.strip().strip('"')]
     return " ".join(parts)
 
@@ -596,7 +625,7 @@ async def import_tags_rslogix500(
     for td in parsed_tags:
         tag = Tag(
             name=td["name"],
-            description=td.get("description"),
+            display_name=td.get("display_name"),
             data_type=TagDataType(td["data_type"]),
             access_mode=TagAccessMode(td["access_mode"]),
             address=td.get("address"),
@@ -641,7 +670,7 @@ def _parse_codesys_xml(xml_str: str, prefix: str = "") -> list[dict]:
         enum_mapping = td.get("enum_mapping")
         result.append({
             "name": tag_name,
-            "description": td.get("description"),
+            "display_name": td.get("display_name"),
             "group": td.get("group"),
             "data_type": td["data_type"].value,
             "access_mode": td["access_mode"].value,
@@ -681,7 +710,7 @@ def _parse_rslogix500_csv(csv_str: str, prefix: str = "") -> list[dict]:
             continue
 
         symbol = fields[2].strip().strip('"')
-        description = _rslogix_build_description(fields[3:8]) if len(fields) > 3 else ""
+        display_name = _rslogix_build_display_name(fields[3:8]) if len(fields) > 3 else ""
         file_letter, _ = _rslogix_parse_address(address)
         data_type = RSLOGIX_FILE_TYPE_MAP.get(file_letter, TagDataType.INT)
 
@@ -690,13 +719,13 @@ def _parse_rslogix500_csv(csv_str: str, prefix: str = "") -> list[dict]:
         if tag_name in seen_names:
             continue
         seen_names.add(tag_name)
-        if not symbol and not description:
+        if not symbol and not display_name:
             continue
 
         full_name = f"{prefix}.{tag_name}" if prefix else tag_name
         result.append({
             "name": full_name,
-            "description": description or None,
+            "display_name": display_name or None,
             "group": RSLOGIX_GROUP_MAP.get(file_letter, "Other"),
             "data_type": data_type.value,
             "access_mode": TagAccessMode.READ_WRITE.value,
@@ -903,6 +932,7 @@ async def bulk_remove_labels(
 
 @router.post("/bulk/update", status_code=status.HTTP_200_OK)
 async def bulk_update_tags(
+    request: Request,
     body: BulkFieldUpdate,
     session: AsyncSession = Depends(get_db),
     _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
@@ -924,6 +954,14 @@ async def bulk_update_tags(
             setattr(tag, key, val)
         tag_engine.register_tag(tag)
     await session.flush()
+    reload_alarms = "alarm_enabled" in fields
+    reload_trends = "trending_enabled" in fields
+    if reload_alarms or reload_trends:
+        await session.commit()
+    if reload_alarms:
+        await request.app.state.alarm_service.reload_alarm_configs()
+    if reload_trends:
+        await request.app.state.trend_service.reload_trending_tags()
     return {"updated": len(tags)}
 
 

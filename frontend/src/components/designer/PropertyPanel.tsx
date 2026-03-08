@@ -28,7 +28,7 @@ function TagPicker({ value, onChange }: { value: string; onChange: (tag: string)
   const lowerSearch = search.toLowerCase();
   const filtered = tags.filter(t =>
     t.name.toLowerCase().includes(lowerSearch) ||
-    (t.description || '').toLowerCase().includes(lowerSearch) ||
+    (t.display_name || '').toLowerCase().includes(lowerSearch) ||
     (t.labels || []).some(l => l.name.toLowerCase().includes(lowerSearch))
   );
   // Cap visible items to avoid rendering 1000+ DOM nodes
@@ -59,8 +59,8 @@ function TagPicker({ value, onChange }: { value: string; onChange: (tag: string)
               className={`w-full text-left px-2 py-1.5 text-xs hover:bg-slate-700 ${t.name === value ? 'bg-slate-700 text-blue-400' : 'text-slate-300'}`}
               onMouseDown={e => { e.preventDefault(); onChange(t.name); setOpen(false); }}
             >
-              <div className="font-medium">{t.description || t.name}</div>
-              {t.description && <div className="text-[10px] text-slate-500 font-mono truncate">{t.name}</div>}
+              <div className="font-medium">{t.display_name || t.name}</div>
+              {t.display_name && <div className="text-[10px] text-slate-500 font-mono truncate">{t.name}</div>}
             </button>
           ))}
           {hasMore && (
@@ -113,7 +113,7 @@ function TagOrderEditor({ labelName, order, onChange }: { labelName: string; ord
       const t = byName.get(name);
       if (t) { result.push(t); byName.delete(name); }
     }
-    const remaining = [...byName.values()].sort((a, b) => (a.description || a.name).localeCompare(b.description || b.name));
+    const remaining = [...byName.values()].sort((a, b) => (a.display_name || a.name).localeCompare(b.display_name || b.name));
     return [...result, ...remaining];
   })();
 
@@ -137,7 +137,7 @@ function TagOrderEditor({ labelName, order, onChange }: { labelName: string; ord
       <div className="text-[10px] text-slate-500 font-medium">Tag Order</div>
       {sorted.map((t, i) => (
         <div key={t.name} className="flex items-center gap-1 px-2 py-1 bg-slate-800 rounded border border-slate-700 text-xs text-slate-300">
-          <span className="flex-1 truncate">{t.description || t.name}</span>
+          <span className="flex-1 truncate">{t.display_name || t.name}</span>
           <button onClick={() => moveUp(i)} className="text-slate-500 hover:text-slate-300 text-[10px] px-1" title="Move up">&uarr;</button>
           <button onClick={() => moveDown(i)} className="text-slate-500 hover:text-slate-300 text-[10px] px-1" title="Move down">&darr;</button>
         </div>

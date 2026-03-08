@@ -58,8 +58,8 @@ async def seed():
         sim_tags = [
             Tag(
                 name="Machine.State",
-                description="Machine operating state",
-                long_description="Current operating state of the packaging machine. States: 0=Stopped (machine is idle and safe to access), 1=Running (machine is in automatic production mode), 2=Faulted (machine has stopped due to an error condition — check alarm log), 3=Idle (machine is powered on but waiting for a start command).",
+                display_name="Machine operating state",
+                description="Current operating state of the packaging machine. States: 0=Stopped (machine is idle and safe to access), 1=Running (machine is in automatic production mode), 2=Faulted (machine has stopped due to an error condition — check alarm log), 3=Idle (machine is powered on but waiting for a start command).",
 
                 data_source_id=sim_ds.id,
                 data_type=TagDataType.INT,
@@ -71,8 +71,8 @@ async def seed():
             ),
             Tag(
                 name="Machine.Speed",
-                description="Machine speed in units/min",
-                long_description="Current actual speed of the packaging machine measured by the main drive encoder. This is a read-back value reflecting real-time production throughput, not the commanded setpoint. Normal operating range is 80–150 units/min. Values above 160 may indicate a control issue.",
+                display_name="Machine speed in units/min",
+                description="Current actual speed of the packaging machine measured by the main drive encoder. This is a read-back value reflecting real-time production throughput, not the commanded setpoint. Normal operating range is 80–150 units/min. Values above 160 may indicate a control issue.",
 
                 data_source_id=sim_ds.id,
                 data_type=TagDataType.FLOAT,
@@ -88,8 +88,8 @@ async def seed():
             ),
             Tag(
                 name="Machine.Temperature",
-                description="Sealing bar temperature",
-                long_description="Temperature of the main sealing bar measured by an embedded thermocouple. This temperature must remain within 100–180°C for proper seal integrity. Below 100°C seals will be weak or incomplete; above 180°C film may burn or deform. An alarm is triggered outside this range.",
+                display_name="Sealing bar temperature",
+                description="Temperature of the main sealing bar measured by an embedded thermocouple. This temperature must remain within 100–180°C for proper seal integrity. Below 100°C seals will be weak or incomplete; above 180°C film may burn or deform. An alarm is triggered outside this range.",
 
                 data_source_id=sim_ds.id,
                 data_type=TagDataType.FLOAT,
@@ -105,7 +105,7 @@ async def seed():
             ),
             Tag(
                 name="Machine.GoodCount",
-                description="Good product count",
+                display_name="Good product count",
 
                 data_source_id=sim_ds.id,
                 data_type=TagDataType.INT,
@@ -116,7 +116,7 @@ async def seed():
             ),
             Tag(
                 name="Machine.RejectCount",
-                description="Rejected product count",
+                display_name="Rejected product count",
 
                 data_source_id=sim_ds.id,
                 data_type=TagDataType.INT,
@@ -127,8 +127,8 @@ async def seed():
             ),
             Tag(
                 name="Machine.Pressure",
-                description="System pressure",
-                long_description="Pneumatic system supply pressure feeding the actuators, clamps, and sealing cylinders. Normal operating pressure is 4.5–6.5 bar. Below 3 bar the machine cannot operate safely and will fault. Above 7 bar indicates a regulator failure. A critical alarm is triggered outside the safe range.",
+                display_name="System pressure",
+                description="Pneumatic system supply pressure feeding the actuators, clamps, and sealing cylinders. Normal operating pressure is 4.5–6.5 bar. Below 3 bar the machine cannot operate safely and will fault. Above 7 bar indicates a regulator failure. A critical alarm is triggered outside the safe range.",
 
                 data_source_id=sim_ds.id,
                 data_type=TagDataType.FLOAT,
@@ -144,7 +144,7 @@ async def seed():
             ),
             Tag(
                 name="Machine.Running",
-                description="Machine running status",
+                display_name="Machine running status",
 
                 data_source_id=sim_ds.id,
                 data_type=TagDataType.BOOL,
@@ -155,8 +155,8 @@ async def seed():
             ),
             Tag(
                 name="Machine.TempAlarm",
-                description="Temperature alarm flag",
-                long_description="Boolean flag set by the PLC when sealing bar temperature is outside the acceptable range (below 100\u00b0C or above 180\u00b0C). The PLC evaluates the analog threshold and sets this flag for the HMI to display. Resets automatically when temperature returns to normal range.",
+                display_name="Temperature alarm flag",
+                description="Boolean flag set by the PLC when sealing bar temperature is outside the acceptable range (below 100\u00b0C or above 180\u00b0C). The PLC evaluates the analog threshold and sets this flag for the HMI to display. Resets automatically when temperature returns to normal range.",
 
                 data_source_id=sim_ds.id,
                 data_type=TagDataType.BOOL,
@@ -174,8 +174,8 @@ async def seed():
             ),
             Tag(
                 name="Machine.PressureAlarm",
-                description="Pressure alarm flag",
-                long_description="Boolean flag set by the PLC when pneumatic system pressure is outside the safe operating range (below 3 bar or above 7 bar). The PLC evaluates the analog threshold and sets this flag for the HMI to display. This is a critical alarm that will cause the machine to fault.",
+                display_name="Pressure alarm flag",
+                description="Boolean flag set by the PLC when pneumatic system pressure is outside the safe operating range (below 3 bar or above 7 bar). The PLC evaluates the analog threshold and sets this flag for the HMI to display. This is a critical alarm that will cause the machine to fault.",
 
                 data_source_id=sim_ds.id,
                 data_type=TagDataType.BOOL,
@@ -193,8 +193,8 @@ async def seed():
             ),
             Tag(
                 name="Machine.TargetSpeed",
-                description="Target speed setpoint",
-                long_description="This setpoint sets the maximum speed of the packaging machine in automatic mode. The drive will ramp to this speed over approximately 5 seconds. Changing this value during production will take effect immediately. Job recipes may override this value when downloaded.",
+                display_name="Target speed setpoint",
+                description="This setpoint sets the maximum speed of the packaging machine in automatic mode. The drive will ramp to this speed over approximately 5 seconds. Changing this value during production will take effect immediately. Job recipes may override this value when downloaded.",
 
                 data_source_id=sim_ds.id,
                 data_type=TagDataType.FLOAT,
@@ -208,8 +208,8 @@ async def seed():
             ),
             Tag(
                 name="Machine.FilmWidth",
-                description="Film width setting",
-                long_description="Sets the film web width for the current product. This value controls the cross-seal knife position and film guide spacing. Must match the actual film roll width being used. Changing this value requires the machine to be stopped. Valid range: 50–500 mm.",
+                display_name="Film width setting",
+                description="Sets the film web width for the current product. This value controls the cross-seal knife position and film guide spacing. Must match the actual film roll width being used. Changing this value requires the machine to be stopped. Valid range: 50–500 mm.",
 
                 data_source_id=sim_ds.id,
                 data_type=TagDataType.FLOAT,
@@ -223,8 +223,8 @@ async def seed():
             ),
             Tag(
                 name="Machine.SealTemp",
-                description="Seal temperature setpoint",
-                long_description="Sets the target temperature for the sealing bar heater. The PID controller will regulate the heater to maintain this temperature. Optimal seal temperature depends on the film material — typically 140–160°C for PE film, 170–190°C for laminated materials. Allow 2–3 minutes for temperature to stabilize after changing.",
+                display_name="Seal temperature setpoint",
+                description="Sets the target temperature for the sealing bar heater. The PID controller will regulate the heater to maintain this temperature. Optimal seal temperature depends on the film material — typically 140–160°C for PE film, 170–190°C for laminated materials. Allow 2–3 minutes for temperature to stabilize after changing.",
 
                 data_source_id=sim_ds.id,
                 data_type=TagDataType.FLOAT,

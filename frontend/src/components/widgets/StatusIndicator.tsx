@@ -27,7 +27,7 @@ export function StatusIndicator({ title, tag, tagValues, mapping = {}, titleStyl
       >
         {mapped?.label || strVal || '—'}
       </div>
-      {shouldShowExtras(chrome) && tv && <div className="text-xs text-slate-500 mt-2">{tv.description || tag}</div>}
+      {shouldShowExtras(chrome) && tv && <div className="text-xs text-slate-500 mt-2">{tv.display_name || tag}</div>}
     </div>
   );
 }

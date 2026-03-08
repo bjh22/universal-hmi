@@ -48,6 +48,11 @@ class TrendService:
             for t in tags
         ]
 
+    async def reload_trending_tags(self):
+        """Reload trending tag configs from DB (call after tag trending settings change)."""
+        async with async_session() as session:
+            await self.load_trending_tags(session)
+
     async def start(self):
         if self._running:
             return

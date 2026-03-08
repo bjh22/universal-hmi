@@ -733,10 +733,10 @@ export function ProjectsPage({ user }: Props) {
                 </div>
                 <div className="max-h-80 overflow-y-auto space-y-1">
                   {projectTags
-                    .filter(t => !tagFilter || t.name.toLowerCase().includes(tagFilter.toLowerCase()) || (t.description || '').toLowerCase().includes(tagFilter.toLowerCase()))
+                    .filter(t => !tagFilter || t.name.toLowerCase().includes(tagFilter.toLowerCase()) || (t.display_name || '').toLowerCase().includes(tagFilter.toLowerCase()))
                     .map(tag => (
                       <div key={tag.id} className="flex items-center gap-2 bg-slate-900 rounded px-3 py-1.5">
-                        <span className="text-xs text-white flex-1 truncate" title={tag.name}>{tag.description || tag.name}</span>
+                        <span className="text-xs text-white flex-1 truncate" title={tag.name}>{tag.display_name || tag.name}</span>
                         <span className="text-xs text-slate-500 w-36 truncate shrink-0" title={tag.address || ''}>
                           {tag.address || '\u2014'}
                         </span>

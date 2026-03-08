@@ -26,7 +26,7 @@ class AlarmService:
         self._eval_task: asyncio.Task | None = None
         self._alarm_configs: list[dict] = []
         self._active_alarms: dict[int, Alarm] = {}  # tag_id -> active Alarm
-        self._tag_lookup: dict[int, dict] = {}  # tag_id -> {name, description} for O(1) lookups
+        self._tag_lookup: dict[int, dict] = {}  # tag_id -> {name, display_name} for O(1) lookups
 
     @property
     def active_alarms(self) -> list[Alarm]:
@@ -51,9 +51,10 @@ class AlarmService:
                     continue
                 config["tag_id"] = tag.id
                 config["tag_name"] = tag.name
+                config["tag_display_name"] = tag.display_name
                 config["tag_description"] = tag.description
                 self._alarm_configs.append(config)
-                self._tag_lookup[tag.id] = {"name": tag.name, "description": tag.description}
+                self._tag_lookup[tag.id] = {"name": tag.name, "display_name": tag.display_name}
 
         # Restore active alarms from DB (survive restarts)
         result = await session.execute(
@@ -162,7 +163,7 @@ class AlarmService:
             for config, value in new_alarms:
                 alarm = Alarm(
                     tag_id=config["tag_id"],
-                    message=config.get("tag_description") or config.get("message") or f"Alarm on {config['tag_name']}",
+                    message=config.get("message") or config.get("tag_description") or config.get("tag_display_name") or f"Alarm on {config['tag_name']}",
                     severity=AlarmSeverity(config.get("severity", "warning")),
                     state=AlarmState.ACTIVE_UNACKED,
                     trigger_value=str(value),
@@ -172,7 +173,7 @@ class AlarmService:
                 await session.flush()
                 await session.refresh(alarm)
                 self._active_alarms[config["tag_id"]] = alarm
-                self._broadcast_alarm(alarm, tag_name=config["tag_name"], tag_display_name=config.get("tag_description"))
+                self._broadcast_alarm(alarm, tag_name=config["tag_name"], tag_display_name=config.get("tag_display_name"))
 
             # Retriggers
             for alarm in retriggers:
@@ -235,7 +236,7 @@ class AlarmService:
             await session.refresh(alarm)
 
         self._active_alarms[config["tag_id"]] = alarm
-        self._broadcast_alarm(alarm, tag_name=config["tag_name"], tag_display_name=config.get("tag_description"))
+        self._broadcast_alarm(alarm, tag_name=config["tag_name"], tag_display_name=config.get("tag_display_name"))
 
     async def _clear_alarm(self, tag_id: int, value):
         alarm = self._active_alarms.get(tag_id)
@@ -288,9 +289,9 @@ class AlarmService:
         entry = self._tag_lookup.get(tag_id)
         return entry["name"] if entry else ""
 
-    def _get_tag_description(self, tag_id: int) -> str | None:
+    def _get_tag_display_name(self, tag_id: int) -> str | None:
         entry = self._tag_lookup.get(tag_id)
-        return entry["description"] if entry else None
+        return entry["display_name"] if entry else None
 
     def _record_history_obj(
         self, session: AsyncSession, alarm: Alarm, clear_value: str | None = None
@@ -300,7 +301,7 @@ class AlarmService:
         history = AlarmHistory(
             tag_id=alarm.tag_id,
             tag_name=tag_name,
-            tag_display_name=self._get_tag_description(alarm.tag_id),
+            tag_display_name=self._get_tag_display_name(alarm.tag_id),
             message=alarm.message,
             severity=alarm.severity,
             triggered_at=alarm.triggered_at,
@@ -321,7 +322,7 @@ class AlarmService:
         if tag_name is None:
             tag_name = self._get_tag_name(alarm.tag_id)
         if tag_display_name is None:
-            tag_display_name = self._get_tag_description(alarm.tag_id)
+            tag_display_name = self._get_tag_display_name(alarm.tag_id)
         msg = {
             "type": "alarm",
             "data": {

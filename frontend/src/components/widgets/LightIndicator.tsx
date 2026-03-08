@@ -24,7 +24,7 @@ export function LightIndicator({ title, tag, writeTag, onColor = '#22c55e', offC
   const value = Boolean(tv?.value);
   const color = value ? onColor : offColor;
   const diameter = SIZES[size] || SIZES.medium;
-  const longDesc = tv?.long_description;
+  const longDesc = tv?.description;
 
   const handleClick = async () => {
     if (!writeTag) return;

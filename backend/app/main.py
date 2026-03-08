@@ -44,6 +44,7 @@ async def lifespan(app: FastAPI):
 
     tag_engine.set_driver_manager(driver_manager)
     app.state.alarm_service = alarm_service
+    app.state.trend_service = trend_service
 
     # Integration system
     integration_manager = IntegrationManager(tag_engine, async_session)

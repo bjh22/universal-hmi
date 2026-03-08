@@ -4,8 +4,8 @@ export interface TagValue {
   value: unknown;
   quality: string;
   timestamp: string;
-  long_description?: string;
   description?: string;
+  display_name?: string;
 }
 
 export interface TagLabel {
@@ -18,8 +18,8 @@ export interface TagLabel {
 export interface Tag {
   id: number;
   name: string;
+  display_name: string | null;
   description: string | null;
-  long_description: string | null;
   data_source_id: number | null;
   address: string | null;
   data_type: 'bool' | 'int' | 'float' | 'string';
@@ -42,7 +42,7 @@ export interface Tag {
 
 export interface ImportPreviewTag {
   name: string;
-  description: string | null;
+  display_name: string | null;
   group: string | null;
   data_type: string;
   access_mode: string;
@@ -106,7 +106,7 @@ export interface Widget {
   enabled?: boolean;       // runtime enabled state (default true)
   enabledTag?: string;     // tag-driven enabled: enabled when tag is truthy
   enabledRoles?: string[]; // role-based enabled: enabled only for these roles
-  showInfo?: boolean;      // show info icon when tag has long_description (default true)
+  showInfo?: boolean;      // show info icon when tag has description (default true)
   chrome?: 'full' | 'compact' | 'none'; // display chrome level (default: full)
   parentId?: string;   // links widget to a container widget for grouping
 }
