@@ -3,8 +3,8 @@ import type { TagValue, AlarmData } from '../types';
 import { api } from '../lib/api';
 
 interface WSMessage {
-  type: 'snapshot' | 'tag_update' | 'alarm' | 'keepalive';
-  data?: Record<string, TagValue> | AlarmData;
+  type: 'snapshot' | 'tag_update' | 'alarm' | 'alarms_snapshot' | 'keepalive';
+  data?: Record<string, TagValue> | AlarmData | AlarmData[];
 }
 
 const RECONNECT_BASE_MS = 1000;
@@ -52,6 +52,8 @@ export function useWebSocket() {
       if (msg.type === 'snapshot' || msg.type === 'tag_update') {
         const data = msg.data as Record<string, TagValue>;
         setTagValues((prev) => ({ ...prev, ...data }));
+      } else if (msg.type === 'alarms_snapshot') {
+        setAlarms(msg.data as AlarmData[]);
       } else if (msg.type === 'alarm') {
         const alarm = msg.data as AlarmData;
         setAlarms((prev) => {
