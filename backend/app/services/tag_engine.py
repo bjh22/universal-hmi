@@ -297,7 +297,7 @@ class TagEngine:
                 task.cancel()
                 try:
                     await task
-                except asyncio.CancelledError:
+                except (asyncio.CancelledError, Exception):
                     pass
 
     async def _simulation_loop(self):

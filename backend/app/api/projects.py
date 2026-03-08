@@ -1,7 +1,7 @@
 import json
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import delete, select, update
@@ -12,6 +12,7 @@ from app.core.database import get_db
 from app.models.datasource import DataSource
 from app.models.job import Job
 from app.models.project import Project
+from app.models.alarm import Alarm, AlarmHistory
 from app.models.screen import Screen, ScreenTemplate
 from app.models.tag import Tag, TagLabel, TagTemplate, tag_label_assignments
 from app.models.user import User, UserRole
@@ -343,6 +344,8 @@ async def _build_snapshot(session: AsyncSession, project: Project) -> dict:
 
 async def _wipe_all_resources(session: AsyncSession):
     """Delete all HMI resources from the database."""
+    await session.execute(delete(AlarmHistory))
+    await session.execute(delete(Alarm))
     await session.execute(delete(tag_label_assignments))
     for model in [Tag, Screen, Job, TagTemplate, ScreenTemplate, TagLabel, DataSource]:
         await session.execute(delete(model))
@@ -392,6 +395,7 @@ async def save_project(
 @router.post("/{project_id}/load")
 async def load_project(
     project_id: int,
+    request: Request,
     session: AsyncSession = Depends(get_db),
     _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
 ):
@@ -444,8 +448,10 @@ async def load_project(
 
     await session.flush()
 
-    # Reload tag engine so in-memory state matches new DB
+    # Reload tag engine and alarm service so in-memory state matches new DB
     await tag_engine.reload(session)
+    await request.app.state.alarm_service.load_alarm_configs(session)
+    request.app.state.alarm_service.broadcast_alarms_snapshot()
 
     return {"status": "loaded", "project_name": project.name}
 
@@ -453,6 +459,7 @@ async def load_project(
 @router.post("/create-blank", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)
 async def create_blank_project(
     body: ProjectCreate,
+    request: Request,
     session: AsyncSession = Depends(get_db),
     _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
 ):
@@ -482,6 +489,8 @@ async def create_blank_project(
     await session.flush()
 
     await tag_engine.reload(session)
+    await request.app.state.alarm_service.load_alarm_configs(session)
+    request.app.state.alarm_service.broadcast_alarms_snapshot()
 
     return ProjectOut(
         id=project.id, name=project.name, description=project.description, version=project.version,
@@ -493,6 +502,7 @@ async def create_blank_project(
 @router.post("/create-demo", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)
 async def create_demo_project(
     body: ProjectCreate,
+    request: Request,
     session: AsyncSession = Depends(get_db),
     _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
 ):
@@ -520,6 +530,8 @@ async def create_demo_project(
     await session.flush()
 
     await tag_engine.reload(session)
+    await request.app.state.alarm_service.load_alarm_configs(session)
+    request.app.state.alarm_service.broadcast_alarms_snapshot()
 
     return ProjectOut(
         id=project.id, name=project.name, description=project.description, version=project.version,

@@ -37,6 +37,7 @@ class AlarmService:
         tags = result.scalars().all()
         self._alarm_configs = []
         self._tag_lookup = {}
+        self._active_alarms = {}
         for tag in tags:
             if tag.alarm_config:
                 config = json.loads(tag.alarm_config)
@@ -71,6 +72,35 @@ class AlarmService:
         """Reload alarm configs from DB (call after tag alarm settings change)."""
         async with self._session_factory() as session:
             await self.load_alarm_configs(session)
+
+    def broadcast_alarms_snapshot(self):
+        """Push current active alarms to all WS subscribers, replacing stale state."""
+        alarms = []
+        for alarm in self._active_alarms.values():
+            tag_name = self._get_tag_name(alarm.tag_id)
+            tag_display_name = self._get_tag_display_name(alarm.tag_id)
+            alarms.append({
+                "id": alarm.id,
+                "tag_id": alarm.tag_id,
+                "tag_name": tag_name,
+                "tag_display_name": tag_display_name,
+                "message": alarm.message,
+                "severity": alarm.severity.value,
+                "state": alarm.state.value,
+                "triggered_at": alarm.triggered_at.isoformat() + ("" if alarm.triggered_at.tzinfo else "Z"),
+                "acknowledged_at": (
+                    (alarm.acknowledged_at.isoformat() + ("" if alarm.acknowledged_at.tzinfo else "Z"))
+                    if alarm.acknowledged_at else None
+                ),
+                "acknowledged_by": alarm.acknowledged_by,
+                "trigger_value": alarm.trigger_value,
+            })
+        msg = {"type": "alarms_snapshot", "data": alarms}
+        for q in self._tag_engine._subscribers:
+            try:
+                q.put_nowait(msg)
+            except asyncio.QueueFull:
+                pass
 
     async def start(self):
         if self._running:
