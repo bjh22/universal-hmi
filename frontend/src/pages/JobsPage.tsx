@@ -399,7 +399,7 @@ function HistoryDialog({ jobId, jobName, onRestore, onClose }: {
                   </pre>
                   <button
                     onClick={() => { onRestore(h.setpoints); onClose(); }}
-                    className="px-4 py-3 min-h-[44px] bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm active:scale-95 transition-transform"
+                    className="px-4 py-3 min-h-[44px] bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-dark)] text-white rounded-lg text-sm active:scale-95 transition-transform"
                   >
                     Restore this version
                   </button>
@@ -704,7 +704,7 @@ export function JobsPage({ user }: Props) {
             </button>
             <button
               onClick={() => setShowCreate(true)}
-              className="flex items-center gap-2 px-4 py-3 min-h-[44px] bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium active:scale-95 transition-transform"
+              className="flex items-center gap-2 px-4 py-3 min-h-[44px] bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-dark)] text-white rounded-lg text-sm font-medium active:scale-95 transition-transform"
             >
               <Plus size={18} /> New Job
             </button>
@@ -739,7 +739,7 @@ export function JobsPage({ user }: Props) {
               </div>
             )}
             <div className="flex gap-3">
-              <button onClick={handleCreate} className="px-5 py-3 min-h-[44px] bg-blue-600 rounded-lg text-sm text-white active:scale-95 transition-transform">Create</button>
+              <button onClick={handleCreate} className="px-5 py-3 min-h-[44px] bg-[var(--hmi-accent)] rounded-lg text-sm text-white active:scale-95 transition-transform">Create</button>
               <button onClick={() => setShowCreate(false)} className="px-5 py-3 min-h-[44px] bg-slate-700 rounded-lg text-sm text-slate-300 active:scale-95 transition-transform">Cancel</button>
             </div>
           </div>
@@ -766,7 +766,7 @@ export function JobsPage({ user }: Props) {
                 onClick={() => { setSelectedJob(job); setEditMode(false); }}
                 className={`p-4 rounded-xl border cursor-pointer transition-colors active:scale-[0.98] ${
                   selectedJob?.id === job.id
-                    ? 'bg-blue-600/10 border-blue-500/30'
+                    ? 'bg-[var(--hmi-accent-bg)] border-[var(--hmi-accent)]/30'
                     : 'bg-slate-800 border-slate-700 hover:border-slate-600'
                 }`}
               >
@@ -787,7 +787,7 @@ export function JobsPage({ user }: Props) {
                   {canEdit && (
                     <button
                       onClick={(e) => { e.stopPropagation(); handleClone(job); }}
-                      className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-blue-600/20 text-blue-400 rounded-lg text-sm hover:bg-blue-600/30 active:scale-95 transition-transform"
+                      className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-[var(--hmi-accent-bg)] text-[var(--hmi-accent-text)] rounded-lg text-sm hover:bg-[var(--hmi-accent)]/30 active:scale-95 transition-transform"
                     >
                       <Copy size={16} /> Clone
                     </button>
@@ -872,7 +872,7 @@ export function JobsPage({ user }: Props) {
                 <div className="flex gap-3 pt-2">
                   <button
                     onClick={handleSaveEdit}
-                    className="flex items-center gap-1.5 px-5 py-3 min-h-[44px] bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white active:scale-95 transition-transform"
+                    className="flex items-center gap-1.5 px-5 py-3 min-h-[44px] bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-dark)] rounded-lg text-sm text-white active:scale-95 transition-transform"
                   >
                     <Save size={16} /> Save
                   </button>

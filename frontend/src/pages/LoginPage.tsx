@@ -42,16 +42,16 @@ export function LoginPage({ onLogin, siteTitle }: Props) {
 
   return (
     <div className="flex items-center justify-center min-h-[80vh]">
-      <div className="w-full max-w-sm bg-slate-800 rounded-2xl p-6 border border-slate-700">
+      <div className="w-full max-w-sm bg-[var(--hmi-bg-elevated)] rounded-2xl p-6 border border-[var(--hmi-border)]">
         <h1 className="text-xl font-bold text-center text-slate-100 mb-1">{siteTitle || 'Industrial HMI'}</h1>
         <p className="text-sm text-center text-slate-400 mb-6">Sign in to continue</p>
 
         {/* Mode toggle */}
-        <div className="flex gap-1 mb-4 bg-slate-900 rounded-lg p-1">
+        <div className="flex gap-1 mb-4 bg-[var(--hmi-bg-surface)] rounded-lg p-1">
           <button
             onClick={() => setMode('password')}
             className={`flex-1 py-2 text-sm rounded-md font-medium ${
-              mode === 'password' ? 'bg-blue-600 text-white' : 'text-slate-400'
+              mode === 'password' ? 'bg-[var(--hmi-accent)] text-white' : 'text-slate-400'
             }`}
           >
             Username
@@ -59,7 +59,7 @@ export function LoginPage({ onLogin, siteTitle }: Props) {
           <button
             onClick={() => setMode('pin')}
             className={`flex-1 py-2 text-sm rounded-md font-medium ${
-              mode === 'pin' ? 'bg-blue-600 text-white' : 'text-slate-400'
+              mode === 'pin' ? 'bg-[var(--hmi-accent)] text-white' : 'text-slate-400'
             }`}
           >
             PIN
@@ -77,7 +77,7 @@ export function LoginPage({ onLogin, siteTitle }: Props) {
               placeholder="Username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-blue-500"
+              className="w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-[var(--hmi-accent)]"
               autoFocus
             />
             <input
@@ -85,9 +85,9 @@ export function LoginPage({ onLogin, siteTitle }: Props) {
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-blue-500"
+              className="w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-[var(--hmi-accent)]"
             />
-            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg text-sm font-medium">
+            <button type="submit" className="w-full bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-dark)] text-white py-2.5 rounded-lg text-sm font-medium">
               Sign In
             </button>
           </form>
@@ -98,7 +98,7 @@ export function LoginPage({ onLogin, siteTitle }: Props) {
               placeholder="Enter PIN"
               value={pin}
               onChange={(e) => setPin(e.target.value)}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-sm text-white text-center text-2xl tracking-widest outline-none focus:border-blue-500"
+              className="w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-lg px-3 py-2.5 text-sm text-white text-center text-2xl tracking-widest outline-none focus:border-[var(--hmi-accent)]"
               maxLength={8}
               autoFocus
             />
@@ -113,14 +113,14 @@ export function LoginPage({ onLogin, siteTitle }: Props) {
                     else if (n !== null) setPin(p => p + String(n));
                   }}
                   className={`py-3 rounded-lg text-lg font-medium ${
-                    n === null ? 'invisible' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'
+                    n === null ? 'invisible' : 'bg-[var(--hmi-bg-input)] hover:bg-[var(--hmi-border-subtle)] text-[var(--hmi-text-primary)]'
                   }`}
                 >
                   {n === 'del' ? '⌫' : n}
                 </button>
               ))}
             </div>
-            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg text-sm font-medium">
+            <button type="submit" className="w-full bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-dark)] text-white py-2.5 rounded-lg text-sm font-medium">
               Sign In with PIN
             </button>
           </form>

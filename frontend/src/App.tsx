@@ -5,6 +5,7 @@ import { useWebSocket } from './hooks/useWebSocket';
 import { useAuthState } from './hooks/useAuth';
 import { LoginPage } from './pages/LoginPage';
 import { api } from './lib/api';
+import { applyTheme } from './lib/theme';
 
 // Lazy-load page components for code splitting
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
@@ -24,7 +25,7 @@ function PageLoader() {
   );
 }
 
-function applyBranding(branding: { site_title: string; has_favicon: boolean }) {
+function applyBranding(branding: { site_title: string; has_favicon: boolean; theme_accent: string; theme_preset: string }) {
   document.title = branding.site_title;
   const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
   if (link) {
@@ -32,6 +33,7 @@ function applyBranding(branding: { site_title: string; has_favicon: boolean }) {
       ? '/api/branding/favicon'
       : '/vite.svg';
   }
+  applyTheme(branding.theme_accent, branding.theme_preset);
 }
 
 export default function App() {
