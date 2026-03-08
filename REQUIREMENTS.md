@@ -192,7 +192,7 @@ The system maintains a **tag database** stored in SQLite. Each tag record contai
 | FR-TAG-03 | Each tag must have a unique short name (friendly identifier), a data source assignment, and a source address. Short names are used in widget bindings, jobs, alarms, and audit logs — the raw source address is not exposed to operators. The tag editor enforces the source address format based on the data source's protocol: when adding or editing a tag, the address input field provides protocol-appropriate validation, placeholder text, and format hints (e.g., Modbus shows `HR:40001:FLOAT32` format, OPC UA shows `ns=2;s=...` format). |
 | FR-TAG-04 | Each tag has configurable options: engineering units (e.g., "°C", "mm/s"), display format (decimal places, number format), range (min/max for validation and gauge scaling), deadband (minimum change before a value update is pushed), and read/write mode (read-only, read-write, write-only) |
 | FR-TAG-05 | Tags can be flagged as trended (logged to history) with a configurable sample rate per tag |
-| FR-TAG-06 | Tags can be flagged as alarm sources. Two alarm modes are supported: **threshold** — for analog tags, with high, high-high, low, low-low limits and severity per limit; **boolean** — for discrete tags, where a true value raises an alarm (e.g., `conveyorMotorFault` = true → Critical alarm "Conveyor Motor Fault"). Each alarm source has a configurable severity, message text, and active-on state (true or false, to handle both fault flags and healthy-state flags). |
+| FR-TAG-06 | Tags can be flagged as alarm sources. Alarms are **boolean** — the tag value is compared against a configurable `trigger_on` state (true or false) to raise an alarm (e.g., `conveyorMotorFault` = true → Critical alarm "Conveyor Motor Fault"). Analog threshold alarming (high/low limits) is handled on the PLC side for safety and reported to the HMI as boolean fault flags. Each alarm source has a configurable severity, message text, and active-on state. |
 | FR-TAG-07 | Group tags into logical categories; groups are displayed in the tag editor as a tree or filtered list |
 | FR-TAG-08 | Tag editor provides a searchable, sortable table view of all tags with inline editing of short name, group, and options |
 | FR-TAG-09 | Tag import/export via JSON or CSV for backup and transfer between systems |
@@ -428,7 +428,7 @@ The system provides a set of **built-in system tags** that are always available 
 9. Engineer reviews the list, deselects a few diagnostic nodes not needed, and taps "Apply"
 10. Tags are created in the database with OPC UA node IDs auto-populated; engineer assigns short names, engineering units, display format, and min/max ranges
 11. Groups tags into categories (e.g., "Sealing Station", "Film Feed", "Counters")
-12. Marks selected tags for trending at 1-second intervals; configures alarm thresholds on temperature tags and boolean alarm sources on fault flags
+12. Marks selected tags for trending at 1-second intervals; configures boolean alarm sources on fault flags (analog threshold alarming is handled on the PLC side)
 13. Saves — widgets can now bind to tags by short name; dashboard begins showing live data
 
 ---

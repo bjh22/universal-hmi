@@ -40,6 +40,15 @@ class AlarmService:
         for tag in tags:
             if tag.alarm_config:
                 config = json.loads(tag.alarm_config)
+                # Skip legacy threshold alarm configs — analog alarming
+                # is handled on the PLC side, not in the HMI.
+                if config.get("type") == "threshold":
+                    logger.warning(
+                        "Tag '%s' has a legacy threshold alarm config — skipping. "
+                        "Convert to a boolean alarm or disable alarm_enabled.",
+                        tag.name,
+                    )
+                    continue
                 config["tag_id"] = tag.id
                 config["tag_name"] = tag.name
                 config["tag_description"] = tag.description
@@ -195,30 +204,18 @@ class AlarmService:
             await session.commit()
 
     def _check_condition(self, config: dict, value) -> bool:
-        alarm_type = config.get("type", "threshold")
-        if alarm_type == "boolean":
-            trigger_on = config.get("trigger_on", True)
-            # Coerce to bool for reliable comparison across types
-            if isinstance(value, str):
-                value = value.lower() in ("true", "1", "yes")
-            if isinstance(trigger_on, str):
-                trigger_on = trigger_on.lower() in ("true", "1", "yes")
-            return bool(value) == bool(trigger_on)
-        elif alarm_type == "threshold":
-            try:
-                val = float(value)
-            except (TypeError, ValueError):
-                return False
-            # Support hi/hi_hi/lo/lo_lo thresholds (industry standard)
-            for key in ("hi_hi", "hi", "high"):
-                limit = config.get(key)
-                if limit is not None and val >= float(limit):
-                    return True
-            for key in ("lo_lo", "lo", "low"):
-                limit = config.get(key)
-                if limit is not None and val <= float(limit):
-                    return True
-        return False
+        """Boolean alarm check — compare tag value against trigger_on (default True).
+
+        Analog threshold alarming is handled on the PLC side and reported
+        to the HMI as boolean fault flags.
+        """
+        trigger_on = config.get("trigger_on", True)
+        # Coerce to bool for reliable comparison across types
+        if isinstance(value, str):
+            value = value.lower() in ("true", "1", "yes")
+        if isinstance(trigger_on, str):
+            trigger_on = trigger_on.lower() in ("true", "1", "yes")
+        return bool(value) == bool(trigger_on)
 
     # ------------------------------------------------------------------
     # State transitions (all persist to DB)

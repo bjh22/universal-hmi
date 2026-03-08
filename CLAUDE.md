@@ -157,7 +157,7 @@ Environment variables prefixed with `HMI_` (or `.env` file):
 ## Key Backend Services
 
 - **TagEngine** (`services/tag_engine.py`): In-memory tag store, simulation engine (sine/ramp/random/toggle/enum_cycle), 500ms update cycle, publishes to WebSocket subscribers
-- **AlarmService** (`services/alarm_service.py`): Two alarm modes — **threshold** (hi/hi_hi/lo/lo_lo for analog tags) and **boolean** (discrete tag true/false triggers alarm). State machine with four states: `active_unacked`, `active_acked`, `inactive_unacked` (alarm clears before acknowledgment), `inactive` (cleared). History recording.
+- **AlarmService** (`services/alarm_service.py`): Boolean alarm evaluation — each alarm-enabled tag is compared against its `trigger_on` value (default `true`). Analog threshold alarming is handled on the PLC side and reported to the HMI as boolean fault flags. State machine with four states: `active_unacked`, `active_acked`, `inactive_unacked` (alarm clears before acknowledgment), `inactive` (cleared). History recording.
 - **TrendService** (`services/trend_service.py`): Time-series sampling, 90-day retention
 - **ScriptEngine** (`services/script_engine.py`): Sandboxed Python execution for button actions (5s timeout, restricted builtins)
 
