@@ -213,6 +213,15 @@ function EnumMappingEditor({ mapping, onChange }: {
   );
 }
 
+function parseAlarmConfig(raw: unknown): { type: string; trigger_on: boolean; severity: string; message: string } {
+  const defaults = { type: 'boolean', trigger_on: true, severity: 'warning', message: '' };
+  if (!raw) return defaults;
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return { ...defaults, ...(parsed as Record<string, unknown>) };
+  } catch { return defaults; }
+}
+
 // ─── Tag Edit Dialog ───
 function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
   tag: Omit<Tag, 'id'> & { id?: number };
@@ -224,6 +233,12 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
   const [form, setForm] = useState(tag);
   const set = useCallback(<K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm(f => ({ ...f, [k]: v })), []);
+  const setAlarmField = useCallback((field: string, value: string) => {
+    setForm(f => {
+      const current = parseAlarmConfig(f.alarm_config);
+      return { ...f, alarm_config: JSON.stringify({ ...current, [field]: value }) as unknown as Record<string, unknown> | null };
+    });
+  }, []);
   const [labelSearch, setLabelSearch] = useState('');
   const [showLabelDropdown, setShowLabelDropdown] = useState(false);
   const labelRef = useRef<HTMLDivElement>(null);
@@ -351,48 +366,79 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
                 <option value="read_write">Read/Write</option>
               </select>
             </Field>
-            <Field label="Units">
-              <input value={form.engineering_units || ''} onChange={e => set('engineering_units', e.target.value || null)} className={inputCls} placeholder="e.g. \u00b0C" />
-            </Field>
+            {form.data_type !== 'bool' && (
+              <Field label="Units">
+                <input value={form.engineering_units || ''} onChange={e => set('engineering_units', e.target.value || null)} className={inputCls} placeholder="e.g. \u00b0C" />
+              </Field>
+            )}
           </div>
 
-          {/* Range & deadband */}
-          <div className="grid grid-cols-4 gap-3">
-            <Field label="Min Value">
-              <input type="number" value={form.min_value ?? ''} onChange={e => set('min_value', e.target.value ? Number(e.target.value) : null)} className={inputCls} />
-            </Field>
-            <Field label="Max Value">
-              <input type="number" value={form.max_value ?? ''} onChange={e => set('max_value', e.target.value ? Number(e.target.value) : null)} className={inputCls} />
-            </Field>
-            <Field label="Deadband">
-              <input type="number" value={form.deadband ?? ''} onChange={e => set('deadband', e.target.value ? Number(e.target.value) : null)} className={inputCls} step="0.1" />
-            </Field>
-            <Field label="Display Format">
-              <input value={form.display_format || ''} onChange={e => set('display_format', e.target.value || null)} className={inputCls} placeholder="e.g. 0.00" />
-            </Field>
-          </div>
+          {/* Range & display (not applicable to bool) */}
+          {form.data_type !== 'bool' && (
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Min Value">
+                <input type="number" value={form.min_value ?? ''} onChange={e => set('min_value', e.target.value ? Number(e.target.value) : null)} className={inputCls} />
+              </Field>
+              <Field label="Max Value">
+                <input type="number" value={form.max_value ?? ''} onChange={e => set('max_value', e.target.value ? Number(e.target.value) : null)} className={inputCls} />
+              </Field>
+              <Field label="Display Format">
+                <input value={form.display_format || ''} onChange={e => set('display_format', e.target.value || null)} className={inputCls} placeholder="e.g. 0.00" />
+              </Field>
+            </div>
+          )}
 
           {/* Trending */}
           <fieldset className="border border-slate-700 rounded-lg p-3">
             <legend className="text-xs text-slate-400 px-2">Trending</legend>
-            <div className="flex items-center gap-4">
-              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
-                <input type="checkbox" checked={form.trending_enabled} onChange={e => set('trending_enabled', e.target.checked)} className="accent-blue-500" />
-                Enabled
-              </label>
-              <Field label="Sample Rate (ms)">
-                <input type="number" value={form.trending_sample_rate_ms ?? ''} onChange={e => set('trending_sample_rate_ms', e.target.value ? Number(e.target.value) : null)} className={inputCls + ' w-28'} min={100} step={100} />
-              </Field>
-            </div>
-          </fieldset>
-
-          {/* Alarm */}
-          <fieldset className="border border-slate-700 rounded-lg p-3">
-            <legend className="text-xs text-slate-400 px-2">Alarm</legend>
             <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
-              <input type="checkbox" checked={form.alarm_enabled} onChange={e => set('alarm_enabled', e.target.checked)} className="accent-blue-500" />
+              <input type="checkbox" checked={form.trending_enabled} onChange={e => set('trending_enabled', e.target.checked)} className="accent-blue-500" />
               Enabled
             </label>
+            {form.trending_enabled && (
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <Field label="Sample Rate (ms)">
+                  <input type="number" value={form.trending_sample_rate_ms ?? ''} onChange={e => set('trending_sample_rate_ms', e.target.value ? Number(e.target.value) : null)} className={inputCls} min={100} step={100} placeholder="1000" />
+                </Field>
+                <Field label="Deadband">
+                  <input type="number" value={form.deadband ?? ''} onChange={e => set('deadband', e.target.value ? Number(e.target.value) : null)} className={inputCls} step="0.1" placeholder="0 (log every sample)" />
+                </Field>
+              </div>
+            )}
+          </fieldset>
+
+          {/* Alarm (boolean tags only) */}
+          <fieldset className="border border-slate-700 rounded-lg p-3">
+            <legend className="text-xs text-slate-400 px-2">Alarm</legend>
+            {form.data_type !== 'bool' ? (
+              <p className="text-xs text-slate-500">Alarms are only supported on boolean tags. Use PLC-side logic for analog threshold alarming.</p>
+            ) : (
+              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={form.alarm_enabled} onChange={e => {
+                  const enabled = e.target.checked;
+                  set('alarm_enabled', enabled);
+                  if (enabled && !form.alarm_config) {
+                    setForm(f => ({ ...f, alarm_config: JSON.stringify({ type: 'boolean', trigger_on: true, severity: 'warning', message: '' }) as unknown as Record<string, unknown> | null }));
+                  }
+                }} className="accent-blue-500" />
+                Enabled
+              </label>
+            )}
+            {form.data_type === 'bool' && form.alarm_enabled && (
+              <div className="flex items-end gap-3 mt-3">
+                <Field label="Severity">
+                  <select
+                    value={parseAlarmConfig(form.alarm_config).severity}
+                    onChange={e => setAlarmField('severity', e.target.value)}
+                    className={inputCls + ' w-32'}
+                  >
+                    <option value="info">Info</option>
+                    <option value="warning">Warning</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </Field>
+              </div>
+            )}
           </fieldset>
 
           {/* Simulation */}
@@ -887,7 +933,11 @@ function TagImportDialog({ dataSources, onImportCsv, onImportCodesys, onImportRs
               ))}
             </select>
           </div>
-          <input ref={fileRef} type="file" accept={fileAccept} onChange={handleFile} className="text-sm text-slate-300" />
+          <input ref={fileRef} type="file" accept={fileAccept} onChange={handleFile} className="hidden" />
+          <button type="button" onClick={() => fileRef.current?.click()} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
+            <Upload size={16} />
+            {fileRef.current?.files?.length ? fileRef.current.files[0].name : 'Choose File'}
+          </button>
         </div>
 
         {/* Optional prefix for PLC imports */}

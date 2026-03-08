@@ -419,28 +419,28 @@ def _codesys_parse_nodes(
     path_parts: list[str],
     registry: dict[str, dict],
     ns: dict[str, str],
+    group: str | None = None,
 ) -> list[dict]:
     """Recursively walk CODESYS Node elements, collecting leaf tags.
 
-    Nodes with child <Node> elements are containers (programs, GVLs).
-    Leaf nodes reference a type which may be primitive, enum, struct, or FB — all
-    are expanded into flattened dot-path tags via _codesys_expand_type.
+    Container nodes (with child <Node> elements) are not included in the tag
+    name — only leaf variable names form the dot-path.  This strips OPC-UA
+    prefixes like Application, GVL names (Globals, HMIData, IO), etc.
+    The most recent container name is passed as *group* for categorisation.
     """
     tags: list[dict] = []
     name = node_el.get("name", "")
-    current_path = path_parts + [name] if name else path_parts
     type_attr = node_el.get("type")
     access = node_el.get("access", "ReadWrite")
 
     children = node_el.findall("sc:Node", ns) if ns else node_el.findall("Node")
     if children:
-        # Container node — recurse into children
+        # Container node — recurse without adding this node's name to the path
         for child in children:
-            tags.extend(_codesys_parse_nodes(child, current_path, registry, ns))
+            tags.extend(_codesys_parse_nodes(child, path_parts, registry, ns, group=name))
     elif type_attr:
-        # Leaf node — expand its type
-        # Use second path part as group (first is usually "Application")
-        group = current_path[1] if len(current_path) > 2 else None
+        # Leaf node — only leaf names form the tag path
+        current_path = path_parts + [name] if name else path_parts
 
         comment_el = node_el.find("sc:Comment", ns) if ns else node_el.find("Comment")
         description = comment_el.text.strip() if comment_el is not None and comment_el.text else None

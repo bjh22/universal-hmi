@@ -31,6 +31,7 @@ class TrendService:
         self._task: asyncio.Task | None = None
         self._trending_tags: list[dict] = []
         self._buffer: list[dict] = []
+        self._last_values: dict[int, float | str | None] = {}  # tag_id -> last recorded value
 
     async def load_trending_tags(self, session: AsyncSession):
         result = await session.execute(
@@ -42,6 +43,7 @@ class TrendService:
                 "tag_id": t.id,
                 "name": t.name,
                 "sample_rate_ms": t.trending_sample_rate_ms or 1000,
+                "deadband": t.deadband,
             }
             for t in tags
         ]
@@ -94,8 +96,17 @@ class TrendService:
                         numeric_value = None
                         string_value = str(tv.value)
 
+                    # Deadband: skip if value hasn't changed enough
+                    tag_id = tc["tag_id"]
+                    deadband = tc.get("deadband")
+                    if deadband and numeric_value is not None and tag_id in self._last_values:
+                        last = self._last_values[tag_id]
+                        if isinstance(last, (int, float)) and abs(numeric_value - last) < deadband:
+                            continue
+
+                    self._last_values[tag_id] = numeric_value if numeric_value is not None else string_value
                     self._buffer.append({
-                        "tag_id": tc["tag_id"],
+                        "tag_id": tag_id,
                         "timestamp": now,
                         "value": numeric_value,
                         "string_value": string_value,
