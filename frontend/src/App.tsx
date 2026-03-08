@@ -14,6 +14,7 @@ const JobsPage = lazy(() => import('./pages/JobsPage').then(m => ({ default: m.J
 const ReportsPage = lazy(() => import('./pages/ReportsPage').then(m => ({ default: m.ReportsPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage').then(m => ({ default: m.ProjectsPage })));
+const FactoryConfigPage = lazy(() => import('./pages/FactoryConfigPage').then(m => ({ default: m.FactoryConfigPage })));
 
 function PageLoader() {
   return (
@@ -71,6 +72,7 @@ export default function App() {
                   <Route path="/reports" element={<ReportsPage user={auth.user} />} />
                   <Route path="/projects" element={<ProjectsPage user={auth.user} />} />
                   <Route path="/settings" element={<SettingsPage user={auth.user} tagValues={tagValues} />} />
+                  <Route path="/factory-config" element={<FactoryConfigPage user={auth.user} tagValues={tagValues} />} />
                 </Routes>
               </Suspense>
             </AppShell>
