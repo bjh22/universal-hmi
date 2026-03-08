@@ -18,6 +18,8 @@ import type {
   ProjectData,
   ProjectDetail,
   ImportPreviewTag,
+  ImportResult,
+  ImportConflictMode,
   ImportPreviewResponse,
   ImportResultResponse,
   IntegrationType,
@@ -84,20 +86,20 @@ export const api = {
     request<{ updated: number }>('/tags/bulk/remove-labels', { method: 'POST', body: JSON.stringify({ tag_ids: tagIds, label_ids: labelIds }) }),
   bulkUpdateTags: (tagIds: number[], fields: Record<string, unknown>) =>
     request<{ updated: number }>('/tags/bulk/update', { method: 'POST', body: JSON.stringify({ tag_ids: tagIds, fields }) }),
-  importTagsCsv: (tags: Partial<Tag>[], dataSourceId?: number | null) =>
-    request<{ imported: number; names: string[] }>('/tags/import/csv', {
+  importTagsCsv: (tags: Partial<Tag>[], dataSourceId?: number | null, onConflict?: ImportConflictMode, updateFields?: string[]) =>
+    request<ImportResult>('/tags/import/csv', {
       method: 'POST',
-      body: JSON.stringify({ tags, ...(dataSourceId != null ? { data_source_id: dataSourceId } : {}) }),
+      body: JSON.stringify({ tags, ...(dataSourceId != null ? { data_source_id: dataSourceId } : {}), on_conflict: onConflict || 'skip', ...(updateFields ? { update_fields: updateFields } : {}) }),
     }),
-  importTagsCodesys: (xml: string, prefix?: string, names?: string[], dataSourceId?: number | null) =>
-    request<{ imported: number; names: string[] }>('/tags/import/codesys', {
+  importTagsCodesys: (xml: string, prefix?: string, names?: string[], dataSourceId?: number | null, onConflict?: ImportConflictMode, updateFields?: string[]) =>
+    request<ImportResult>('/tags/import/codesys', {
       method: 'POST',
-      body: JSON.stringify({ xml, prefix: prefix || '', ...(names ? { names } : {}), ...(dataSourceId != null ? { data_source_id: dataSourceId } : {}) }),
+      body: JSON.stringify({ xml, prefix: prefix || '', ...(names ? { names } : {}), ...(dataSourceId != null ? { data_source_id: dataSourceId } : {}), on_conflict: onConflict || 'skip', ...(updateFields ? { update_fields: updateFields } : {}) }),
     }),
-  importTagsRslogix500: (csv: string, prefix?: string, names?: string[], dataSourceId?: number | null) =>
-    request<{ imported: number; names: string[] }>('/tags/import/rslogix500', {
+  importTagsRslogix500: (csv: string, prefix?: string, names?: string[], dataSourceId?: number | null, onConflict?: ImportConflictMode, updateFields?: string[]) =>
+    request<ImportResult>('/tags/import/rslogix500', {
       method: 'POST',
-      body: JSON.stringify({ csv, prefix: prefix || '', ...(names ? { names } : {}), ...(dataSourceId != null ? { data_source_id: dataSourceId } : {}) }),
+      body: JSON.stringify({ csv, prefix: prefix || '', ...(names ? { names } : {}), ...(dataSourceId != null ? { data_source_id: dataSourceId } : {}), on_conflict: onConflict || 'skip', ...(updateFields ? { update_fields: updateFields } : {}) }),
     }),
   previewCodesysImport: (xml: string, prefix?: string) =>
     request<{ total: number; tags: ImportPreviewTag[]; groups: Record<string, number>; enum_count: number }>('/tags/import/codesys/preview', {

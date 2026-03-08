@@ -49,7 +49,16 @@ export interface ImportPreviewTag {
   has_enum?: boolean;
   enum_values?: number;
   address?: string;
+  exists?: boolean;
 }
+
+export interface ImportResult {
+  imported: number;
+  updated: number;
+  skipped: number;
+}
+
+export type ImportConflictMode = 'skip' | 'update';
 
 export interface AlarmData {
   id: number;

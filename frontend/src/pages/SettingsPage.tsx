@@ -3,7 +3,7 @@ import { Search, Download, UserPlus, Plus, Pencil, Trash2, Upload, X, Plug, Unpl
 import { api } from '../lib/api';
 import { PROTOCOL_CONFIGS } from '../lib/protocolConfigs';
 import { IntegrationsTab } from '../components/settings/IntegrationsTab';
-import type { Tag, TagLabel, DataSourceData, ProtocolType, AuditEntry, UserData, BrowsedTag, UserListEntry, ImportPreviewTag, TagValue } from '../types';
+import type { Tag, TagLabel, DataSourceData, ProtocolType, AuditEntry, UserData, BrowsedTag, UserListEntry, ImportPreviewTag, ImportConflictMode, TagValue } from '../types';
 
 interface Props {
   user: UserData | null;
@@ -718,11 +718,12 @@ function BulkLabelDialog({ mode, tagCount, allLabels, onApply, onClose }: {
 // ─── Tag Import Dialog (HMI CSV, CODESYS XML, RSLogix 500) ───
 type ImportFormat = 'hmi_csv' | 'codesys_xml' | 'rslogix500';
 
-function TagImportDialog({ dataSources, onImportCsv, onImportCodesys, onImportRslogix, onClose }: {
+function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportCodesys, onImportRslogix, onClose }: {
   dataSources: DataSourceData[];
-  onImportCsv: (tags: Record<string, unknown>[], dataSourceId: number | null) => void;
-  onImportCodesys: (xml: string, prefix: string, names: string[], dataSourceId: number | null) => void;
-  onImportRslogix: (csv: string, prefix: string, names: string[], dataSourceId: number | null) => void;
+  existingTagNames: Set<string>;
+  onImportCsv: (tags: Record<string, unknown>[], dataSourceId: number | null, onConflict: ImportConflictMode, updateFields: string[]) => void;
+  onImportCodesys: (xml: string, prefix: string, names: string[], dataSourceId: number | null, onConflict: ImportConflictMode, updateFields: string[]) => void;
+  onImportRslogix: (csv: string, prefix: string, names: string[], dataSourceId: number | null, onConflict: ImportConflictMode, updateFields: string[]) => void;
   onClose: () => void;
 }) {
   const [format, setFormat] = useState<ImportFormat>('hmi_csv');
@@ -738,6 +739,8 @@ function TagImportDialog({ dataSources, onImportCsv, onImportCodesys, onImportRs
   const [previewError, setPreviewError] = useState('');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [selectedNames, setSelectedNames] = useState<Set<string>>(new Set());
+  const [conflictMode, setConflictMode] = useState<ImportConflictMode>('skip');
+  const [updateFields, setUpdateFields] = useState<Set<string>>(new Set(['display_name', 'data_type', 'access_mode', 'address', 'enum_mapping', 'engineering_units']));
   const fileRef = useRef<HTMLInputElement>(null);
 
   const resetState = useCallback(() => {
@@ -750,6 +753,8 @@ function TagImportDialog({ dataSources, onImportCsv, onImportCodesys, onImportRs
     setPreviewError('');
     setExpandedGroups(new Set());
     setSelectedNames(new Set());
+    setConflictMode('skip');
+    setUpdateFields(new Set(['display_name', 'data_type', 'access_mode', 'address', 'enum_mapping', 'engineering_units']));
     if (fileRef.current) fileRef.current.value = '';
   }, []);
 
@@ -874,17 +879,27 @@ function TagImportDialog({ dataSources, onImportCsv, onImportCodesys, onImportRs
 
   const handleImport = useCallback(() => {
     const names = [...selectedNames];
+    const fields = [...updateFields];
     if (format === 'hmi_csv') {
       const selected = rows.filter((r, i) => selectedNames.has(r.name || String(i)));
-      onImportCsv(selected, dataSourceId);
+      onImportCsv(selected, dataSourceId, conflictMode, fields);
     } else if (format === 'codesys_xml') {
-      onImportCodesys(rawContent, prefix, names, dataSourceId);
+      onImportCodesys(rawContent, prefix, names, dataSourceId, conflictMode, fields);
     } else if (format === 'rslogix500') {
-      onImportRslogix(rawContent, prefix, names, dataSourceId);
+      onImportRslogix(rawContent, prefix, names, dataSourceId, conflictMode, fields);
     }
-  }, [format, rows, rawContent, prefix, selectedNames, dataSourceId, onImportCsv, onImportCodesys, onImportRslogix]);
+  }, [format, rows, rawContent, prefix, selectedNames, dataSourceId, conflictMode, updateFields, onImportCsv, onImportCodesys, onImportRslogix]);
 
   const hasData = format === 'hmi_csv' ? rows.length > 0 : previewTags.length > 0;
+
+  // Conflict detection
+  const existingCount = useMemo(() => {
+    if (format === 'hmi_csv') {
+      return rows.filter((r, i) => selectedNames.has(r.name || String(i)) && existingTagNames.has(r.name)).length;
+    }
+    return [...selectedNames].filter(n => existingTagNames.has(n)).length;
+  }, [format, rows, selectedNames, existingTagNames]);
+  const newCount = selectedNames.size - existingCount;
   const fileAccept = format === 'codesys_xml' ? '.xml' : '.csv,.CSV';
 
   const formatInfo: Record<ImportFormat, { label: string; desc: string }> = {
@@ -988,6 +1003,9 @@ function TagImportDialog({ dataSources, onImportCsv, onImportCodesys, onImportRs
                           <input type="checkbox" checked={checked} onChange={() => toggleTagSelection(key)} className="accent-blue-600" />
                         </td>
                         {headers.map(h => <td key={h} className="px-2 py-1 text-slate-300 truncate max-w-32">{row[h]}</td>)}
+                        {existingTagNames.has(row.name) && (
+                          <td className="px-2 py-1"><span className="px-1.5 py-0.5 rounded text-[10px] font-medium text-slate-300 bg-slate-600">exists</span></td>
+                        )}
                       </tr>
                     );
                   })}
@@ -1079,6 +1097,9 @@ function TagImportDialog({ dataSources, onImportCsv, onImportCodesys, onImportRs
                                 {tag.has_enum && (
                                   <span className="px-1.5 py-0.5 rounded text-[10px] font-medium text-amber-300 bg-amber-900/40">enum</span>
                                 )}
+                                {existingTagNames.has(tag.name) && (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-medium text-slate-300 bg-slate-600">exists</span>
+                                )}
                                 <span className="text-slate-300 font-mono truncate flex-1">{tag.name}</span>
                                 {tag.display_name && (
                                   <span className="text-slate-500 truncate max-w-48">{tag.display_name}</span>
@@ -1096,6 +1117,56 @@ function TagImportDialog({ dataSources, onImportCsv, onImportCodesys, onImportRs
                 })}
             </div>
           </>
+        )}
+
+        {/* Conflict resolution */}
+        {hasData && existingCount > 0 && (
+          <div className="mb-4 p-3 bg-slate-900 border border-slate-700 rounded-lg">
+            <div className="text-sm text-slate-300 mb-2">
+              <span className="text-blue-400 font-medium">{newCount} new</span>
+              {' and '}
+              <span className="text-amber-400 font-medium">{existingCount} existing</span>
+              {' tags selected'}
+            </div>
+            <div className="flex gap-4 mb-2">
+              <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                <input type="radio" name="conflict" checked={conflictMode === 'skip'} onChange={() => setConflictMode('skip')} className="accent-blue-600" />
+                <span className="text-slate-300">Skip existing</span>
+              </label>
+              <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                <input type="radio" name="conflict" checked={conflictMode === 'update'} onChange={() => setConflictMode('update')} className="accent-blue-600" />
+                <span className="text-slate-300">Update existing</span>
+              </label>
+            </div>
+            {conflictMode === 'update' && (
+              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                <span className="text-xs text-slate-500 w-full mb-0.5">Fields to update:</span>
+                {[
+                  { key: 'display_name', label: 'Display Name' },
+                  { key: 'data_type', label: 'Data Type' },
+                  { key: 'access_mode', label: 'Access Mode' },
+                  { key: 'address', label: 'Address' },
+                  ...(format === 'codesys_xml' ? [{ key: 'enum_mapping', label: 'Enum Mapping' }] : []),
+                  ...(format === 'hmi_csv' ? [{ key: 'engineering_units', label: 'Units' }] : []),
+                ].map(f => (
+                  <label key={f.key} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={updateFields.has(f.key)}
+                      onChange={() => setUpdateFields(prev => {
+                        const next = new Set(prev);
+                        if (next.has(f.key)) next.delete(f.key);
+                        else next.add(f.key);
+                        return next;
+                      })}
+                      className="accent-blue-600"
+                    />
+                    <span className="text-slate-400">{f.label}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         {hasData && (
@@ -1441,33 +1512,41 @@ export function SettingsPage({ user, tagValues }: Props) {
     });
   }, [filteredTags]);
 
-  const handleCsvImport = useCallback(async (rows: Record<string, unknown>[], dataSourceId: number | null) => {
+  const formatImportResult = (result: { imported: number; updated: number; skipped: number }) => {
+    const parts: string[] = [];
+    if (result.imported > 0) parts.push(`${result.imported} imported`);
+    if (result.updated > 0) parts.push(`${result.updated} updated`);
+    if (result.skipped > 0) parts.push(`${result.skipped} skipped`);
+    return parts.join(', ') || 'No changes';
+  };
+
+  const handleCsvImport = useCallback(async (rows: Record<string, unknown>[], dataSourceId: number | null, onConflict: ImportConflictMode, updateFieldsList: string[]) => {
     try {
-      const result = await api.importTagsCsv(rows as Partial<Tag>[], dataSourceId);
+      const result = await api.importTagsCsv(rows as Partial<Tag>[], dataSourceId, onConflict, updateFieldsList);
       setShowTagImport(false);
-      alert(`Imported ${result.imported} tags`);
+      alert(formatImportResult(result));
       loadTags();
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err));
     }
   }, [loadTags]);
 
-  const handleCodesysImport = useCallback(async (xml: string, prefix: string, names: string[], dataSourceId: number | null) => {
+  const handleCodesysImport = useCallback(async (xml: string, prefix: string, names: string[], dataSourceId: number | null, onConflict: ImportConflictMode, updateFieldsList: string[]) => {
     try {
-      const result = await api.importTagsCodesys(xml, prefix, names, dataSourceId);
+      const result = await api.importTagsCodesys(xml, prefix, names, dataSourceId, onConflict, updateFieldsList);
       setShowTagImport(false);
-      alert(`Imported ${result.imported} tags from CODESYS`);
+      alert(formatImportResult(result));
       loadTags();
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err));
     }
   }, [loadTags]);
 
-  const handleRslogixImport = useCallback(async (csv: string, prefix: string, names: string[], dataSourceId: number | null) => {
+  const handleRslogixImport = useCallback(async (csv: string, prefix: string, names: string[], dataSourceId: number | null, onConflict: ImportConflictMode, updateFieldsList: string[]) => {
     try {
-      const result = await api.importTagsRslogix500(csv, prefix, names, dataSourceId);
+      const result = await api.importTagsRslogix500(csv, prefix, names, dataSourceId, onConflict, updateFieldsList);
       setShowTagImport(false);
-      alert(`Imported ${result.imported} tags from RSLogix 500`);
+      alert(formatImportResult(result));
       loadTags();
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err));
@@ -1933,7 +2012,7 @@ export function SettingsPage({ user, tagValues }: Props) {
 
           {editTag && <TagDialog tag={editTag} dataSources={dataSources} allLabels={allLabels} onSave={handleSaveTag} onClose={() => setEditTag(null)} />}
           {deleteTagTarget && <DeleteConfirmDialog title="Delete Tag" name={deleteTagTarget.name} onConfirm={handleDeleteTag} onCancel={() => setDeleteTagTarget(null)} />}
-          {showTagImport && <TagImportDialog dataSources={dataSources} onImportCsv={handleCsvImport} onImportCodesys={handleCodesysImport} onImportRslogix={handleRslogixImport} onClose={() => setShowTagImport(false)} />}
+          {showTagImport && <TagImportDialog dataSources={dataSources} existingTagNames={new Set(tags.map(t => t.name))} onImportCsv={handleCsvImport} onImportCodesys={handleCodesysImport} onImportRslogix={handleRslogixImport} onClose={() => setShowTagImport(false)} />}
           {bulkDeleteConfirm && (
             <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setBulkDeleteConfirm(false)}>
               <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 max-w-sm" onClick={e => e.stopPropagation()}>
