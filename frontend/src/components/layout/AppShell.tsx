@@ -14,6 +14,7 @@ interface AppShellProps {
   wsConnected: boolean;
   alarms: AlarmData[];
   onLogout: () => void;
+  navTitle?: string;
 }
 
 const NAV_ITEMS = [
@@ -38,7 +39,7 @@ function SeverityIcon({ severity }: { severity: AlarmData['severity'] }) {
   }
 }
 
-export function AppShell({ children, user, wsConnected, alarms, onLogout }: AppShellProps) {
+export function AppShell({ children, user, wsConnected, alarms, onLogout, navTitle = 'HMI' }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [ackingAll, setAckingAll] = useState(false);
   const location = useLocation();
@@ -68,7 +69,7 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout }: AppS
         }`}
       >
         <div className="flex items-center gap-2 px-4 h-14 border-b border-slate-700">
-          {sidebarOpen && <span className="font-bold text-blue-400 text-lg">HMI</span>}
+          {sidebarOpen && <span className="font-bold text-blue-400 text-lg">{navTitle}</span>}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="ml-auto p-1.5 rounded-md hover:bg-slate-800 text-slate-400"

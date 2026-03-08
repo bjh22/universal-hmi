@@ -16,15 +16,18 @@ from app.models.user import UserRole
 router = APIRouter(prefix="/api/branding", tags=["branding"])
 
 DEFAULT_SITE_TITLE = "Industrial HMI"
+DEFAULT_NAV_TITLE = "HMI"
 
 
 class BrandingResponse(BaseModel):
     site_title: str
+    nav_title: str
     has_favicon: bool
 
 
 class BrandingUpdate(BaseModel):
     site_title: Optional[str] = None
+    nav_title: Optional[str] = None
     favicon: Optional[str] = None  # base64 data URI, or empty string to clear
 
 
@@ -47,9 +50,11 @@ async def _set_setting(session: AsyncSession, key: str, value: str | None):
 async def get_branding(session: AsyncSession = Depends(get_db)):
     """Get current branding settings. No auth required (needed before login)."""
     title = await _get_setting(session, "site_title")
+    nav_title = await _get_setting(session, "nav_title")
     favicon = await _get_setting(session, "favicon")
     return BrandingResponse(
         site_title=title or DEFAULT_SITE_TITLE,
+        nav_title=nav_title or DEFAULT_NAV_TITLE,
         has_favicon=bool(favicon),
     )
 
@@ -63,13 +68,17 @@ async def update_branding(
     """Update branding settings. Requires engineer or designer role."""
     if body.site_title is not None:
         await _set_setting(session, "site_title", body.site_title or None)
+    if body.nav_title is not None:
+        await _set_setting(session, "nav_title", body.nav_title or None)
     if body.favicon is not None:
         await _set_setting(session, "favicon", body.favicon or None)
 
     title = await _get_setting(session, "site_title")
+    nav_title = await _get_setting(session, "nav_title")
     favicon = await _get_setting(session, "favicon")
     return BrandingResponse(
         site_title=title or DEFAULT_SITE_TITLE,
+        nav_title=nav_title or DEFAULT_NAV_TITLE,
         has_favicon=bool(favicon),
     )
 
