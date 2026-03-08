@@ -34,8 +34,11 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         # Lightweight column migrations for SQLite (no Alembic)
+        # Column renames (must run before add_column_if_missing)
+        await _rename_column_if_needed(conn, "tags", "description", "display_name")
+        await _rename_column_if_needed(conn, "tags", "long_description", "description")
         # Tags
-        await _add_column_if_missing(conn, "tags", "long_description", "TEXT")
+        await _add_column_if_missing(conn, "tags", "display_name", "TEXT")
         await _add_column_if_missing(conn, "tags", "enum_mapping", "TEXT")
         await _add_column_if_missing(conn, "tags", "template_id", "INTEGER REFERENCES tag_templates(id)")
         # Screens
@@ -60,3 +63,13 @@ async def _add_column_if_missing(conn, table: str, column: str, col_type: str):
     columns = [row[1] for row in result.fetchall()]
     if column not in columns:
         await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+
+
+async def _rename_column_if_needed(conn, table: str, old_name: str, new_name: str):
+    """Rename a column if the old name exists and the new name does not."""
+    result = await conn.execute(text(f"PRAGMA table_info({table})"))
+    columns = [row[1] for row in result.fetchall()]
+    if old_name in columns and new_name not in columns:
+        await conn.execute(
+            text(f"ALTER TABLE {table} RENAME COLUMN {old_name} TO {new_name}")
+        )

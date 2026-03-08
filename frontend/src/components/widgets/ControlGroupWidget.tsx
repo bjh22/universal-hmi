@@ -32,7 +32,7 @@ function ToggleControl({ item, tagValues, valueStyle }: { item: ControlItem & { 
     await api.writeTag(item.tag, !value);
   };
 
-  const longDesc = tv?.long_description;
+  const longDesc = tv?.description;
 
   return (
     <div className="flex items-center justify-between gap-2 py-1.5">
@@ -60,7 +60,7 @@ function ToggleControl({ item, tagValues, valueStyle }: { item: ControlItem & { 
 function ValueControl({ item, tagValues, valueStyle }: { item: ControlItem & { type: 'value' }; tagValues: Record<string, TagValue>; valueStyle?: TextStyle }) {
   const tv = tagValues[item.tag];
   const value = tv?.value;
-  const longDesc = tv?.long_description;
+  const longDesc = tv?.description;
   const dp = item.decimalPlaces ?? 1;
   const display = typeof value === 'number' ? value.toFixed(dp) : String(value ?? '—');
 
@@ -79,7 +79,7 @@ function ValueControl({ item, tagValues, valueStyle }: { item: ControlItem & { t
 }
 
 function ButtonControl({ item, tagValues }: { item: ControlItem & { type: 'button' }; tagValues: Record<string, TagValue> }) {
-  const longDesc = tagValues[item.tag]?.long_description;
+  const longDesc = tagValues[item.tag]?.description;
   const colorMap: Record<string, string> = {
     blue: 'bg-blue-600 hover:bg-blue-700',
     green: 'bg-green-600 hover:bg-green-700',
@@ -125,7 +125,7 @@ function InputControl({ item, tagValues, valueStyle }: { item: ControlItem & { t
     setShowKeypad(false);
   };
 
-  const longDesc = tv?.long_description;
+  const longDesc = tv?.description;
 
   return (
     <div className="py-1.5">

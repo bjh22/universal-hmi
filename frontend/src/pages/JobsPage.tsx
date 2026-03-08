@@ -47,7 +47,7 @@ function SetpointEditor({ value, onChange, tags }: {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const tagMap = useMemo(() => new Map(tags.map(t => [t.name, t])), [tags]);
 
-  const tagDisplayName = (name: string) => tagMap.get(name)?.description || name;
+  const tagDisplayName = (name: string) => tagMap.get(name)?.display_name || name;
   const isBoolTag = (name: string) => tagMap.get(name)?.data_type === 'bool';
 
   const addRow = () => {
@@ -134,7 +134,7 @@ function SetpointEditor({ value, onChange, tags }: {
                   {tagGroups.map(([gName, gTags]) => (
                     <optgroup key={gName} label={gName}>
                       {gTags.map(t => (
-                        <option key={t.id} value={t.name}>{t.description || t.name}</option>
+                        <option key={t.id} value={t.name}>{t.display_name || t.name}</option>
                       ))}
                     </optgroup>
                   ))}
@@ -267,7 +267,7 @@ function ConditionsEditor({ value, onChange, tags }: {
 
   const tagDisplayName = (name: string) => {
     const t = tags.find(t => t.name === name);
-    return t?.description || name;
+    return t?.display_name || name;
   };
 
   const addGuard = () => {
@@ -311,7 +311,7 @@ function ConditionsEditor({ value, onChange, tags }: {
             >
               <option value="">Select tag…</option>
               {tags.filter(t => !t.name.startsWith('$')).map(t => (
-                <option key={t.id} value={t.name}>{t.description || t.name}</option>
+                <option key={t.id} value={t.name}>{t.display_name || t.name}</option>
               ))}
             </select>
           </div>
@@ -447,7 +447,7 @@ function UploadDialog({ tags, onClose, onUploaded }: {
   const filteredTags = useMemo(() => {
     if (!tagSearch) return writableTags;
     const q = tagSearch.toLowerCase();
-    return writableTags.filter(t => t.name.toLowerCase().includes(q) || (t.description || '').toLowerCase().includes(q) || (t.labels || []).some(l => l.name.toLowerCase().includes(q)));
+    return writableTags.filter(t => t.name.toLowerCase().includes(q) || (t.display_name || '').toLowerCase().includes(q) || (t.labels || []).some(l => l.name.toLowerCase().includes(q)));
   }, [writableTags, tagSearch]);
 
   const toggleAll = () => {
@@ -513,7 +513,7 @@ function UploadDialog({ tags, onClose, onUploaded }: {
                     }}
                     className="accent-blue-500 w-5 h-5"
                   />
-                  <span className="text-slate-300">{t.description || t.name}</span>
+                  <span className="text-slate-300">{t.display_name || t.name}</span>
                   {t.labels?.map(l => (
                     <span key={l.id} className="px-1.5 py-0.5 rounded text-[10px] font-medium" style={{ backgroundColor: (l.color || '#6b7280') + '20', color: l.color || '#6b7280' }}>{l.name}</span>
                   ))}
@@ -734,7 +734,7 @@ export function JobsPage({ user }: Props) {
                 <TagIcon size={12} className="mt-0.5 text-blue-400 flex-shrink-0" />
                 <span>
                   Default setpoints from <span className="text-blue-400 font-medium">Job Setpoint</span> tags:{' '}
-                  {jobSetpointTags.map(t => t.description || t.name).join(', ')}
+                  {jobSetpointTags.map(t => t.display_name || t.name).join(', ')}
                 </span>
               </div>
             )}

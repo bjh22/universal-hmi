@@ -23,14 +23,14 @@ function BoolIndicator({ tag, tagValues, onColor, offColor }: { tag: Tag; tagVal
   const tv = tagValues[tag.name];
   const value = Boolean(tv?.value);
   const color = value ? onColor : offColor;
-  const longDesc = tv?.long_description;
+  const longDesc = tv?.description;
   const diameter = 14;
 
   return (
     <div className="flex items-center justify-between gap-2 py-1.5">
       <div className="flex items-center gap-1 min-w-0">
-        {longDesc && <InlineInfoButton description={longDesc} title={tag.description || tag.name} />}
-        <span className="text-xs text-slate-300 truncate">{tag.description || tag.name}</span>
+        {longDesc && <InlineInfoButton description={longDesc} title={tag.display_name || tag.name} />}
+        <span className="text-xs text-slate-300 truncate">{tag.display_name || tag.name}</span>
       </div>
       <div
         style={{
@@ -50,14 +50,14 @@ function BoolIndicator({ tag, tagValues, onColor, offColor }: { tag: Tag; tagVal
 function ValueDisplay({ tag, tagValues, decimalPlaces, valueStyle }: { tag: Tag; tagValues: Record<string, TagValue>; decimalPlaces: number; valueStyle?: TextStyle }) {
   const tv = tagValues[tag.name];
   const value = tv?.value;
-  const longDesc = tv?.long_description;
+  const longDesc = tv?.description;
   const display = typeof value === 'number' ? value.toFixed(decimalPlaces) : String(value ?? '—');
 
   return (
     <div className="flex items-center justify-between gap-2 py-1.5">
       <div className="flex items-center gap-1 min-w-0">
-        {longDesc && <InlineInfoButton description={longDesc} title={tag.description || tag.name} />}
-        <span className="text-xs text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{tag.description || tag.name}</span>
+        {longDesc && <InlineInfoButton description={longDesc} title={tag.display_name || tag.name} />}
+        <span className="text-xs text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{tag.display_name || tag.name}</span>
       </div>
       <span className="text-sm font-semibold text-slate-100 tabular-nums flex-shrink-0" style={textStyleToCSS(valueStyle)}>
         {display}
@@ -79,7 +79,7 @@ export function AutoFillWidget({ title, labelName, columns = 2, onColor = '#22c5
 
   const matchedTags = useMemo(() => {
     if (!tagOrder || tagOrder.length === 0) {
-      return [...fetchedTags].sort((a, b) => (a.description || a.name).localeCompare(b.description || b.name));
+      return [...fetchedTags].sort((a, b) => (a.display_name || a.name).localeCompare(b.display_name || b.name));
     }
     const byName = new Map(fetchedTags.map(t => [t.name, t]));
     const ordered: Tag[] = [];
@@ -88,7 +88,7 @@ export function AutoFillWidget({ title, labelName, columns = 2, onColor = '#22c5
       if (t) { ordered.push(t); byName.delete(name); }
     }
     // Append new tags not in the order
-    const remaining = [...byName.values()].sort((a, b) => (a.description || a.name).localeCompare(b.description || b.name));
+    const remaining = [...byName.values()].sort((a, b) => (a.display_name || a.name).localeCompare(b.display_name || b.name));
     return [...ordered, ...remaining];
   }, [fetchedTags, tagOrder]);
 

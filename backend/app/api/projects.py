@@ -346,8 +346,8 @@ async def export_project(
     for tag in tag_result.scalars().all():
         tags.append({
             "name": tag.name,
+            "display_name": tag.display_name,
             "description": tag.description,
-            "long_description": tag.long_description,
             "data_source_name": ds_id_map.get(tag.data_source_id),
             "address": tag.address,
             "data_type": tag.data_type.value,
@@ -696,8 +696,12 @@ async def _import_tags(
             if conflict_mode == "overwrite":
                 tag = await session.get(Tag, tag_id)
                 if tag:
-                    tag.description = tag_data.get("description")
-                    tag.long_description = tag_data.get("long_description")
+                    if "display_name" in tag_data:
+                        tag.display_name = tag_data.get("display_name")
+                        tag.description = tag_data.get("description")
+                    else:
+                        tag.display_name = tag_data.get("description")
+                        tag.description = tag_data.get("long_description")
                     tag.data_source_id = ds_id
                     tag.address = tag_data.get("address")
                     tag.data_type = tag_data.get("data_type", "float")
@@ -730,10 +734,16 @@ async def _import_tags(
             else:
                 result.skipped += 1
         else:
+            if "display_name" in tag_data:
+                dn_val = tag_data.get("display_name")
+                desc_val = tag_data.get("description")
+            else:
+                dn_val = tag_data.get("description")
+                desc_val = tag_data.get("long_description")
             tag = Tag(
                 name=tag_name,
-                description=tag_data.get("description"),
-                long_description=tag_data.get("long_description"),
+                display_name=dn_val,
+                description=desc_val,
                 data_source_id=ds_id,
                 address=tag_data.get("address"),
                 data_type=tag_data.get("data_type", "float"),

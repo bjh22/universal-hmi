@@ -543,7 +543,7 @@ const RuntimeWidget = memo(function RuntimeWidget({ widget: w, index, isAbsolute
   const isEnabled = enabledByProp && enabledByTag && enabledByRole;
 
   const tagName = (w.props as Record<string, unknown>).tag as string | undefined;
-  const longDesc = tagName ? tagValues[tagName]?.long_description : undefined;
+  const longDesc = tagName ? tagValues[tagName]?.description : undefined;
   const containerDesc = w.type === 'container' ? (w.props as Record<string, unknown>).description as string : undefined;
   const infoDesc = longDesc || containerDesc;
   const showInfoBtn = w.showInfo !== false && !!infoDesc;

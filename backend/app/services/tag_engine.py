@@ -23,17 +23,17 @@ logger = logging.getLogger(__name__)
 
 
 class TagValue:
-    __slots__ = ("tag_id", "name", "value", "quality", "timestamp", "data_type", "long_description", "description")
+    __slots__ = ("tag_id", "name", "value", "quality", "timestamp", "data_type", "description", "display_name")
 
-    def __init__(self, tag_id: int, name: str, value, data_type: str, long_description: str | None = None, description: str | None = None):
+    def __init__(self, tag_id: int, name: str, value, data_type: str, description: str | None = None, display_name: str | None = None):
         self.tag_id = tag_id
         self.name = name
         self.value = value
         self.quality = "good"
         self.timestamp = datetime.now(timezone.utc)
         self.data_type = data_type
-        self.long_description = long_description
         self.description = description
+        self.display_name = display_name
 
     def to_dict(self) -> dict:
         d = {
@@ -43,10 +43,10 @@ class TagValue:
             "quality": self.quality,
             "timestamp": self.timestamp.isoformat() + ("" if self.timestamp.tzinfo else "Z"),
         }
-        if self.long_description:
-            d["long_description"] = self.long_description
         if self.description:
             d["description"] = self.description
+        if self.display_name:
+            d["display_name"] = self.display_name
         return d
 
 
@@ -80,8 +80,8 @@ class TagEngine:
             initial_value = self._get_initial_value(tag)
             self._values[tag.name] = TagValue(
                 tag_id=tag.id, name=tag.name, value=initial_value,
-                data_type=tag.data_type.value, long_description=tag.long_description,
-                description=tag.description,
+                data_type=tag.data_type.value, description=tag.description,
+                display_name=tag.display_name,
             )
 
     def _get_initial_value(self, tag: Tag):
@@ -108,19 +108,33 @@ class TagEngine:
         return self._tags.get(tag_name)
 
     def register_tag(self, tag: Tag):
-        """Register a new tag at runtime (e.g. after creation via API)."""
+        """Register or update a tag at runtime (e.g. after creation/edit via API).
+
+        Preserves the current runtime value when updating an existing tag so that
+        metadata-only edits (description, units, etc.) don't wipe live values.
+        """
         self._tags[tag.name] = tag
         # Cache parsed simulation config
         if tag.simulation_enabled and tag.simulation_config:
             self._sim_configs[tag.name] = json.loads(tag.simulation_config)
         else:
             self._sim_configs.pop(tag.name, None)
-        initial_value = self._get_initial_value(tag)
-        self._values[tag.name] = TagValue(
-            tag_id=tag.id, name=tag.name, value=initial_value,
-            data_type=tag.data_type.value, long_description=tag.long_description,
-            description=tag.description,
-        )
+
+        existing = self._values.get(tag.name)
+        if existing and existing.tag_id == tag.id:
+            # Update metadata on existing TagValue, keep current value
+            existing.data_type = tag.data_type.value
+            existing.description = tag.description
+            existing.display_name = tag.display_name
+            self._invalidate_snapshot()
+        else:
+            # Brand-new tag — set initial value
+            initial_value = self._get_initial_value(tag)
+            self._values[tag.name] = TagValue(
+                tag_id=tag.id, name=tag.name, value=initial_value,
+                data_type=tag.data_type.value, description=tag.description,
+                display_name=tag.display_name,
+            )
         self._poll_tags = None  # invalidate cached poll list
 
     def _build_poll_tags(self) -> dict[int, list[tuple[str, str]]]:

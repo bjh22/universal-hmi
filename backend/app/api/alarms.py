@@ -50,7 +50,7 @@ class AlarmHistoryOut(BaseModel):
 @router.get("/active", response_model=list[AlarmOut])
 async def get_active_alarms(session: AsyncSession = Depends(get_db)):
     result = await session.execute(
-        select(Alarm, Tag.name.label("tag_name"), Tag.description.label("tag_display_name"))
+        select(Alarm, Tag.name.label("tag_name"), Tag.display_name.label("tag_display_name"))
         .join(Tag, Alarm.tag_id == Tag.id)
         .where(Alarm.state.in_([
             AlarmState.ACTIVE_UNACKED,
@@ -71,7 +71,7 @@ async def get_alarm_history(
     session: AsyncSession = Depends(get_db),
 ):
     query = (
-        select(AlarmHistory, Tag.description.label("current_display_name"))
+        select(AlarmHistory, Tag.display_name.label("current_display_name"))
         .outerjoin(Tag, AlarmHistory.tag_id == Tag.id)
         .order_by(AlarmHistory.triggered_at.desc())
     )

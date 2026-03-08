@@ -12,8 +12,8 @@ interface Props {
 
 const EMPTY_TAG: Omit<Tag, 'id'> = {
   name: '',
+  display_name: null,
   description: null,
-  long_description: null,
   data_source_id: null,
   address: null,
   data_type: 'float',
@@ -318,12 +318,12 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
             </div>
           </Field>
           <Field label="Display Name">
-            <input value={form.description || ''} onChange={e => set('description', e.target.value || null)} className={inputCls} placeholder="Friendly name shown to operators instead of the tag name" />
+            <input value={form.display_name || ''} onChange={e => set('display_name', e.target.value || null)} className={inputCls} placeholder="Friendly name shown to operators instead of the tag name" />
           </Field>
           <Field label="Description">
             <textarea
-              value={form.long_description || ''}
-              onChange={e => set('long_description', e.target.value || null)}
+              value={form.description || ''}
+              onChange={e => set('description', e.target.value || null)}
               className={inputCls}
               rows={3}
               placeholder="Detailed description shown to operators via the info button on widgets"
@@ -1080,8 +1080,8 @@ function TagImportDialog({ dataSources, onImportCsv, onImportCodesys, onImportRs
                                   <span className="px-1.5 py-0.5 rounded text-[10px] font-medium text-amber-300 bg-amber-900/40">enum</span>
                                 )}
                                 <span className="text-slate-300 font-mono truncate flex-1">{tag.name}</span>
-                                {tag.description && (
-                                  <span className="text-slate-500 truncate max-w-48">{tag.description}</span>
+                                {tag.display_name && (
+                                  <span className="text-slate-500 truncate max-w-48">{tag.display_name}</span>
                                 )}
                               </div>
                             );
@@ -1328,7 +1328,7 @@ export function SettingsPage({ user, tagValues }: Props) {
       if (tagSearch) {
         const q = tagSearch.toLowerCase();
         return t.name.toLowerCase().includes(q) ||
-               (t.description || '').toLowerCase().includes(q) ||
+               (t.display_name || '').toLowerCase().includes(q) ||
                (t.address || '').toLowerCase().includes(q) ||
                (t.labels || []).some(l => l.name.toLowerCase().includes(q));
       }
@@ -1886,8 +1886,8 @@ export function SettingsPage({ user, tagValues }: Props) {
                       </td>
                     )}
                     <td className="px-4 py-2">
-                      <div className="text-slate-200">{tag.description || tag.name}</div>
-                      {tag.description && <div className="text-[10px] text-slate-500 font-mono truncate max-w-48">{tag.name}</div>}
+                      <div className="text-slate-200">{tag.display_name || tag.name}</div>
+                      {tag.display_name && <div className="text-[10px] text-slate-500 font-mono truncate max-w-48">{tag.name}</div>}
                     </td>
                     <td className="px-4 py-2">
                       <div className="flex flex-wrap gap-1">
