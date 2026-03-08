@@ -14,7 +14,7 @@ A web-based Human-Machine Interface (HMI) for industrial automation. Connects to
 - Widget types: status indicators, gauges, counters, toggles, command buttons, parameter inputs, text labels, OEE display, alarm summary, multi-value groups, dropdown selects
 - Per-widget font/style customization (font family, size, weight, color, italic)
 - Per-widget visibility and enabled conditions (tag-based, role-based, or combined)
-- Alarm management with threshold-based triggers, acknowledgment, filtering, sorting, and history
+- Alarm management with boolean triggers, acknowledgment, filtering, sorting, and history
 - Trend charting with configurable sample rates, retention, and saved views
 - Job/recipe management with setpoint editing, cloning, and download
 - OEE/production reporting with summary cards and charts
