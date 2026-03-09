@@ -140,3 +140,39 @@ async def browse_datasource(
         raise HTTPException(status_code=400, detail="Data source not connected")
     tags = await driver.browse()
     return {"tags": tags, "address_prefix": driver.address_prefix}
+
+
+class BrowseLevelRequest(BaseModel):
+    parent_node_id: str | None = None
+
+
+@router.post("/{ds_id}/browse-level")
+async def browse_datasource_level(
+    ds_id: int,
+    body: BrowseLevelRequest | None = None,
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    """Browse a single level of the tag tree (lazy/incremental browsing).
+
+    Much faster than full browse for large OPC UA servers since it only
+    fetches one level at a time. Results are cached for 30 seconds.
+    """
+    driver = driver_manager.get_driver(ds_id)
+    if not driver or not driver.connected:
+        raise HTTPException(status_code=400, detail="Data source not connected")
+    parent = body.parent_node_id if body else None
+    nodes = await driver.browse_level(parent)
+    return {"nodes": nodes, "address_prefix": driver.address_prefix}
+
+
+@router.post("/{ds_id}/browse-cache-clear")
+async def clear_browse_cache(
+    ds_id: int,
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    """Clear cached browse results for a datasource."""
+    driver = driver_manager.get_driver(ds_id)
+    if not driver:
+        raise HTTPException(status_code=400, detail="Data source not found")
+    driver.clear_browse_cache()
+    return {"status": "ok"}

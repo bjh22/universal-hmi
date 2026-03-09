@@ -41,6 +41,31 @@ class ProtocolDriver(ABC):
     async def browse(self) -> list[dict]:
         """Browse available tags/nodes. Returns list of tag metadata dicts."""
 
+    async def browse_level(self, parent_node_id: str | None = None) -> list[dict]:
+        """Browse a single level of the tag tree (lazy browsing).
+
+        Args:
+            parent_node_id: Protocol-specific parent identifier.
+                           None means browse from the root.
+
+        Returns:
+            List of dicts. Each dict has at minimum: node_id, name, node_class
+            ("variable" or "object"). Variables include data_type.
+            Objects include has_children boolean.
+
+        Default implementation falls back to full browse() for drivers
+        that don't support incremental browsing.
+        """
+        tags = await self.browse()
+        # Convert flat tag list to variable entries
+        return [
+            {**tag, "node_class": "variable", "has_children": False}
+            for tag in tags
+        ]
+
+    def clear_browse_cache(self):
+        """Clear any cached browse results. No-op by default."""
+
     async def reconnect(self):
         """Disconnect and reconnect with backoff."""
         await self.disconnect()
