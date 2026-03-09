@@ -58,10 +58,8 @@ class AlarmService:
     async def load_alarm_configs(self, session: AsyncSession):
         result = await session.execute(select(Tag).where(Tag.alarm_enabled == True))  # noqa: E712
         tags = result.scalars().all()
-        self._alarm_configs = []
-        self._tag_lookup = {}
-        self._active_alarms = {}
-        self._last_eval_values = {}
+        new_configs: list[dict] = []
+        new_tag_lookup: dict[int, dict] = {}
         for tag in tags:
             if tag.alarm_config:
                 config = json.loads(tag.alarm_config)
@@ -78,8 +76,8 @@ class AlarmService:
                 config["tag_name"] = tag.name
                 config["tag_display_name"] = tag.display_name
                 config["tag_description"] = tag.description
-                self._alarm_configs.append(config)
-                self._tag_lookup[tag.id] = {"name": tag.name, "display_name": tag.display_name}
+                new_configs.append(config)
+                new_tag_lookup[tag.id] = {"name": tag.name, "display_name": tag.display_name}
 
         # Restore active alarms from DB (survive restarts)
         result = await session.execute(
@@ -89,13 +87,87 @@ class AlarmService:
                 AlarmState.INACTIVE_UNACKED,
             ]))
         )
+        new_active_alarms: dict[int, Alarm] = {}
         for alarm in result.scalars().all():
-            self._active_alarms[alarm.tag_id] = alarm
+            new_active_alarms[alarm.tag_id] = alarm
+
+        # Swap all state atomically (no await between clear and populate,
+        # so the eval loop can't see an empty _active_alarms mid-reload).
+        self._alarm_configs = new_configs
+        self._tag_lookup = new_tag_lookup
+        self._active_alarms = new_active_alarms
+        self._last_eval_values = {}
 
     async def reload_alarm_configs(self):
-        """Reload alarm configs from DB (call after tag alarm settings change)."""
+        """Reload alarm configs from DB (call after tag alarm settings change).
+
+        When a tag's alarm config changes (e.g., severity info→warning) or alarm
+        is disabled, any existing active alarm for that tag becomes stale. We must
+        retire those stale alarms before loading the new configs, otherwise the old
+        alarm persists in the DB and in-memory alongside any new alarm the eval loop
+        creates from the updated config.
+        """
         async with self._session_factory() as session:
+            # Build a set of currently configured alarm tag_ids and their configs
+            # BEFORE clearing in-memory state, so we can compare against active alarms.
+            result = await session.execute(select(Tag).where(Tag.alarm_enabled == True))  # noqa: E712
+            new_config_by_tag: dict[int, dict] = {}
+            for tag in result.scalars().all():
+                if tag.alarm_config:
+                    config = json.loads(tag.alarm_config)
+                    if config.get("type") == "threshold":
+                        continue
+                    new_config_by_tag[tag.id] = config
+
+            # Find and retire stale active alarms: alarms whose tag is no longer
+            # alarm-enabled, or whose severity/message changed since the alarm fired.
+            active_result = await session.execute(
+                select(Alarm).where(Alarm.state.in_([
+                    AlarmState.ACTIVE_UNACKED,
+                    AlarmState.ACTIVE_ACKED,
+                    AlarmState.INACTIVE_UNACKED,
+                ]))
+            )
+            now = datetime.now(timezone.utc)
+            stale_tag_ids: set[int] = set()
+            for alarm in active_result.scalars().all():
+                new_cfg = new_config_by_tag.get(alarm.tag_id)
+                is_stale = False
+                if new_cfg is None:
+                    # Tag no longer has alarm enabled
+                    is_stale = True
+                else:
+                    # Config changed: severity or message differs from the active alarm
+                    cfg_severity = new_cfg.get("severity", "warning")
+                    cfg_message = new_cfg.get("message", "")
+                    if cfg_severity != alarm.severity.value:
+                        is_stale = True
+                    elif cfg_message and cfg_message != alarm.message:
+                        is_stale = True
+
+                if is_stale:
+                    stale_tag_ids.add(alarm.tag_id)
+                    # Transition to INACTIVE and record history
+                    alarm.state = AlarmState.INACTIVE
+                    alarm.cleared_at = now
+                    if not alarm.acknowledged_at:
+                        alarm.acknowledged_at = now
+                        alarm.acknowledged_by = "system:config_change"
+                    self._record_history_obj(session, alarm)
+
+            if stale_tag_ids:
+                await session.commit()
+                # Broadcast removals so frontends drop the stale alarms
+                for tag_id in stale_tag_ids:
+                    old_alarm = self._active_alarms.pop(tag_id, None)
+                    if old_alarm:
+                        old_alarm.state = AlarmState.INACTIVE
+                        old_alarm.cleared_at = now
+                        self._broadcast_alarm(old_alarm)
+
             await self.load_alarm_configs(session)
+            # Push a fresh snapshot so all frontends have consistent alarm state
+            self.broadcast_alarms_snapshot()
 
     def broadcast_alarms_snapshot(self):
         """Push current active alarms to all WS subscribers, replacing stale state."""
