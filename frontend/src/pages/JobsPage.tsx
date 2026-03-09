@@ -122,7 +122,14 @@ function SetpointEditor({ value, onChange, tags }: {
               <span className="text-slate-600 ml-1">({items.length})</span>
             </button>
           )}
-          {!collapsed.has(group) && items.map(([key, val, idx]) => (
+          {!collapsed.has(group) && items.map(([key, val, idx]) => {
+            const tagDef = tagMap.get(key);
+            let enumMap: Record<string, string> | null = null;
+            if (tagDef?.enum_mapping) {
+              try { enumMap = typeof tagDef.enum_mapping === 'string' ? JSON.parse(tagDef.enum_mapping) : tagDef.enum_mapping; } catch { /* ignore */ }
+            }
+            const hasEnum = enumMap && Object.keys(enumMap).length > 0;
+            return (
             <div key={idx} className="flex gap-2 items-center mb-2">
               <div className="flex-1">
                 <select
@@ -154,6 +161,17 @@ function SetpointEditor({ value, onChange, tags }: {
                     {Boolean(val) ? 'ON' : 'OFF'}
                   </span>
                 </button>
+              ) : hasEnum ? (
+                <select
+                  value={String(val ?? '')}
+                  onChange={e => updateValue(key, e.target.value)}
+                  className="w-32 min-h-[44px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white hover:border-blue-500 transition-all"
+                >
+                  <option value="">Select…</option>
+                  {Object.entries(enumMap!).map(([k, label]) => (
+                    <option key={k} value={k}>{label}</option>
+                  ))}
+                </select>
               ) : (
                 <button
                   type="button"
@@ -171,7 +189,8 @@ function SetpointEditor({ value, onChange, tags }: {
                 <X size={18} />
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
       ))}
       {keypad?.kind === 'numeric' && (
@@ -241,7 +260,7 @@ function JobSetpointDisplay({ setpoints, tags }: { setpoints: string | null; tag
                               {Boolean(v) ? 'ON' : 'OFF'}
                             </span>
                           ) : (
-                            <span className="text-slate-200">{String(v)}</span>
+                            <span className="text-slate-200">{typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(2) : String(v)}</span>
                           )}
                         </td>
                       </tr>

@@ -69,6 +69,9 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
   const activeAlarms = alarms.filter(a => a.state === 'active_unacked' || a.state === 'active_acked' || a.state === 'inactive_unacked');
   const unackedAlarms = alarms.filter(a => a.state === 'active_unacked' || a.state === 'inactive_unacked');
   const activeAlarmCount = unackedAlarms.length;
+  const criticalCount = unackedAlarms.filter(a => a.severity === 'critical').length;
+  const warningCount = unackedAlarms.filter(a => a.severity === 'warning').length;
+  const infoCount = unackedAlarms.filter(a => a.severity === 'info').length;
 
   const handleAcknowledgeAll = useCallback(async () => {
     if (ackingAll || unackedAlarms.length === 0) return;
@@ -145,11 +148,23 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
             </span>
           </div>
 
-          {/* Alarm badge */}
-          {activeAlarmCount > 0 && (
+          {/* Alarm badges by severity */}
+          {criticalCount > 0 && (
             <Link to="/alarms" className="flex items-center gap-1.5 bg-red-500/20 text-red-400 px-2.5 py-1 rounded-md text-xs font-medium">
-              <Bell size={14} />
-              {activeAlarmCount} Active Alarm{activeAlarmCount !== 1 ? 's' : ''}
+              <AlertCircle size={14} />
+              {criticalCount} Alarm{criticalCount !== 1 ? 's' : ''}
+            </Link>
+          )}
+          {warningCount > 0 && (
+            <Link to="/alarms" className="flex items-center gap-1.5 bg-yellow-500/20 text-yellow-400 px-2.5 py-1 rounded-md text-xs font-medium">
+              <AlertTriangle size={14} />
+              {warningCount} Warning{warningCount !== 1 ? 's' : ''}
+            </Link>
+          )}
+          {infoCount > 0 && (
+            <Link to="/alarms" className="flex items-center gap-1.5 bg-blue-500/20 text-blue-400 px-2.5 py-1 rounded-md text-xs font-medium">
+              <Info size={14} />
+              {infoCount} Info
             </Link>
           )}
 

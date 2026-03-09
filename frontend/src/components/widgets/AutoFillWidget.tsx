@@ -27,11 +27,7 @@ function BoolIndicator({ tag, tagValues, onColor, offColor }: { tag: Tag; tagVal
   const diameter = 14;
 
   return (
-    <div className="flex items-center justify-between gap-2 py-1.5">
-      <div className="flex items-center gap-1 min-w-0">
-        {longDesc && <InlineInfoButton description={longDesc} title={tag.display_name || tag.name} />}
-        <span className="text-sm text-slate-300 truncate">{tag.display_name || tag.name}</span>
-      </div>
+    <div className="flex items-center gap-2 py-1.5">
       <div
         style={{
           width: diameter,
@@ -43,6 +39,8 @@ function BoolIndicator({ tag, tagValues, onColor, offColor }: { tag: Tag; tagVal
           flexShrink: 0,
         }}
       />
+      {longDesc && <InlineInfoButton description={longDesc} title={tag.display_name || tag.name} />}
+      <span className="text-sm text-slate-300 truncate">{tag.display_name || tag.name}</span>
     </div>
   );
 }

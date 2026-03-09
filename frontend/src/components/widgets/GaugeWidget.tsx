@@ -29,6 +29,8 @@ interface Props {
   units?: string;
   warning?: number;
   critical?: number;
+  targetTag?: string;
+  targetValue?: number;
   decimalPlaces?: number;
   displayMode?: GaugeDisplayMode;
   valueFontSize?: number;
@@ -40,10 +42,17 @@ interface Props {
 }
 
 // Threshold-based coloring — returns the color for the gauge based on the current value.
-// If the value exceeds the critical threshold, it turns red (danger).
-// If it exceeds the warning threshold, it turns amber (caution).
-// Otherwise it stays blue (normal). Thresholds are optional — if not set, it stays blue.
-function getColor(value: number, warning?: number, critical?: number): string {
+// If a target is provided, color is based on how close the value is to the target:
+//   within 5% of range = green, within 15% = amber, beyond = red.
+// Otherwise falls back to warning/critical thresholds.
+function getColor(value: number, warning?: number, critical?: number, target?: number, min?: number, max?: number): string {
+  if (target != null && min != null && max != null) {
+    const range = max - min || 1;
+    const deviation = Math.abs(value - target) / range;
+    if (deviation <= 0.05) return '#22c55e';  // green — on target
+    if (deviation <= 0.15) return '#f59e0b';  // amber — close
+    return '#ef4444';                          // red — far from target
+  }
   if (critical != null && value >= critical) return '#ef4444'; // red
   if (warning != null && value >= warning) return '#f59e0b';   // amber
   return '#3b82f6';                                            // blue
@@ -229,17 +238,17 @@ const DEFAULTS: Record<GaugeDisplayMode, { valueFontSize: number; barThickness: 
 // ─── Main component ───
 export function GaugeWidget({
   title, tag, tagValues, min = 0, max = 100, units = '', warning, critical,
+  targetTag, targetValue,
   decimalPlaces = 1, displayMode = 'bar', valueFontSize, barThickness, gaugeSize,
   titleStyle, valueStyle, chrome = 'full',
 }: Props) {
   const tv = tagValues[tag];
   const value = Number(tv?.value ?? 0);
   // Normalize the value to a 0-100% range between min and max.
-  // Math.max(0, Math.min(100, ...)) clamps the result so it never goes below 0%
-  // or above 100%, which prevents visual overflow in the gauge graphics.
-  // The `|| 1` prevents division by zero if min equals max.
   const pct = Math.max(0, Math.min(100, ((value - min) / (max - min || 1)) * 100));
-  const color = getColor(value, warning, critical);
+  // Resolve target: prefer tag-based target, fall back to hardcoded value
+  const resolvedTarget = targetTag ? Number(tagValues[targetTag]?.value ?? targetValue) : targetValue;
+  const color = getColor(value, warning, critical, resolvedTarget, min, max);
 
   const defaults = DEFAULTS[displayMode] || DEFAULTS.bar;
   const vfs = valueFontSize ?? defaults.valueFontSize;

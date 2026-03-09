@@ -36,9 +36,9 @@ class TagValue:
     # __dict__ for attributes, Python pre-allocates fixed memory slots for only these
     # named attributes. This saves significant memory when thousands of TagValue
     # instances exist (one per tag in the system).
-    __slots__ = ("tag_id", "name", "value", "quality", "timestamp", "data_type", "description", "display_name")
+    __slots__ = ("tag_id", "name", "value", "quality", "timestamp", "data_type", "description", "display_name", "engineering_units", "display_format")
 
-    def __init__(self, tag_id: int, name: str, value, data_type: str, description: str | None = None, display_name: str | None = None):
+    def __init__(self, tag_id: int, name: str, value, data_type: str, description: str | None = None, display_name: str | None = None, engineering_units: str | None = None, display_format: str | None = None):
         self.tag_id = tag_id
         self.name = name
         self.value = value
@@ -47,6 +47,8 @@ class TagValue:
         self.data_type = data_type
         self.description = description
         self.display_name = display_name
+        self.engineering_units = engineering_units
+        self.display_format = display_format
 
     def to_dict(self) -> dict:
         d = {
@@ -60,6 +62,10 @@ class TagValue:
             d["description"] = self.description
         if self.display_name:
             d["display_name"] = self.display_name
+        if self.engineering_units:
+            d["engineering_units"] = self.engineering_units
+        if self.display_format:
+            d["display_format"] = self.display_format
         return d
 
 
@@ -98,6 +104,8 @@ class TagEngine:
                 tag_id=tag.id, name=tag.name, value=initial_value,
                 data_type=tag.data_type.value, description=tag.description,
                 display_name=tag.display_name,
+                engineering_units=tag.engineering_units,
+                display_format=tag.display_format,
             )
 
     def _get_initial_value(self, tag: Tag):
@@ -142,6 +150,8 @@ class TagEngine:
             existing.data_type = tag.data_type.value
             existing.description = tag.description
             existing.display_name = tag.display_name
+            existing.engineering_units = tag.engineering_units
+            existing.display_format = tag.display_format
             self._invalidate_snapshot()
         else:
             # Brand-new tag — set initial value
@@ -150,6 +160,8 @@ class TagEngine:
                 tag_id=tag.id, name=tag.name, value=initial_value,
                 data_type=tag.data_type.value, description=tag.description,
                 display_name=tag.display_name,
+                engineering_units=tag.engineering_units,
+                display_format=tag.display_format,
             )
         self._poll_tags = None  # invalidate cached poll list
 

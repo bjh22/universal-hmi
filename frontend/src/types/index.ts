@@ -25,6 +25,8 @@ export interface TagValue {
   timestamp: string;     // ISO 8601 string from the server
   description?: string;
   display_name?: string;
+  engineering_units?: string;   // e.g. "RPM", "°C", "psi"
+  display_format?: string;     // e.g. "0.00", "0.0"
 }
 
 export interface TagLabel {

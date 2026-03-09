@@ -248,6 +248,8 @@ export const api = {
   getUsers: () => request<UserListEntry[]>('/users/'),
   createUser: (data: { username: string; display_name: string; password: string; role: string; login_mode?: string }) =>
     request('/users/', { method: 'POST', body: JSON.stringify(data) }),
+  deleteUser: (id: number) =>
+    request(`/users/${id}`, { method: 'DELETE' }),
 
   // Audit
   getAuditLog: (limit = 100) => request<AuditEntry[]>(`/audit/?limit=${limit}`),

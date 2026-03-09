@@ -10,7 +10,8 @@ export type ControlItem =
   | { type: 'toggle'; tag: string; label: string }
   | { type: 'value'; tag: string; label: string; units?: string; decimalPlaces?: number }
   | { type: 'button'; tag: string; label: string; value: unknown; color?: string; confirm?: boolean; script?: string }
-  | { type: 'input'; tag: string; label: string; min?: number; max?: number; step?: number; units?: string; decimalPlaces?: number };
+  | { type: 'input'; tag: string; label: string; min?: number; max?: number; step?: number; units?: string; decimalPlaces?: number }
+  | { type: 'dropdown'; tag: string; label: string; options?: Array<{ label: string; value: unknown }> };
 
 interface Props {
   title: string;
@@ -20,6 +21,34 @@ interface Props {
   titleStyle?: TextStyle;
   valueStyle?: TextStyle;
   chrome?: 'full' | 'compact' | 'none';
+}
+
+/** Parse a display_format string like "0.00" into decimal places (2). */
+function parseDecimalPlaces(format: string | undefined): number | undefined {
+  if (!format) return undefined;
+  const dot = format.indexOf('.');
+  if (dot < 0) return 0;
+  return format.length - dot - 1;
+}
+
+/** Resolve the label to show — prefer explicit, fall back to tag display_name, then tag name. */
+function resolveLabel(itemLabel: string, tv: TagValue | undefined, tagName: string): string {
+  if (itemLabel) return itemLabel;
+  return tv?.display_name || tagName || '—';
+}
+
+/** Resolve units — prefer explicit, fall back to tag engineering_units. */
+function resolveUnits(itemUnits: string | undefined, tv: TagValue | undefined): string | undefined {
+  if (itemUnits) return itemUnits;
+  return tv?.engineering_units;
+}
+
+/** Resolve decimal places — prefer explicit, fall back to tag display_format. */
+function resolveDecimalPlaces(itemDp: number | undefined, tv: TagValue | undefined, fallback: number): number {
+  if (itemDp != null) return itemDp;
+  const fromFormat = parseDecimalPlaces(tv?.display_format);
+  if (fromFormat != null) return fromFormat;
+  return fallback;
 }
 
 // ─── Individual control renderers ───
@@ -33,12 +62,13 @@ function ToggleControl({ item, tagValues, valueStyle }: { item: ControlItem & { 
   };
 
   const longDesc = tv?.description;
+  const label = resolveLabel(item.label, tv, item.tag);
 
   return (
     <div className="flex items-center justify-between gap-2 py-1.5">
       <div className="flex items-center gap-1 min-w-0">
-        {longDesc && <InlineInfoButton description={longDesc} title={item.label} />}
-        <span className="text-sm text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{item.label}</span>
+        {longDesc && <InlineInfoButton description={longDesc} title={label} />}
+        <span className="text-sm text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{label}</span>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
         <span className={`text-xs font-medium ${value ? 'text-green-400' : 'text-slate-500'}`}>
@@ -61,25 +91,29 @@ function ValueControl({ item, tagValues, valueStyle }: { item: ControlItem & { t
   const tv = tagValues[item.tag];
   const value = tv?.value;
   const longDesc = tv?.description;
-  const dp = item.decimalPlaces ?? 1;
+  const label = resolveLabel(item.label, tv, item.tag);
+  const units = resolveUnits(item.units, tv);
+  const dp = resolveDecimalPlaces(item.decimalPlaces, tv, 1);
   const display = typeof value === 'number' ? value.toFixed(dp) : String(value ?? '—');
 
   return (
     <div className="flex items-center justify-between gap-2 py-1.5">
       <div className="flex items-center gap-1 min-w-0">
-        {longDesc && <InlineInfoButton description={longDesc} title={item.label} />}
-        <span className="text-sm text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{item.label}</span>
+        {longDesc && <InlineInfoButton description={longDesc} title={label} />}
+        <span className="text-sm text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{label}</span>
       </div>
       <span className="text-base font-semibold text-slate-100 tabular-nums flex-shrink-0" style={textStyleToCSS(valueStyle)}>
         {display}
-        {item.units && <span className="text-sm text-slate-500 font-normal ml-1">{item.units}</span>}
+        {units && <span className="text-sm text-slate-500 font-normal ml-1">{units}</span>}
       </span>
     </div>
   );
 }
 
 function ButtonControl({ item, tagValues }: { item: ControlItem & { type: 'button' }; tagValues: Record<string, TagValue> }) {
-  const longDesc = tagValues[item.tag]?.description;
+  const tv = tagValues[item.tag];
+  const longDesc = tv?.description;
+  const label = resolveLabel(item.label, tv, item.tag);
   const colorMap: Record<string, string> = {
     blue: 'bg-blue-600 hover:bg-blue-700',
     green: 'bg-green-600 hover:bg-green-700',
@@ -89,7 +123,7 @@ function ButtonControl({ item, tagValues }: { item: ControlItem & { type: 'butto
   const cls = colorMap[item.color || 'blue'] || colorMap.blue;
 
   const handleClick = async () => {
-    if (item.confirm && !window.confirm(`Execute "${item.label}"?`)) return;
+    if (item.confirm && !window.confirm(`Execute "${label}"?`)) return;
     if (item.script) {
       await api.executeScript(item.script);
     } else if (item.tag) {
@@ -100,9 +134,9 @@ function ButtonControl({ item, tagValues }: { item: ControlItem & { type: 'butto
   return (
     <div className="py-1">
       <div className="flex items-center gap-1">
-        {longDesc && <InlineInfoButton description={longDesc} title={item.label} />}
+        {longDesc && <InlineInfoButton description={longDesc} title={label} />}
         <button onClick={handleClick} className={`flex-1 px-3 py-1.5 rounded-md text-sm text-white font-medium ${cls}`}>
-          {item.label}
+          {label}
         </button>
       </div>
     </div>
@@ -115,7 +149,9 @@ function InputControl({ item, tagValues, valueStyle }: { item: ControlItem & { t
   const [showKeypad, setShowKeypad] = useState(false);
   const min = item.min ?? 0;
   const max = item.max ?? 100;
-  const dp = item.decimalPlaces ?? 1;
+  const label = resolveLabel(item.label, tv, item.tag);
+  const units = resolveUnits(item.units, tv);
+  const dp = resolveDecimalPlaces(item.decimalPlaces, tv, 1);
 
   const handleSubmit = async (val: string) => {
     const num = Number(val);
@@ -132,12 +168,12 @@ function InputControl({ item, tagValues, valueStyle }: { item: ControlItem & { t
       <button onClick={() => setShowKeypad(true)} className="w-full text-left group">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1 min-w-0">
-            {longDesc && <InlineInfoButton description={longDesc} title={item.label} />}
-            <span className="text-sm text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{item.label}</span>
+            {longDesc && <InlineInfoButton description={longDesc} title={label} />}
+            <span className="text-sm text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{label}</span>
           </div>
           <span className="text-base font-semibold text-slate-100 tabular-nums flex-shrink-0 group-hover:text-blue-300 transition-colors" style={textStyleToCSS(valueStyle)}>
             {currentValue.toFixed(dp)}
-            {item.units && <span className="text-sm text-slate-500 font-normal ml-1">{item.units}</span>}
+            {units && <span className="text-sm text-slate-500 font-normal ml-1">{units}</span>}
           </span>
         </div>
         <div className="text-xs text-blue-400 group-hover:text-blue-300 mt-0.5">Tap to change</div>
@@ -145,8 +181,8 @@ function InputControl({ item, tagValues, valueStyle }: { item: ControlItem & { t
       {showKeypad && (
         <NumericKeypad
           value={currentValue.toFixed(dp)}
-          title={item.label}
-          units={item.units}
+          title={label}
+          units={units}
           min={min}
           max={max}
           decimalPlaces={dp}
@@ -154,6 +190,42 @@ function InputControl({ item, tagValues, valueStyle }: { item: ControlItem & { t
           onClose={() => setShowKeypad(false)}
         />
       )}
+    </div>
+  );
+}
+
+function DropdownControl({ item, tagValues, valueStyle }: { item: ControlItem & { type: 'dropdown' }; tagValues: Record<string, TagValue>; valueStyle?: TextStyle }) {
+  const tv = tagValues[item.tag];
+  const currentValue = tv?.value;
+  const longDesc = tv?.description;
+  const label = resolveLabel(item.label, tv, item.tag);
+  const options = item.options || [];
+
+  const currentIdx = options.findIndex(o => String(o.value) === String(currentValue));
+
+  const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const idx = Number(e.target.value);
+    if (idx >= 0 && idx < options.length) {
+      await api.writeTag(item.tag, options[idx].value);
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-between gap-2 py-1.5">
+      <div className="flex items-center gap-1 min-w-0">
+        {longDesc && <InlineInfoButton description={longDesc} title={label} />}
+        <span className="text-sm text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{label}</span>
+      </div>
+      <select
+        value={currentIdx >= 0 ? currentIdx : ''}
+        onChange={handleChange}
+        className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-white outline-none focus:border-blue-500 max-w-[50%] flex-shrink-0"
+      >
+        {currentIdx < 0 && <option value="" disabled>{currentValue != null ? String(currentValue) : '—'}</option>}
+        {options.map((opt, i) => (
+          <option key={i} value={i}>{opt.label}</option>
+        ))}
+      </select>
     </div>
   );
 }
@@ -181,6 +253,7 @@ export function ControlGroupWidget({ title, controls = [], tagValues, columns = 
             {ctrl.type === 'value' && <ValueControl item={ctrl as ControlItem & { type: 'value' }} tagValues={tagValues} valueStyle={valueStyle} />}
             {ctrl.type === 'button' && <ButtonControl item={ctrl as ControlItem & { type: 'button' }} tagValues={tagValues} />}
             {ctrl.type === 'input' && <InputControl item={ctrl as ControlItem & { type: 'input' }} tagValues={tagValues} valueStyle={valueStyle} />}
+            {ctrl.type === 'dropdown' && <DropdownControl item={ctrl as ControlItem & { type: 'dropdown' }} tagValues={tagValues} valueStyle={valueStyle} />}
           </div>
         ))}
         {controls.length === 0 && (
