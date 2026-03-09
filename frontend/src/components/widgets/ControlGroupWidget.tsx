@@ -10,7 +10,8 @@ export type ControlItem =
   | { type: 'toggle'; tag: string; label: string }
   | { type: 'value'; tag: string; label: string; units?: string; decimalPlaces?: number }
   | { type: 'button'; tag: string; label: string; value: unknown; color?: string; confirm?: boolean; script?: string }
-  | { type: 'input'; tag: string; label: string; min?: number; max?: number; step?: number; units?: string; decimalPlaces?: number };
+  | { type: 'input'; tag: string; label: string; min?: number; max?: number; step?: number; units?: string; decimalPlaces?: number }
+  | { type: 'dropdown'; tag: string; label: string; options?: Array<{ label: string; value: unknown }> };
 
 interface Props {
   title: string;
@@ -193,6 +194,42 @@ function InputControl({ item, tagValues, valueStyle }: { item: ControlItem & { t
   );
 }
 
+function DropdownControl({ item, tagValues, valueStyle }: { item: ControlItem & { type: 'dropdown' }; tagValues: Record<string, TagValue>; valueStyle?: TextStyle }) {
+  const tv = tagValues[item.tag];
+  const currentValue = tv?.value;
+  const longDesc = tv?.description;
+  const label = resolveLabel(item.label, tv, item.tag);
+  const options = item.options || [];
+
+  const currentIdx = options.findIndex(o => String(o.value) === String(currentValue));
+
+  const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const idx = Number(e.target.value);
+    if (idx >= 0 && idx < options.length) {
+      await api.writeTag(item.tag, options[idx].value);
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-between gap-2 py-1.5">
+      <div className="flex items-center gap-1 min-w-0">
+        {longDesc && <InlineInfoButton description={longDesc} title={label} />}
+        <span className="text-sm text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{label}</span>
+      </div>
+      <select
+        value={currentIdx >= 0 ? currentIdx : ''}
+        onChange={handleChange}
+        className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-white outline-none focus:border-blue-500 max-w-[50%] flex-shrink-0"
+      >
+        {currentIdx < 0 && <option value="" disabled>{currentValue != null ? String(currentValue) : '—'}</option>}
+        {options.map((opt, i) => (
+          <option key={i} value={i}>{opt.label}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 // ─── Main Component ───
 
 export function ControlGroupWidget({ title, controls = [], tagValues, columns = 1, titleStyle, valueStyle, chrome = 'full' }: Props) {
@@ -216,6 +253,7 @@ export function ControlGroupWidget({ title, controls = [], tagValues, columns = 
             {ctrl.type === 'value' && <ValueControl item={ctrl as ControlItem & { type: 'value' }} tagValues={tagValues} valueStyle={valueStyle} />}
             {ctrl.type === 'button' && <ButtonControl item={ctrl as ControlItem & { type: 'button' }} tagValues={tagValues} />}
             {ctrl.type === 'input' && <InputControl item={ctrl as ControlItem & { type: 'input' }} tagValues={tagValues} valueStyle={valueStyle} />}
+            {ctrl.type === 'dropdown' && <DropdownControl item={ctrl as ControlItem & { type: 'dropdown' }} tagValues={tagValues} valueStyle={valueStyle} />}
           </div>
         ))}
         {controls.length === 0 && (

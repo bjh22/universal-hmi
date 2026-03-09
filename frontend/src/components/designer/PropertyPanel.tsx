@@ -805,6 +805,7 @@ const CONTROL_TYPES = [
   { value: 'value', label: 'Value Display' },
   { value: 'button', label: 'Button' },
   { value: 'input', label: 'Parameter Input' },
+  { value: 'dropdown', label: 'Dropdown' },
 ];
 
 function ControlGroupEditor({ controls, onChange }: {
@@ -816,6 +817,7 @@ function ControlGroupEditor({ controls, onChange }: {
     if (type === 'button') { base.value = null; base.color = 'blue'; }
     if (type === 'input') { base.min = 0; base.max = 100; base.step = 1; }
     if (type === 'value') { base.decimalPlaces = 1; }
+    if (type === 'dropdown') { base.options = []; }
     onChange([...controls, base as { type: string; tag: string; label: string; [k: string]: unknown }]);
   };
   const removeControl = (idx: number) => onChange(controls.filter((_, i) => i !== idx));
@@ -892,6 +894,14 @@ function ControlGroupEditor({ controls, onChange }: {
               <input type="number" value={ctrl.decimalPlaces as number ?? 1} onChange={e => updateControl(i, { decimalPlaces: Number(e.target.value) })}
                 min={0} max={6} placeholder="DP" className="w-12 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
             </div>
+          )}
+
+          {ctrl.type === 'dropdown' && (
+            <DropdownOptionsEditor
+              options={(ctrl.options as Array<{ label: string; value: unknown }>) || []}
+              onChange={opts => updateControl(i, { options: opts })}
+              tagName={ctrl.tag}
+            />
           )}
         </div>
       ))}
