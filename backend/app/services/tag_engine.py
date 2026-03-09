@@ -3,6 +3,15 @@ Tag Engine: In-memory runtime tag value store and simulation engine.
 
 Maintains current values for all tags and runs simulation behaviors
 for tags in simulation mode. Pushes updates via WebSocket.
+
+In industrial automation, a "tag" is a named data point representing a sensor
+reading, machine state, or setpoint — similar to a variable in a PLC (Programmable
+Logic Controller). Examples: "Pump1_Running" (bool), "Tank_Level" (float),
+"Motor_Speed_SP" (int setpoint).
+
+The TagEngine holds ALL tag values in memory for fast access (no database round-trip
+on every read). It also runs simulation behaviors (sine waves, ramps, random values,
+etc.) so the HMI can be developed and tested without real hardware connected.
 """
 
 import asyncio
@@ -23,6 +32,10 @@ logger = logging.getLogger(__name__)
 
 
 class TagValue:
+    # __slots__ is a Python optimization: instead of each instance having a flexible
+    # __dict__ for attributes, Python pre-allocates fixed memory slots for only these
+    # named attributes. This saves significant memory when thousands of TagValue
+    # instances exist (one per tag in the system).
     __slots__ = ("tag_id", "name", "value", "quality", "timestamp", "data_type", "description", "display_name")
 
     def __init__(self, tag_id: int, name: str, value, data_type: str, description: str | None = None, display_name: str | None = None):
@@ -62,7 +75,10 @@ class TagEngine:
         self._subscribers: list[asyncio.Queue] = []
         self._start_time = time.time()
         self._system_values: dict[str, object] = {}  # mutable system tag values
-        self._snapshot_cache: dict[str, dict] | None = None  # cached get_all_values result
+        # Caches the serialized dict of all tag values. Invalidated on any value change.
+        # Without this, we'd re-serialize all tags every 500ms for EACH WebSocket client,
+        # which is wasteful when many clients are connected.
+        self._snapshot_cache: dict[str, dict] | None = None
         self._poll_tags: dict[int, list[tuple[str, str]]] | None = None  # cached ds_id -> [(name, addr)]
 
     @property
@@ -198,7 +214,11 @@ class TagEngine:
                 return value
 
     async def write_value(self, tag_name: str, value) -> bool:
-        """Write a tag value, routing through the driver if the tag has a data source."""
+        """Write a tag value. If the tag is connected to real hardware (has a
+        data_source_id), the write is routed through the appropriate protocol driver
+        (OPC-UA, Modbus, etc.) to actually change the value on the PLC/device.
+        For simulated tags, it just updates the in-memory store.
+        """
         tag = self._tags.get(tag_name)
         if tag is None:
             return False
@@ -225,6 +245,13 @@ class TagEngine:
         self._broadcast(msg)
 
     def _broadcast(self, msg: dict):
+        """Send a message to all subscribed WebSocket clients.
+
+        QueueFull handling is critical: if a slow or disconnected client can't
+        keep up, we drop its messages rather than blocking the entire engine.
+        After 50 consecutive dropped messages, we remove the subscriber entirely
+        to prevent a dead client from consuming resources indefinitely.
+        """
         dead_queues: list[asyncio.Queue] = []
         for q in self._subscribers:
             try:
@@ -241,11 +268,17 @@ class TagEngine:
             self._subscribers.remove(q)
 
     def subscribe(self) -> asyncio.Queue:
+        """Publish-subscribe (pub/sub) pattern: each WebSocket client subscribes by
+        getting an asyncio.Queue. The engine pushes tag updates into all queues,
+        and each client reads from its own queue. This is more efficient than
+        polling — clients get updates instantly without repeatedly asking "anything new?"
+        """
         q: asyncio.Queue = asyncio.Queue(maxsize=100)
         self._subscribers.append(q)
         return q
 
     def unsubscribe(self, q: asyncio.Queue):
+        """Remove a client's queue when they disconnect, so we stop pushing to it."""
         if q in self._subscribers:
             self._subscribers.remove(q)
 
@@ -308,6 +341,13 @@ class TagEngine:
                     pass
 
     async def _simulation_loop(self):
+        """Runs every 500ms, computing new values for simulated tags (sine waves,
+        ramps, random values, toggles, etc.). This lets the HMI show realistic
+        behavior during development without connecting to real PLCs/sensors.
+
+        Only tags whose values actually changed are broadcast — this minimizes
+        network traffic to WebSocket clients.
+        """
         while self._running:
             changed = {}
             elapsed = time.time() - self._start_time
@@ -328,10 +368,18 @@ class TagEngine:
                 self._invalidate_snapshot()
                 self._broadcast({"type": "tag_update", "data": changed})
 
+            # asyncio.sleep yields control back to the event loop, allowing other
+            # async tasks (WebSocket handlers, HTTP requests) to run between cycles
             await asyncio.sleep(0.5)
 
     async def _polling_loop(self):
-        """Poll connected data source drivers for tag values."""
+        """Poll connected data source drivers (OPC-UA, Modbus, EtherNet/IP, MQTT)
+        for real hardware tag values. Runs every 500ms alongside the simulation loop.
+
+        Deadband filtering: for numeric values, ignores changes smaller than the
+        configured threshold. This reduces noise from sensor jitter (e.g., a
+        temperature reading flickering between 72.01 and 72.02 won't trigger updates).
+        """
         while self._running:
             ds_tags = self._build_poll_tags()
 
@@ -424,5 +472,7 @@ class TagEngine:
                 return None
 
 
-# Singleton
+# Singleton pattern: this module-level instance is created once when the module is
+# first imported. Every part of the app (API routes, WebSocket handlers, alarm service)
+# imports and shares this same instance, ensuring a single source of truth for tag values.
 tag_engine = TagEngine()

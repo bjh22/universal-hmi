@@ -1,3 +1,10 @@
+"""
+Database model for tags (industrial data points). Tags are the core data entity
+in an HMI — they represent sensors, actuators, and machine parameters. Each tag
+has a unique name (e.g., "Pump1.Speed") and a current value that gets updated
+by protocol drivers or simulation.
+"""
+
 import enum
 from datetime import datetime, timezone
 
@@ -17,6 +24,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 
+
+# --- Enums constrain columns to valid values at the database level ---
+# This prevents bad data from ever being stored (e.g., data_type="banana").
 
 class TagDataType(str, enum.Enum):
     BOOL = "bool"
@@ -41,6 +51,10 @@ class SimulationBehavior(str, enum.Enum):
     SCRIPT = "script"
 
 
+# A "junction table" (also called "association table") for the many-to-many
+# relationship between tags and labels. A tag can have multiple labels
+# (e.g., "critical", "motor"), and a label can be applied to multiple tags.
+# This table only stores pairs of foreign keys — no ORM class needed.
 tag_label_assignments = Table(
     "tag_label_assignments",
     Base.metadata,
@@ -80,7 +94,9 @@ class Tag(Base):
     trending_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     trending_sample_rate_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    # Alarm config (JSON-encoded)
+    # JSON-encoded fields: stored as text strings containing JSON. This is a
+    # pragmatic choice for SQLite — it avoids complex table relationships for
+    # rarely-queried nested config that the application parses on read.
     alarm_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     alarm_config: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -104,7 +120,10 @@ class Tag(Base):
         ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
     )
 
-    # Labels (many-to-many)
+    # relationship() defines how tables connect in the ORM layer.
+    # lazy="selectin" means labels are loaded in a single efficient query
+    # when the tag is fetched, avoiding the "N+1 query" problem (one extra
+    # query per tag to load its labels).
     labels: Mapped[list["TagLabel"]] = relationship(
         secondary=tag_label_assignments, back_populates="tags", lazy="selectin"
     )

@@ -1,6 +1,25 @@
 """
 Alarm Service: Evaluates alarm conditions, manages alarm state transitions,
 and records alarm history.
+
+Runs an evaluation loop every second that checks tag values against alarm
+conditions and manages a state machine for each alarm. Industrial alarms follow
+a strict state machine to ensure operators must EXPLICITLY acknowledge problems,
+even if the problem clears on its own. This prevents issues from being silently
+ignored.
+
+Alarm state machine:
+  ACTIVE_UNACKED  -> Problem detected, operator has NOT acknowledged it yet.
+  ACTIVE_ACKED    -> Operator acknowledged, but the problem is still ongoing.
+  INACTIVE_UNACKED -> Problem resolved on its own BEFORE operator acknowledged.
+                      Stays visible so the operator still sees it happened.
+  INACTIVE        -> Fully resolved: problem cleared AND operator acknowledged.
+                     At this point, a history record is saved and the alarm is removed.
+
+Boolean alarm model: This HMI treats alarms as simple true/false flags. Complex
+analog threshold alarming (e.g., "temperature > 200C" or "pressure < 10 PSI")
+is handled on the PLC side and reported to the HMI as boolean fault flags.
+This keeps the HMI alarm logic simple and avoids duplicating PLC logic.
 """
 
 import asyncio
@@ -27,6 +46,9 @@ class AlarmService:
         self._alarm_configs: list[dict] = []
         self._active_alarms: dict[int, Alarm] = {}  # tag_id -> active Alarm
         self._tag_lookup: dict[int, dict] = {}  # tag_id -> {name, display_name} for O(1) lookups
+        # Optimization: tracks the last value we evaluated for each tag. If the value
+        # hasn't changed since the last check, we skip re-evaluating that alarm condition.
+        # This avoids redundant work when most tags are stable most of the time.
         self._last_eval_values: dict[int, object] = {}  # tag_id -> last evaluated value
 
     @property
@@ -149,6 +171,12 @@ class AlarmService:
     # ------------------------------------------------------------------
 
     async def _evaluate_loop(self):
+        """Checks all alarm-enabled tags once per second. Instead of committing each
+        alarm state change individually, all changes are collected into batches
+        (new alarms, retriggers, clears) and committed in a single database
+        transaction. This is much more efficient for SQLite, which is slow with
+        many small writes.
+        """
         while self._running:
             try:
                 # Collect all state changes, then commit in a single batch
@@ -334,7 +362,12 @@ class AlarmService:
     def _record_history_obj(
         self, session: AsyncSession, alarm: Alarm, clear_value: str | None = None
     ):
-        """Add a history record to the session (caller must commit)."""
+        """Add a history record to the session (caller must commit).
+
+        When an alarm is fully resolved (cleared AND acknowledged), we save it to
+        alarm_history for regulatory compliance and post-incident troubleshooting.
+        Many industries require maintaining alarm logs for audits.
+        """
         tag_name = self._get_tag_name(alarm.tag_id)
         history = AlarmHistory(
             tag_id=alarm.tag_id,

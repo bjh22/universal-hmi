@@ -1,3 +1,10 @@
+/**
+ * api.ts — Centralized API client.
+ *
+ * All HTTP calls to the backend go through this file. Having a single place for
+ * API logic means authentication headers, error handling, and base URL configuration
+ * are defined once rather than duplicated in every component that needs data.
+ */
 import type {
   Tag,
   TagLabel,
@@ -26,8 +33,16 @@ import type {
   IntegrationData,
 } from '../types/index';
 
+// Using a relative URL (no "http://...") means requests go to the same host that
+// served the page. In development, Vite's proxy forwards /api to the backend on
+// port 8080. In production, the backend serves the frontend directly — so this
+// relative path works in both environments without any config changes.
 const BASE = '/api';
 
+// getHeaders builds the HTTP headers sent with every request. The key part is
+// the Authorization header: "Bearer <token>" is an HTTP standard where we send
+// the JWT (JSON Web Token) we received at login. The backend verifies this token
+// to identify the user and check permissions.
 function getHeaders(): HeadersInit {
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
   const token = localStorage.getItem('hmi_token');
@@ -37,6 +52,15 @@ function getHeaders(): HeadersInit {
   return headers;
 }
 
+// request<T> is a "generic" function — the <T> is a TypeScript type parameter that
+// lets each caller specify what shape the response JSON will have. For example,
+// request<Tag[]>('/tags/') tells TypeScript the result will be an array of Tag objects,
+// so you get autocomplete and type checking on the response — without needing a
+// separate function for every endpoint.
+//
+// Error handling pattern: if the HTTP status is not "ok" (200-299), we try to extract
+// a detail message from the JSON body (the FastAPI convention), then throw an Error.
+// Callers use .catch() or try/catch to handle failures.
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: getHeaders(),
@@ -50,6 +74,10 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
+// The api object organizes all backend calls by resource (Auth, Tags, Alarms, etc.).
+// Each method returns a Promise — an async result that resolves when the server responds.
+// POST/PUT methods send a JSON body; GET methods just read data. This object is exported
+// so any component can call e.g. api.getTags() without knowing the URL or HTTP details.
 export const api = {
   // Auth
   login: (username: string, password: string) =>
@@ -66,6 +94,8 @@ export const api = {
   // Tags
   getTags: (projectId?: number) =>
     request<Tag[]>(`/tags/${projectId != null ? `?project_id=${projectId}` : ''}`),
+  // encodeURIComponent makes special characters (spaces, slashes, etc.) safe for URLs.
+  // Without it, a tag named "Motor/Speed" would break the URL path.
   getTagByName: (name: string) => request<Tag>(`/tags/by-name/${encodeURIComponent(name)}`),
   createTag: (data: Partial<Tag>) =>
     request('/tags/', { method: 'POST', body: JSON.stringify(data) }),

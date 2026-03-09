@@ -3,6 +3,19 @@ Trend Service: Periodically samples tag values and stores them for historical tr
 
 Samples are collected in memory each second and flushed to the database in bulk
 every FLUSH_INTERVAL_S seconds to reduce SQLite write pressure.
+
+Records tag values over time so operators can view historical charts/graphs (e.g.,
+"show me the tank temperature for the last 8 hours"). This is essential for
+troubleshooting: when something goes wrong, operators need to see what values
+looked like leading up to the event.
+
+Key design decisions:
+- Samples every 1 second but buffers in memory and flushes to the database every
+  10 seconds. SQLite can bottleneck on frequent small writes, so batching is critical.
+- Deadband filtering skips recording values that haven't changed significantly,
+  saving storage space (a stable sensor doesn't need a new row every second).
+- Retention cleanup runs hourly to delete data older than the configured period
+  (default 90 days), preventing the database from growing indefinitely.
 """
 
 import asyncio
@@ -69,7 +82,8 @@ class TrendService:
                     await task
                 except asyncio.CancelledError:
                     pass
-        # Flush remaining samples on shutdown
+        # Graceful shutdown: flush any remaining buffered samples to the database
+        # so we don't lose the last few seconds of data when the service stops
         await self._flush()
 
     async def _flush(self):
@@ -94,6 +108,9 @@ class TrendService:
                     tv = self._tag_engine.get_value(tc["name"])
                     if tv is None:
                         continue
+                    # Dual value storage: try to store as a float for efficient
+                    # querying and charting. If the value isn't numeric (e.g., a
+                    # string like "Running" or "Idle"), store it in string_value instead.
                     try:
                         numeric_value = float(tv.value) if tv.value is not None else None
                         string_value = None
@@ -125,7 +142,9 @@ class TrendService:
             await asyncio.sleep(1.0)
 
     async def _cleanup_loop(self):
-        """Periodically delete trend data older than the retention period."""
+        """Periodically delete trend data older than the retention period (default 90 days).
+        Runs once per hour to prevent the database from growing indefinitely.
+        """
         while self._running:
             await asyncio.sleep(CLEANUP_INTERVAL_S)
             try:

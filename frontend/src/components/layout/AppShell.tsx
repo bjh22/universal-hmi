@@ -1,3 +1,19 @@
+/**
+ * AppShell — the main application layout wrapper that provides the persistent
+ * UI chrome around every page: sidebar navigation, top header bar, alarm banner,
+ * and WebSocket connection status indicator.
+ *
+ * Every page except Login is rendered inside this shell. The `children` prop
+ * receives the current page content (Dashboard, Alarms, Trends, etc.) and
+ * renders it in the main content area.
+ *
+ * Key features:
+ *   - Sidebar navigation with role-based filtering (operators see fewer pages)
+ *   - Alarm banner: scrollable horizontal list of active alarms with color-coded
+ *     severity and an "Acknowledge All" button
+ *   - WebSocket connection indicator: green = live data, red = stale/disconnected
+ *   - Collapsible sidebar for more screen real estate
+ */
 import { useState, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
@@ -18,6 +34,11 @@ interface AppShellProps {
   activeProjectName?: string | null;
 }
 
+// Declarative navigation config — each item defines its URL path, icon, label,
+// and which roles can see it. `roles: null` means everyone can see it.
+// Items with a roles array (like 'engineer', 'designer') are hidden from users
+// who don't have one of those roles. This keeps the nav clean for operators
+// who don't need access to engineering tools.
 const NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', roles: null },
   { to: '/trends', icon: TrendingUp, label: 'Trends', roles: null },
@@ -79,6 +100,8 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
           </button>
         </div>
 
+        {/* Role-based filtering: only show nav items the current user is allowed to see.
+            If roles is null, everyone sees it. Otherwise, the user's role must be in the list. */}
         <nav className="flex-1 py-2">
           {NAV_ITEMS.filter(item => !item.roles || (user && item.roles.includes(user.role))).map((item) => {
             const active = location.pathname === item.to ||

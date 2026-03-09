@@ -1,8 +1,23 @@
+/**
+ * WidgetPalette — the sidebar panel in the screen designer that lists all
+ * available widget types, grouped by category. Clicking a widget adds it to
+ * the canvas at a default position and size.
+ *
+ * Supports a collapsed mode that shows only icons (saving screen space) and
+ * an expanded mode that shows icons with labels.
+ *
+ * The actual widget type definitions (icons, default sizes, categories) live
+ * in widgetTypes.ts — this file handles the UI for browsing and selecting them.
+ */
 import { WIDGET_TYPES } from './widgetTypes';
 import type { WidgetTypeInfo } from './widgetTypes';
 export type { WidgetTypeInfo };
 export { WIDGET_TYPES };
 
+// Groups widgets into sections for organization in the palette.
+// Display = read-only visualizations (gauges, indicators, labels)
+// Input = interactive controls (toggles, buttons, inputs)
+// Layout = structural elements (containers)
 const CATEGORIES = [
   { key: 'display' as const, label: 'Display' },
   { key: 'input' as const, label: 'Input' },
@@ -16,6 +31,8 @@ interface Props {
 }
 
 export function WidgetPalette({ onAddWidget, collapsed, onToggleCollapse }: Props) {
+  // Collapsed mode: shows only icons to save screen space when the designer
+  // doesn't need the full palette. Each icon is a clickable button with a tooltip.
   if (collapsed) {
     return (
       <div className="w-12 bg-slate-900 border-r border-slate-700 flex flex-col items-center py-2 gap-1">
