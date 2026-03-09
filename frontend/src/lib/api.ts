@@ -351,6 +351,30 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  // System Update
+  getSystemInfo: () =>
+    request<{ app_version: string; platform: string; python_version: string; install_path: string; database_path: string; uptime_seconds: number | null }>('/system/info'),
+  validateUpdatePackage: async (file: File): Promise<{ valid: boolean; has_backend: boolean; has_frontend: boolean; has_wheels: boolean; has_windows_wheels: boolean; file_count: number; package_size_mb: number; error: string | null }> => {
+    const form = new FormData();
+    form.append('file', file);
+    const token = localStorage.getItem('hmi_token');
+    const headers: HeadersInit = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${BASE}/system/update/validate`, { method: 'POST', headers, body: form });
+    if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.detail || `HTTP ${res.status}`); }
+    return res.json();
+  },
+  applyUpdatePackage: async (file: File): Promise<{ success: boolean; message: string; updated_backend: boolean; updated_frontend: boolean; updated_dependencies: boolean; restart_scheduled: boolean }> => {
+    const form = new FormData();
+    form.append('file', file);
+    const token = localStorage.getItem('hmi_token');
+    const headers: HeadersInit = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${BASE}/system/update/apply`, { method: 'POST', headers, body: form });
+    if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.detail || `HTTP ${res.status}`); }
+    return res.json();
+  },
+
   // Health
   health: () => request<Record<string, unknown>>('/health'),
 };

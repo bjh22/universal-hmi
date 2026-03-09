@@ -538,6 +538,299 @@ For production deployments, make sure to:
 3. Use a persistent database (PostgreSQL recommended for multi-user production).
 4. Place behind a reverse proxy with HTTPS.
 
+---
+
+## Deployment to Panel PCs
+
+The project includes a `deploy.sh` script that packages the entire HMI — backend, frontend, and all Python dependencies — into a self-contained archive for offline installation on industrial panel PCs. No internet connection is required on the target machine.
+
+### Prerequisites (Build Machine)
+
+The packaging step runs on your **development machine** (Linux or macOS with internet access):
+
+| Requirement | Purpose |
+|-------------|---------|
+| Python 3.10+ | Downloads pip wheels for the target |
+| Node.js 18+ | Builds the frontend |
+| `pip` | Downloads offline wheel packages |
+| `zip` (optional) | Creates `.zip` archive for Windows targets |
+
+### Prerequisites (Target Panel PC)
+
+| Platform | Requirement |
+|----------|-------------|
+| **Linux** | Python 3.11+ installed (`sudo apt install python3 python3-venv`) |
+| **Windows** | Python 3.11+ installed and on PATH ([python.org](https://www.python.org/downloads/)) |
+
+No Node.js, npm, or internet connection is needed on the target — the frontend is pre-built and all Python packages are bundled as wheels.
+
+### Step 1: Create the Deployment Package
+
+On your development machine:
+
+```bash
+# Linux target only
+./deploy.sh
+
+# Linux + Windows targets
+./deploy.sh --windows
+```
+
+This performs the following steps automatically:
+1. Builds the frontend with `npm run build` (TypeScript check + Vite production build)
+2. Copies the backend source and built frontend into a release directory
+3. Downloads all Python dependency wheels for offline installation
+4. Downloads Windows-specific wheels (when `--windows` is specified)
+5. Generates platform-specific install scripts (`install.sh` and `install.bat`)
+6. Creates deployment archives in `dist/`:
+   - `dist/hmi-<timestamp>.tar.gz` — Linux deployment package (always created)
+   - `dist/hmi-<timestamp>-windows.zip` — Windows deployment package (when `--windows` is used)
+
+### Step 2: Deploy to the Target
+
+#### Linux Panel PC
+
+```bash
+# 1. Copy the archive to the panel PC (USB drive, SCP, network share, etc.)
+scp dist/hmi-*.tar.gz user@panel-pc:/tmp/
+
+# 2. On the panel PC, extract the archive
+tar -xzf /tmp/hmi-*.tar.gz
+
+# 3. Run the installer (installs to /opt/hmi by default)
+cd hmi-release
+sudo ./install.sh
+
+# Or specify a custom install location
+sudo ./install.sh /home/hmi/app
+```
+
+The Linux installer:
+- Verifies Python 3 is available
+- Creates a Python virtual environment at the install location
+- Installs all dependencies from bundled wheels (fully offline)
+- Copies the application files and built frontend
+- Creates a `.env` file with a generated `HMI_SECRET_KEY`
+- Creates a **systemd service** (`hmi.service`) for auto-start on boot
+- Seeds the database with default users and demo tags
+- Creates convenience scripts (`start.sh`, `seed.sh`)
+
+**After installation:**
+
+```bash
+# Start as a systemd service (auto-starts on boot)
+sudo systemctl enable --now hmi
+
+# Or start manually
+/opt/hmi/start.sh
+
+# Re-seed the database
+/opt/hmi/seed.sh
+
+# View logs
+journalctl -u hmi -f
+
+# Stop the service
+sudo systemctl stop hmi
+```
+
+#### Windows Panel PC
+
+1. Copy `dist/hmi-<timestamp>-windows.zip` to the panel PC (USB drive, network share, etc.)
+2. Extract the archive (right-click > "Extract All" or use 7-Zip)
+3. Open **Command Prompt as Administrator** in the `hmi-release` folder
+4. Run the installer:
+
+```cmd
+install.bat
+
+REM Or specify a custom install location
+install.bat D:\hmi
+```
+
+The Windows installer:
+- Verifies Python is available on PATH
+- Creates a Python virtual environment at the install location (default: `C:\hmi`)
+- Installs all dependencies from bundled wheels (fully offline, uses Windows-specific wheels when available)
+- Copies the application files and built frontend
+- Creates a `.env` file with a generated `HMI_SECRET_KEY`
+- Configures a **Windows Firewall** rule to allow incoming connections on port 8080
+- Seeds the database with default users and demo tags
+- Creates convenience scripts (`start.bat`, `seed.bat`)
+
+**After installation:**
+
+```cmd
+REM Start manually
+C:\hmi\start.bat
+
+REM Re-seed the database
+C:\hmi\seed.bat
+```
+
+**Running as a Windows Service (recommended for production):**
+
+The HMI should run as a service so it starts automatically on boot and survives user logoff. Use [NSSM](https://nssm.cc/) (Non-Sucking Service Manager):
+
+```cmd
+REM Install NSSM, then register the service:
+nssm install HMI_Server "C:\hmi\venv\Scripts\python.exe" run.py
+nssm set HMI_Server AppDirectory "C:\hmi"
+nssm set HMI_Server AppEnvironmentExtra "PATH=C:\hmi\venv\Scripts;%PATH%"
+nssm start HMI_Server
+
+REM Or use Task Scheduler to run start.bat at logon
+```
+
+### Post-Deployment Verification
+
+After installation on either platform, verify the deployment:
+
+1. **Open a browser** on the panel PC and navigate to `http://localhost:8080`
+2. **Log in** with the default credentials: username `admin`, password `admin`
+3. **Check the WebSocket** — the "Connected" indicator in the header should show green
+4. **Verify tag data** — navigate to the Dashboard and confirm simulated tag values are updating
+
+If accessing from another machine on the network, use the panel PC's IP address (e.g., `http://192.168.1.100:8080`).
+
+### Updating an Existing Installation
+
+Updates can be applied **directly from the HMI web interface** or via the command line. Both methods are designed for safe in-place upgrades — application code and frontend assets are replaced while **all operational data is preserved**.
+
+#### What Is Preserved During Updates
+
+| Preserved (never overwritten) | Replaced (updated) |
+|-------------------------------|---------------------|
+| `.env` (configuration & secret key) | `app/` (backend source code) |
+| `data/hmi.db` (database: trends, jobs, screens, alarms, users, audit trail, production runs) | `static/` (frontend build) |
+| `venv/` (updated only if new wheels bundled) | `requirements.txt` |
+| systemd service / NSSM config | `run.py`, `start.*`, `seed.*` |
+
+The SQLite database contains all your operational data — trend history, job/recipe definitions, screen layouts, alarm history, user accounts, audit logs, and production records. It is stored in the `data/` subdirectory and is **never overwritten or deleted** during an update.
+
+#### Method 1: In-HMI Update (Recommended)
+
+The HMI includes a built-in **System Update** feature in the Settings page. This allows engineers and designers to apply updates directly from the running HMI — no command line, SSH, or terminal access required.
+
+1. Build a deployment package on your development machine (`./deploy.sh` or `./deploy.sh --windows`)
+2. Copy the `.tar.gz` or `.zip` file to the panel PC (USB drive, network share, or any local folder)
+3. In the HMI, navigate to **Settings** > **System Update**
+4. Click **Select Update Package** and browse to the deployment archive
+5. The package is automatically **validated** — the UI shows what's included (backend, frontend, wheels) and confirms the package structure is correct
+6. Review the validation results, then click **Apply Update**
+7. Confirm the update in the dialog — the system reminds you that your database, trends, jobs, and screens are preserved
+8. The update is applied and the **system restarts automatically**
+9. The page reloads when the server is back online (typically within a few seconds)
+
+The update is recorded in the **Audit Trail** with the filename, size, and what was updated.
+
+> **Note:** The System Update tab also displays current system information (version, platform, uptime, install path) so you can verify what version is running.
+
+#### Method 2: Command-Line Update
+
+For headless deployments or when the HMI is not accessible, updates can be applied via the command line.
+
+**Linux Panel PC:**
+
+```bash
+# 1. Mount USB drive (if applicable)
+sudo mount /dev/sdb1 /mnt/usb
+
+# 2. Extract the update package to a temporary location
+tar -xzf /mnt/usb/hmi-*.tar.gz -C /tmp/
+
+# 3. Stop the running service
+sudo systemctl stop hmi
+
+# 4. Run the installer (same command as initial install)
+cd /tmp/hmi-release
+sudo ./install.sh          # uses existing /opt/hmi install path
+
+# 5. Restart the service
+sudo systemctl start hmi
+
+# 6. Unmount USB
+sudo umount /mnt/usb
+```
+
+**Windows Panel PC:**
+
+1. Insert the USB drive or copy the `.zip` to a local folder
+2. Extract the archive (right-click > "Extract All")
+3. Stop the HMI:
+   - If running as a service: `nssm stop HMI_Server`
+   - If running manually: close the `start.bat` window
+4. Open **Command Prompt as Administrator** in the extracted `hmi-release` folder
+5. Run the installer:
+
+```cmd
+install.bat
+REM Uses existing C:\hmi install path by default
+```
+
+6. Restart:
+   - Service: `nssm start HMI_Server`
+   - Manual: `C:\hmi\start.bat`
+
+#### Verifying the Update
+
+After updating (via either method), verify the new version is running:
+
+1. Open `http://localhost:8080` in a browser
+2. Log in and confirm the application loads correctly
+3. Go to **Settings** > **System Update** to confirm the reported version
+4. Check that existing screens, trend data, jobs, and alarms are intact
+5. Verify the WebSocket "Connected" indicator is green
+
+#### Rollback
+
+If an update causes issues, you can restore the previous version:
+
+1. Stop the service (or use the in-HMI update to apply the previous package)
+2. Re-run the installer using the **previous** deployment package (keep old archives as backups)
+3. Restart the service — the database and configuration are untouched by both the update and the rollback
+
+### Production Configuration
+
+For production panel PC deployments, review these settings in the `.env` file at the install location:
+
+| Variable | Recommendation |
+|----------|----------------|
+| `HMI_SECRET_KEY` | Auto-generated during install — keep the generated value |
+| `HMI_DEBUG` | Set to `false` (default) |
+| `HMI_HOST` | `0.0.0.0` to accept connections from any network interface |
+| `HMI_PORT` | `8080` (default) — change if needed, update firewall rules accordingly |
+| `HMI_ACCESS_TOKEN_EXPIRE_MINUTES` | `480` (8 hours) — adjust to match shift length |
+| `HMI_WS_UPDATE_INTERVAL_MS` | `500` — lower for faster updates, higher to reduce CPU usage |
+| `HMI_TREND_RETENTION_DAYS` | `90` — increase for longer history, monitor disk usage |
+
+### Deployment Directory Structure
+
+After installation, the target machine will have:
+
+```
+/opt/hmi/                          # Linux (or C:\hmi on Windows)
+├── venv/                          # Python virtual environment
+├── app/                           # Backend application
+│   ├── api/                       # Route handlers
+│   ├── core/                      # Config, database, security
+│   ├── drivers/                   # PLC protocol drivers
+│   ├── models/                    # Database models
+│   ├── services/                  # Business logic
+│   ├── main.py                    # FastAPI entry point
+│   └── seed.py                    # Database seeder
+├── static/                        # Built frontend (served by FastAPI)
+│   ├── assets/                    # JS, CSS bundles
+│   └── index.html                 # SPA entry point
+├── data/
+│   └── hmi.db                     # SQLite database
+├── run.py                         # Server entry point
+├── requirements.txt               # Python dependencies list
+├── .env                           # Environment configuration
+├── start.sh (or start.bat)        # Manual start script
+└── seed.sh (or seed.bat)          # Database seed script
+```
+
 ## Project Structure
 
 ```
