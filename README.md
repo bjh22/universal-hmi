@@ -695,17 +695,79 @@ If accessing from another machine on the network, use the panel PC's IP address 
 
 ### Updating an Existing Installation
 
-To deploy a new version to a panel PC that already has the HMI installed:
+Updates can be applied by loading a deployment package from a **USB drive**, **network share**, or **any local folder** on the target. The installer is designed for safe in-place upgrades — it replaces application code and frontend assets while **preserving all operational data**.
 
-1. Build a new deployment package on your development machine (`./deploy.sh` or `./deploy.sh --windows`)
-2. Stop the running service on the target:
-   - Linux: `sudo systemctl stop hmi`
-   - Windows: `nssm stop HMI_Server` or close the running `start.bat` window
-3. Copy and extract the new archive to the target
-4. Re-run the installer — it will overwrite application files but **preserve the existing `.env` and database**
-5. Restart the service:
-   - Linux: `sudo systemctl start hmi`
-   - Windows: `nssm start HMI_Server` or run `start.bat`
+#### What Is Preserved During Updates
+
+| Preserved (never overwritten) | Replaced (updated) |
+|-------------------------------|---------------------|
+| `.env` (configuration & secret key) | `app/` (backend source code) |
+| `data/hmi.db` (database: trends, jobs, screens, alarms, users, audit trail, production runs) | `static/` (frontend build) |
+| `venv/` (rebuilt with new wheels) | `requirements.txt` |
+| systemd service / NSSM config | `run.py`, `start.*`, `seed.*` |
+
+The SQLite database contains all your operational data — trend history, job/recipe definitions, screen layouts, alarm history, user accounts, audit logs, and production records. It is stored in the `data/` subdirectory and is **never overwritten or deleted** by the installer.
+
+#### Update Procedure — USB Drive or Local Folder
+
+**Linux Panel PC:**
+
+```bash
+# 1. Mount USB drive (if applicable)
+sudo mount /dev/sdb1 /mnt/usb
+
+# 2. Extract the update package to a temporary location
+tar -xzf /mnt/usb/hmi-*.tar.gz -C /tmp/
+
+# 3. Stop the running service
+sudo systemctl stop hmi
+
+# 4. Run the installer (same command as initial install)
+cd /tmp/hmi-release
+sudo ./install.sh          # uses existing /opt/hmi install path
+
+# 5. Restart the service
+sudo systemctl start hmi
+
+# 6. Unmount USB
+sudo umount /mnt/usb
+```
+
+**Windows Panel PC:**
+
+1. Insert the USB drive or copy the `.zip` to a local folder
+2. Extract the archive (right-click > "Extract All")
+3. Stop the HMI:
+   - If running as a service: `nssm stop HMI_Server`
+   - If running manually: close the `start.bat` window
+4. Open **Command Prompt as Administrator** in the extracted `hmi-release` folder
+5. Run the installer:
+
+```cmd
+install.bat
+REM Uses existing C:\hmi install path by default
+```
+
+6. Restart:
+   - Service: `nssm start HMI_Server`
+   - Manual: `C:\hmi\start.bat`
+
+#### Verifying the Update
+
+After updating, verify the new version is running:
+
+1. Open `http://localhost:8080` in a browser
+2. Log in and confirm the application loads correctly
+3. Check that existing screens, trend data, jobs, and alarms are intact
+4. Verify the WebSocket "Connected" indicator is green
+
+#### Rollback
+
+If an update causes issues, you can restore the previous version:
+
+1. Stop the service
+2. Re-run the installer using the **previous** deployment package (keep old archives as backups)
+3. Restart the service — the database and configuration are untouched by both the update and the rollback
 
 ### Production Configuration
 
