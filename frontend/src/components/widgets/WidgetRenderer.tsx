@@ -30,6 +30,7 @@ import { ControlGroupWidget, type ControlItem } from './ControlGroupWidget';
 import { ContainerWidget } from './ContainerWidget';
 import { LightIndicator } from './LightIndicator';
 import { AutoFillWidget } from './AutoFillWidget';
+import { CognexViewerWidget } from './CognexViewerWidget';
 
 // TypeScript interface defining the data this component receives from its parent.
 // `Record<string, TagValue>` is a dictionary type — keys are tag name strings,
@@ -59,6 +60,11 @@ function getWidgetTagNames(widget: Widget): string[] {
   if (typeof p.performanceTag === 'string' && p.performanceTag) tags.push(p.performanceTag);
   if (typeof p.qualityTag === 'string' && p.qualityTag) tags.push(p.qualityTag);
   if (typeof p.oeeTag === 'string' && p.oeeTag) tags.push(p.oeeTag);
+  // Cognex viewer — prefix-based tags
+  if (typeof p.tagPrefix === 'string' && p.tagPrefix) {
+    const pfx = p.tagPrefix;
+    tags.push(`${pfx}.status`, `${pfx}.last_result`, `${pfx}.last_result_time`, `${pfx}.total_reads`);
+  }
   // Multi-value / control_group
   if (Array.isArray(p.tags)) {
     for (const t of p.tags) if (t && typeof t.tag === 'string') tags.push(t.tag);
@@ -116,6 +122,8 @@ export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, 
       return <LightIndicator title={p.title as string} tag={p.tag as string} writeTag={p.writeTag as string} onColor={p.onColor as string} offColor={p.offColor as string} size={p.size as 'small' | 'medium' | 'large'} tagValues={tagValues} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
     case 'control_group':
       return <ControlGroupWidget title={p.title as string} controls={p.controls as ControlItem[] || []} tagValues={tagValues} columns={p.columns as number} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
+    case 'cognex_viewer':
+      return <CognexViewerWidget title={p.title as string} tagPrefix={p.tagPrefix as string || 'dataman'} showImage={p.showImage as boolean} showTrigger={p.showTrigger as boolean} tagValues={tagValues} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
     case 'container':
       return <ContainerWidget title={p.title as string} description={p.description as string} titleStyle={p.titleStyle as undefined} chrome={chrome} />;
     default:

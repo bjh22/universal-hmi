@@ -349,7 +349,7 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
         </Section>
 
         {/* Tag Binding */}
-        {widget.type !== 'text_label' && widget.type !== 'alarm_summary' && widget.type !== 'multi_value' && widget.type !== 'control_group' && widget.type !== 'auto_fill' && widget.type !== 'container' && (
+        {widget.type !== 'text_label' && widget.type !== 'alarm_summary' && widget.type !== 'multi_value' && widget.type !== 'control_group' && widget.type !== 'auto_fill' && widget.type !== 'container' && widget.type !== 'cognex_viewer' && (
           <Section title="Tag Binding">
             <Field label="Tag Name">
               <TagPicker value={p.tag || ''} onChange={v => setProp('tag', v)} />
@@ -496,6 +496,31 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
                 <option value="medium">Medium</option>
                 <option value="large">Large</option>
               </select>
+            </Field>
+          </Section>
+        )}
+
+        {widget.type === 'cognex_viewer' && (
+          <Section title="Cognex DataMan">
+            <Field label="Tag Prefix">
+              <input type="text" value={p.tagPrefix || 'dataman'} onChange={e => setProp('tagPrefix', e.target.value)}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+                placeholder="dataman" />
+            </Field>
+            <p className="text-[10px] text-slate-500 -mt-1">Tags: prefix.status, prefix.last_result, etc.</p>
+            <Field label="Show Image">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={p.showImage !== false} onChange={e => setProp('showImage', e.target.checked)}
+                  className="accent-blue-500" />
+                <span className="text-xs text-slate-300">Display captured image</span>
+              </label>
+            </Field>
+            <Field label="Show Trigger">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={!!p.showTrigger} onChange={e => setProp('showTrigger', e.target.checked)}
+                  className="accent-blue-500" />
+                <span className="text-xs text-slate-300">Manual trigger button</span>
+              </label>
             </Field>
           </Section>
         )}

@@ -1,6 +1,6 @@
 import {
   Activity, Gauge, Hash, ToggleLeft, MousePointerClick,
-  SlidersHorizontal, Type, FileText, Bell, ChevronDown, BarChart3, LayoutGrid, Square, Circle, Sparkles,
+  SlidersHorizontal, Type, FileText, Bell, ChevronDown, BarChart3, LayoutGrid, Square, Circle, Sparkles, ScanBarcode,
 } from 'lucide-react';
 
 export interface WidgetTypeInfo {
@@ -80,6 +80,11 @@ export const WIDGET_TYPES: WidgetTypeInfo[] = [
     type: 'light_indicator', label: 'Light Indicator', icon: Circle, category: 'display',
     defaultW: 3, defaultH: 2, defaultAbsW: 200, defaultAbsH: 60,
     defaultProps: { title: 'Indicator', tag: '', onColor: '#22c55e', offColor: '#6b7280', size: 'medium' },
+  },
+  {
+    type: 'cognex_viewer', label: 'Cognex Viewer', icon: ScanBarcode, category: 'display',
+    defaultW: 5, defaultH: 5, defaultAbsW: 360, defaultAbsH: 400,
+    defaultProps: { title: 'Cognex', tagPrefix: 'dataman', showImage: true, showTrigger: false },
   },
   {
     type: 'text_label', label: 'Text Label', icon: Type, category: 'layout',
