@@ -695,7 +695,7 @@ If accessing from another machine on the network, use the panel PC's IP address 
 
 ### Updating an Existing Installation
 
-Updates can be applied by loading a deployment package from a **USB drive**, **network share**, or **any local folder** on the target. The installer is designed for safe in-place upgrades — it replaces application code and frontend assets while **preserving all operational data**.
+Updates can be applied **directly from the HMI web interface** or via the command line. Both methods are designed for safe in-place upgrades — application code and frontend assets are replaced while **all operational data is preserved**.
 
 #### What Is Preserved During Updates
 
@@ -703,12 +703,32 @@ Updates can be applied by loading a deployment package from a **USB drive**, **n
 |-------------------------------|---------------------|
 | `.env` (configuration & secret key) | `app/` (backend source code) |
 | `data/hmi.db` (database: trends, jobs, screens, alarms, users, audit trail, production runs) | `static/` (frontend build) |
-| `venv/` (rebuilt with new wheels) | `requirements.txt` |
+| `venv/` (updated only if new wheels bundled) | `requirements.txt` |
 | systemd service / NSSM config | `run.py`, `start.*`, `seed.*` |
 
-The SQLite database contains all your operational data — trend history, job/recipe definitions, screen layouts, alarm history, user accounts, audit logs, and production records. It is stored in the `data/` subdirectory and is **never overwritten or deleted** by the installer.
+The SQLite database contains all your operational data — trend history, job/recipe definitions, screen layouts, alarm history, user accounts, audit logs, and production records. It is stored in the `data/` subdirectory and is **never overwritten or deleted** during an update.
 
-#### Update Procedure — USB Drive or Local Folder
+#### Method 1: In-HMI Update (Recommended)
+
+The HMI includes a built-in **System Update** feature in the Settings page. This allows engineers and designers to apply updates directly from the running HMI — no command line, SSH, or terminal access required.
+
+1. Build a deployment package on your development machine (`./deploy.sh` or `./deploy.sh --windows`)
+2. Copy the `.tar.gz` or `.zip` file to the panel PC (USB drive, network share, or any local folder)
+3. In the HMI, navigate to **Settings** > **System Update**
+4. Click **Select Update Package** and browse to the deployment archive
+5. The package is automatically **validated** — the UI shows what's included (backend, frontend, wheels) and confirms the package structure is correct
+6. Review the validation results, then click **Apply Update**
+7. Confirm the update in the dialog — the system reminds you that your database, trends, jobs, and screens are preserved
+8. The update is applied and the **system restarts automatically**
+9. The page reloads when the server is back online (typically within a few seconds)
+
+The update is recorded in the **Audit Trail** with the filename, size, and what was updated.
+
+> **Note:** The System Update tab also displays current system information (version, platform, uptime, install path) so you can verify what version is running.
+
+#### Method 2: Command-Line Update
+
+For headless deployments or when the HMI is not accessible, updates can be applied via the command line.
 
 **Linux Panel PC:**
 
@@ -754,18 +774,19 @@ REM Uses existing C:\hmi install path by default
 
 #### Verifying the Update
 
-After updating, verify the new version is running:
+After updating (via either method), verify the new version is running:
 
 1. Open `http://localhost:8080` in a browser
 2. Log in and confirm the application loads correctly
-3. Check that existing screens, trend data, jobs, and alarms are intact
-4. Verify the WebSocket "Connected" indicator is green
+3. Go to **Settings** > **System Update** to confirm the reported version
+4. Check that existing screens, trend data, jobs, and alarms are intact
+5. Verify the WebSocket "Connected" indicator is green
 
 #### Rollback
 
 If an update causes issues, you can restore the previous version:
 
-1. Stop the service
+1. Stop the service (or use the in-HMI update to apply the previous package)
 2. Re-run the installer using the **previous** deployment package (keep old archives as backups)
 3. Restart the service — the database and configuration are untouched by both the update and the rollback
 
