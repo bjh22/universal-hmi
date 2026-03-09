@@ -371,6 +371,14 @@ class TagEngine:
 
             await asyncio.sleep(0.5)
 
+    def unregister_tag(self, tag_name: str):
+        """Remove a tag from the in-memory store (e.g. after deletion via API)."""
+        self._tags.pop(tag_name, None)
+        self._values.pop(tag_name, None)
+        self._sim_configs.pop(tag_name, None)
+        self._poll_tags = None  # invalidate cached poll list
+        self._invalidate_snapshot()
+
     def _compute_sim_value(
         self, behavior: SimulationBehavior, config: dict, elapsed: float, current: TagValue
     ):
@@ -381,12 +389,16 @@ class TagEngine:
                 min_v = config.get("min", 0)
                 max_v = config.get("max", 100)
                 period = config.get("period", 60)
+                if not period:
+                    return min_v
                 pos = (elapsed % period) / period
                 return min_v + (max_v - min_v) * pos
             case SimulationBehavior.SINE:
                 min_v = config.get("min", 0)
                 max_v = config.get("max", 100)
                 period = config.get("period", 60)
+                if not period:
+                    return (min_v + max_v) / 2
                 mid = (min_v + max_v) / 2
                 amp = (max_v - min_v) / 2
                 return mid + amp * math.sin(2 * math.pi * elapsed / period)
@@ -396,10 +408,16 @@ class TagEngine:
                 return random.uniform(min_v, max_v)
             case SimulationBehavior.TOGGLE:
                 period = config.get("period", 10)
+                if not period:
+                    return current.value
                 return (int(elapsed / period) % 2) == 0
             case SimulationBehavior.ENUM_CYCLE:
                 values = config.get("values", [0, 1, 2])
+                if not values:
+                    return current.value
                 period = config.get("period", 10)
+                if not period:
+                    return values[0]
                 idx = int(elapsed / period) % len(values)
                 return values[idx]
             case _:

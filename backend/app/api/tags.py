@@ -161,7 +161,9 @@ async def delete_tag(
         raise HTTPException(status_code=404, detail="Tag not found")
     had_alarm = tag.alarm_enabled
     had_trending = tag.trending_enabled
+    tag_name = tag.name
     await session.delete(tag)
+    tag_engine.unregister_tag(tag_name)
     if had_alarm or had_trending:
         await session.commit()
     if had_alarm:
@@ -997,6 +999,7 @@ async def bulk_delete_tags(
     tags_to_delete = result.scalars().all()
     for tag in tags_to_delete:
         await session.delete(tag)
+        tag_engine.unregister_tag(tag.name)
     await session.flush()
     return {"deleted": len(tags_to_delete)}
 
