@@ -20,7 +20,7 @@ export function CounterWidget({ title, tag, tagValues, titleStyle, valueStyle, c
   return (
     <div className={`${getContainerClasses(chrome)} h-full flex flex-col justify-center items-center`}>
       {shouldShowTitle(chrome) && <div className={getTitleClasses(chrome)} style={textStyleToCSS(titleStyle)}>{title}</div>}
-      <div className="text-4xl font-bold text-slate-100" style={textStyleToCSS(valueStyle)}>{String(value)}</div>
+      <div className="text-5xl font-bold text-slate-100" style={textStyleToCSS(valueStyle)}>{String(value)}</div>
     </div>
   );
 }
