@@ -51,6 +51,73 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+// ─── Inline editable live tag value ───
+function InlineTagValue({ tag, tagValues, canEdit }: { tag: Tag; tagValues: Record<string, TagValue>; canEdit: boolean }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const tv = tagValues[tag.name];
+  const value = tv?.value;
+
+  const display = (() => {
+    if (value == null) return '—';
+    if (tag.data_type === 'bool') return Boolean(value) ? 'ON' : 'OFF';
+    if (tag.enum_mapping) {
+      let em: Record<string, string> = {};
+      try { em = typeof tag.enum_mapping === 'string' ? JSON.parse(tag.enum_mapping) : tag.enum_mapping; } catch { /* ignore */ }
+      const mapped = em[String(value)];
+      if (mapped) return `${mapped} (${value})`;
+    }
+    return String(value);
+  })();
+
+  const startEdit = () => {
+    if (!canEdit) return;
+    setDraft(value != null ? String(value) : '');
+    setEditing(true);
+  };
+
+  const submit = async () => {
+    setEditing(false);
+    let parsed: unknown = draft;
+    if (tag.data_type === 'bool') parsed = draft === 'true' || draft === '1' || draft === 'ON';
+    else if (tag.data_type === 'int' || tag.data_type === 'float') {
+      const n = Number(draft);
+      if (!isNaN(n)) parsed = n;
+    }
+    try { await api.writeTag(tag.name, parsed); } catch { /* ignore */ }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') submit();
+    if (e.key === 'Escape') setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={submit}
+        onKeyDown={handleKeyDown}
+        className="w-20 bg-[var(--hmi-bg-input)] border border-blue-500 rounded px-1.5 py-0.5 text-xs text-white outline-none"
+      />
+    );
+  }
+
+  return (
+    <span
+      onClick={canEdit ? startEdit : undefined}
+      className={`text-xs tabular-nums ${canEdit ? 'cursor-pointer hover:text-blue-400' : ''} ${
+        tag.data_type === 'bool' ? (Boolean(value) ? 'text-green-400' : 'text-[var(--hmi-text-muted)]') : 'text-[var(--hmi-text-secondary)]'
+      }`}
+      title={canEdit ? 'Click to edit' : undefined}
+    >
+      {display}
+    </span>
+  );
+}
+
 // ─── Generic Delete Confirmation ───
 function DeleteConfirmDialog({ title, name, onConfirm, onCancel }: {
   title: string;
@@ -2461,6 +2528,7 @@ export function SettingsPage({ user, tagValues }: Props) {
                     </th>
                   )}
                   <th className="text-left px-4 py-3 font-medium">Name</th>
+                  <th className="text-left px-4 py-3 font-medium">Value</th>
                   <th className="text-left px-4 py-3 font-medium">Labels</th>
                   <th className="text-left px-4 py-3 font-medium">Source</th>
                   <th className="text-left px-4 py-3 font-medium">Type</th>
@@ -2486,8 +2554,11 @@ export function SettingsPage({ user, tagValues }: Props) {
                       </td>
                     )}
                     <td className="px-4 py-2">
-                      <div className="text-[var(--hmi-text-primary)]">{tag.display_name || tag.name}</div>
-                      {tag.display_name && <div className="text-[10px] text-[var(--hmi-text-muted)] font-mono truncate max-w-48">{tag.name}</div>}
+                      <div className="text-[var(--hmi-text-primary)] font-mono text-xs">{tag.name}</div>
+                      {tag.display_name && <div className="text-[10px] text-[var(--hmi-text-muted)] truncate max-w-48">{tag.display_name}</div>}
+                    </td>
+                    <td className="px-4 py-2">
+                      <InlineTagValue tag={tag} tagValues={tagValues} canEdit={canManage && tag.access_mode !== 'read'} />
                     </td>
                     <td className="px-4 py-2">
                       <div className="flex flex-wrap gap-1">
@@ -2525,7 +2596,7 @@ export function SettingsPage({ user, tagValues }: Props) {
                   </tr>
                 ))}
                 {filteredTags.length === 0 && (
-                  <tr><td colSpan={canManage ? 11 : 10} className="px-4 py-8 text-center text-[var(--hmi-text-muted)]">No tags found</td></tr>
+                  <tr><td colSpan={canManage ? 12 : 11} className="px-4 py-8 text-center text-[var(--hmi-text-muted)]">No tags found</td></tr>
                 )}
               </tbody>
             </table>

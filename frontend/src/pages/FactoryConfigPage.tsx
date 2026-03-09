@@ -215,6 +215,11 @@ export function FactoryConfigPage({ user, tagValues }: Props) {
 
                       if (editMode) {
                         const editVal = editValues[tag.name];
+                        let enumMap: Record<string, string> | null = null;
+                        if (tag.enum_mapping) {
+                          try { enumMap = typeof tag.enum_mapping === 'string' ? JSON.parse(tag.enum_mapping) : tag.enum_mapping; } catch { /* ignore */ }
+                        }
+                        const hasEnum = enumMap && Object.keys(enumMap).length > 0;
                         return (
                           <tr key={tag.name} className="border-b border-slate-700/50 last:border-b-0">
                             <td className="px-4 py-3 text-slate-300 text-sm">
@@ -238,6 +243,17 @@ export function FactoryConfigPage({ user, tagValues }: Props) {
                                     {Boolean(editVal) ? 'ON' : 'OFF'}
                                   </span>
                                 </button>
+                              ) : hasEnum ? (
+                                <select
+                                  value={String(editVal ?? '')}
+                                  onChange={e => updateValue(tag.name, parseTypedValue(e.target.value))}
+                                  className="min-h-[44px] min-w-[120px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white hover:border-blue-500 transition-all"
+                                >
+                                  <option value="">Select…</option>
+                                  {Object.entries(enumMap!).map(([k, label]) => (
+                                    <option key={k} value={k}>{label}</option>
+                                  ))}
+                                </select>
                               ) : (
                                 <button
                                   type="button"

@@ -53,6 +53,7 @@ function getWidgetTagNames(widget: Widget): string[] {
   // Single-tag widgets
   if (typeof p.tag === 'string' && p.tag) tags.push(p.tag);
   if (typeof p.writeTag === 'string' && p.writeTag) tags.push(p.writeTag);
+  if (typeof p.targetTag === 'string' && p.targetTag) tags.push(p.targetTag);
   // OEE widget
   if (typeof p.availabilityTag === 'string' && p.availabilityTag) tags.push(p.availabilityTag);
   if (typeof p.performanceTag === 'string' && p.performanceTag) tags.push(p.performanceTag);
@@ -82,7 +83,7 @@ export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, 
     case 'status_indicator':
       return <StatusIndicator title={p.title as string} tag={p.tag as string} tagValues={tagValues} mapping={p.mapping as Record<string, { label: string; color: string }>} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
     case 'gauge':
-      return <GaugeWidget title={p.title as string} tag={p.tag as string} tagValues={tagValues} min={p.min as number} max={p.max as number} units={p.units as string} warning={p.warning as number} critical={p.critical as number} decimalPlaces={p.decimalPlaces as number} displayMode={p.displayMode as GaugeDisplayMode} valueFontSize={p.valueFontSize as number} barThickness={p.barThickness as number} gaugeSize={p.gaugeSize as number} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
+      return <GaugeWidget title={p.title as string} tag={p.tag as string} tagValues={tagValues} min={p.min as number} max={p.max as number} units={p.units as string} warning={p.warning as number} critical={p.critical as number} targetTag={p.targetTag as string} targetValue={p.targetValue as number} decimalPlaces={p.decimalPlaces as number} displayMode={p.displayMode as GaugeDisplayMode} valueFontSize={p.valueFontSize as number} barThickness={p.barThickness as number} gaugeSize={p.gaugeSize as number} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
     case 'counter':
       return <CounterWidget title={p.title as string} tag={p.tag as string} tagValues={tagValues} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
     case 'toggle':

@@ -435,6 +435,20 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
           </Section>
         )}
 
+        {widget.type === 'gauge' && (
+          <Section title="Target">
+            <Field label="Target Tag">
+              <TagPicker value={p.targetTag as string || ''} onChange={v => setProp('targetTag', v || undefined)} />
+            </Field>
+            <Field label="Target Value">
+              <input type="number" value={p.targetValue ?? ''} onChange={e => setProp('targetValue', e.target.value ? Number(e.target.value) : undefined)}
+                placeholder="Fixed target (if no tag)"
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
+            </Field>
+            <p className="text-[10px] text-slate-500">Colors shift green/amber/red based on distance from target</p>
+          </Section>
+        )}
+
         {widget.type === 'command_button' && (
           <Section title="Button">
             <Field label="Color">
