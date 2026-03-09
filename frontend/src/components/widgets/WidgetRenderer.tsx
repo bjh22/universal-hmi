@@ -19,7 +19,7 @@ import { StatusIndicator } from './StatusIndicator';
 import { GaugeWidget, type GaugeDisplayMode } from './GaugeWidget';
 import { CounterWidget } from './CounterWidget';
 import { ToggleWidget } from './ToggleWidget';
-import { CommandButton } from './CommandButton';
+import { CommandButton, type ButtonVariant, type ButtonShape } from './CommandButton';
 import { ParameterInput } from './ParameterInput';
 import { TextLabelWidget } from './TextLabelWidget';
 import { TextValueWidget } from './TextValueWidget';
@@ -95,7 +95,7 @@ export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, 
     case 'toggle':
       return <ToggleWidget title={p.title as string} tag={p.tag as string} tagValues={tagValues} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
     case 'command_button':
-      return <CommandButton title={p.title as string} tag={p.tag as string} value={p.value} script={p.script as string} color={p.color as string} confirm={p.confirm as boolean} titleStyle={p.titleStyle as undefined} chrome={chrome} />;
+      return <CommandButton title={p.title as string} tag={p.tag as string} value={p.value} script={p.script as string} color={p.color as string} variant={p.variant as ButtonVariant} shape={p.shape as ButtonShape} icon={p.icon as string} iconPosition={p.iconPosition as 'left' | 'right'} confirm={p.confirm as boolean} titleStyle={p.titleStyle as undefined} chrome={chrome} />;
     case 'parameter_input':
       return <ParameterInput title={p.title as string} tag={p.tag as string} tagValues={tagValues} min={p.min as number} max={p.max as number} step={p.step as number} units={p.units as string} decimalPlaces={p.decimalPlaces as number} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
     case 'text_label':

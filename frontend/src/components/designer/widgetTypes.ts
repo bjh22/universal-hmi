@@ -39,7 +39,7 @@ export const WIDGET_TYPES: WidgetTypeInfo[] = [
   {
     type: 'command_button', label: 'Button', icon: MousePointerClick, category: 'input',
     defaultW: 3, defaultH: 2, defaultAbsW: 200, defaultAbsH: 60,
-    defaultProps: { title: 'Button', tag: '', value: null, color: 'blue' },
+    defaultProps: { title: 'Button', tag: '', value: null, color: 'blue', variant: 'filled', shape: 'rectangle', icon: '', iconPosition: 'left' },
   },
   {
     type: 'parameter_input', label: 'Parameter Input', icon: SlidersHorizontal, category: 'input',
