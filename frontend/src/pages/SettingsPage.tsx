@@ -1771,6 +1771,7 @@ export function SettingsPage({ user, tagValues }: Props) {
   // User create
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [newUser, setNewUser] = useState({ username: '', display_name: '', password: '', role: 'operator', login_mode: 'password' });
+  const [deleteUserTarget, setDeleteUserTarget] = useState<UserListEntry | null>(null);
 
   const canManage = ['engineer', 'designer'].includes(user?.role || '');
 
@@ -2083,6 +2084,18 @@ export function SettingsPage({ user, tagValues }: Props) {
       api.getUsers().then(setUsers).catch(() => {});
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!deleteUserTarget) return;
+    try {
+      await api.deleteUser(deleteUserTarget.id);
+      setDeleteUserTarget(null);
+      api.getUsers().then(setUsers).catch(() => {});
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+      setDeleteUserTarget(null);
     }
   };
 
@@ -2867,6 +2880,7 @@ export function SettingsPage({ user, tagValues }: Props) {
                   <th className="text-left px-4 py-3 font-medium">Display Name</th>
                   <th className="text-left px-4 py-3 font-medium">Role</th>
                   <th className="text-center px-4 py-3 font-medium">Active</th>
+                  {canManage && <th className="px-4 py-3 font-medium w-16"></th>}
                 </tr>
               </thead>
               <tbody>
@@ -2876,11 +2890,31 @@ export function SettingsPage({ user, tagValues }: Props) {
                     <td className="px-4 py-2 text-[var(--hmi-text-secondary)]">{u.display_name}</td>
                     <td className="px-4 py-2 capitalize text-[var(--hmi-text-secondary)]">{u.role}</td>
                     <td className="px-4 py-2 text-center">{u.is_active ? '\u2713' : '\u2717'}</td>
+                    {canManage && (
+                      <td className="px-4 py-2">
+                        <button
+                          onClick={() => setDeleteUserTarget(u)}
+                          disabled={u.username === user?.username}
+                          className="p-1 text-[var(--hmi-text-muted)] hover:text-red-400 disabled:opacity-30 disabled:cursor-not-allowed"
+                          title={u.username === user?.username ? 'Cannot delete yourself' : 'Delete user'}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          {deleteUserTarget && (
+            <DeleteConfirmDialog
+              title="Delete User"
+              name={deleteUserTarget.username}
+              onConfirm={handleDeleteUser}
+              onCancel={() => setDeleteUserTarget(null)}
+            />
+          )}
         </div>
       )}
 
