@@ -122,7 +122,7 @@ class OpcuaDriver(ProtocolDriver):
             return None
         try:
             root = self._client.get_objects_node()
-            prefix = await self._find_prefix(root, depth=0, max_depth=4)
+            prefix = await self._find_prefix(root, depth=0, max_depth=8)
             if prefix:
                 self._address_prefix = prefix
                 logger.info(f"Detected OPC UA address prefix for {self.name}: {prefix}")
