@@ -1,3 +1,19 @@
+/**
+ * GaugeWidget — a versatile gauge with multiple display modes:
+ *   - 'bar'      — horizontal fill bar (like a progress bar)
+ *   - 'radial'   — a dial/speedometer-style arc
+ *   - 'donut'    — a circular ring that fills up
+ *   - 'vertical' — a vertical bar that fills from bottom to top
+ *   - 'numeric'  — just the number, no graphical element
+ *
+ * All modes share the same value normalization (min/max to percentage) and
+ * threshold-based coloring (normal=blue, warning=amber, critical=red).
+ *
+ * The radial and donut modes use SVG (Scalable Vector Graphics), which is an
+ * XML-based drawing format built into browsers. SVG lets us draw arcs, circles,
+ * and text that scale cleanly to any size without pixelation. The arc paths use
+ * trigonometry (sin/cos) to calculate points along a curve.
+ */
 import type { TagValue, TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
 import { getContainerClasses, shouldShowTitle, getTitleClasses } from '../../lib/widgetChrome';
@@ -23,10 +39,14 @@ interface Props {
   chrome?: 'full' | 'compact' | 'none';
 }
 
+// Threshold-based coloring — returns the color for the gauge based on the current value.
+// If the value exceeds the critical threshold, it turns red (danger).
+// If it exceeds the warning threshold, it turns amber (caution).
+// Otherwise it stays blue (normal). Thresholds are optional — if not set, it stays blue.
 function getColor(value: number, warning?: number, critical?: number): string {
-  if (critical != null && value >= critical) return '#ef4444';
-  if (warning != null && value >= warning) return '#f59e0b';
-  return '#3b82f6';
+  if (critical != null && value >= critical) return '#ef4444'; // red
+  if (warning != null && value >= warning) return '#f59e0b';   // amber
+  return '#3b82f6';                                            // blue
 }
 
 // ─── Horizontal bar ───
@@ -214,6 +234,10 @@ export function GaugeWidget({
 }: Props) {
   const tv = tagValues[tag];
   const value = Number(tv?.value ?? 0);
+  // Normalize the value to a 0-100% range between min and max.
+  // Math.max(0, Math.min(100, ...)) clamps the result so it never goes below 0%
+  // or above 100%, which prevents visual overflow in the gauge graphics.
+  // The `|| 1` prevents division by zero if min equals max.
   const pct = Math.max(0, Math.min(100, ((value - min) / (max - min || 1)) * 100));
   const color = getColor(value, warning, critical);
 

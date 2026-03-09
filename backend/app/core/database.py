@@ -1,37 +1,79 @@
+"""
+Database connection setup using SQLAlchemy's async engine with SQLite.
+
+The "async" approach means database queries don't block other requests — while
+one request waits for a query result, the server can handle other users. This
+is essential for a web app where many clients connect simultaneously.
+"""
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
 
+# create_async_engine sets up the database connection pool. The engine manages
+# a pool of connections so each request doesn't open/close its own connection.
+# aiosqlite is the async driver that lets SQLite work with Python's asyncio.
 engine = create_async_engine(settings.database_url, echo=settings.debug)
+
+# A session factory — calling async_session() creates a new database session.
+# A session is like a "workspace": you read/write data within it, then commit
+# (save) or rollback (discard) all changes at once.
+# expire_on_commit=False keeps ORM objects usable after commit — without this,
+# accessing an attribute after commit would trigger a lazy load (which fails
+# in async mode).
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
 async def _enable_wal_mode():
-    """Enable WAL journal mode for better concurrent read/write performance."""
+    """Enable WAL (Write-Ahead Logging) for SQLite.
+
+    By default, SQLite locks the entire database during writes, blocking all
+    readers. WAL mode lets readers and writers work simultaneously — critical
+    for a web app where multiple users query data while background tasks write.
+    """
     async with engine.begin() as conn:
         await conn.execute(text("PRAGMA journal_mode=WAL"))
         await conn.execute(text("PRAGMA synchronous=NORMAL"))
 
 
+# DeclarativeBase is the parent class for all database models (User, Tag, etc.).
+# SQLAlchemy inspects its subclasses to learn which tables and columns exist,
+# enabling automatic table creation and query generation.
 class Base(DeclarativeBase):
     pass
 
 
 async def get_db() -> AsyncSession:
+    """FastAPI dependency that provides a database session to route handlers.
+
+    Used like: async def get_items(db: AsyncSession = Depends(get_db))
+
+    The `yield` pattern makes this a "dependency with cleanup" — FastAPI calls
+    it before the route handler, provides the session, then resumes this
+    function afterward to commit or rollback. This guarantees every request
+    gets a clean session and errors are handled consistently.
+    """
     async with async_session() as session:
         try:
-            yield session
-            await session.commit()
+            yield session  # Route handler runs here, using `session`
+            await session.commit()  # Success — save all changes
         except Exception:
-            await session.rollback()
+            await session.rollback()  # Error — discard all changes
             raise
 
 
 async def init_db():
+    """Create all tables on first run and apply lightweight schema migrations.
+
+    Since we're not using a full migration tool like Alembic, we handle simple
+    column additions and renames manually. This checks what columns exist and
+    adds any missing ones — safe to run repeatedly (idempotent).
+    """
     await _enable_wal_mode()
     async with engine.begin() as conn:
+        # Creates any tables that don't exist yet (based on Base subclasses)
         await conn.run_sync(Base.metadata.create_all)
         # Lightweight column migrations for SQLite (no Alembic)
         # Column renames (must run before add_column_if_missing)

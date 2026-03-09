@@ -1,3 +1,23 @@
+/**
+ * DesignCanvas — the main canvas area for the drag-and-drop screen designer.
+ *
+ * This is the interactive surface where designers place, move, and resize widgets.
+ * It handles: widget rendering in their configured positions, drag-to-move,
+ * resize handles (bottom-right corner), marquee (rubber-band) selection for
+ * selecting multiple widgets by dragging on empty space, right-click context
+ * menus, and alignment/distribution tools for multi-selection.
+ *
+ * Two layout modes are supported:
+ *   - Grid mode: uses a 12-column responsive CSS grid (like Bootstrap/Tailwind
+ *     grid), where widget positions are in column/row units. Good for layouts
+ *     that adapt to different screen sizes.
+ *   - Absolute mode: allows free pixel positioning anywhere on a fixed-size
+ *     canvas (e.g. 1920x1080). Good for precise control panel layouts that
+ *     target a specific display resolution.
+ *
+ * Mouse events use requestAnimationFrame for throttling to ensure smooth
+ * dragging even with many widgets on screen.
+ */
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { Lock } from 'lucide-react';
 import type { Widget, TagValue, AlarmData, LayoutMode, ScreenResolution } from '../../types';

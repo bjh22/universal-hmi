@@ -1,3 +1,9 @@
+"""
+CRUD (Create, Read, Update, Delete) endpoints for HMI screens.
+Screens contain widget layouts stored as JSON. Only users with the
+"designer" role can create, edit, or delete screens.
+"""
+
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -15,6 +21,9 @@ from app.services.audit_service import log_audit
 router = APIRouter(prefix="/api/screens", tags=["screens"])
 
 
+# --- Pydantic models for request validation and response serialization ---
+# ScreenCreate defines the JSON shape accepted when creating/updating a screen.
+# FastAPI validates incoming requests against this model automatically.
 class ScreenCreate(BaseModel):
     name: str
     slug: str
@@ -25,6 +34,9 @@ class ScreenCreate(BaseModel):
     sort_order: int = 0
 
 
+# ScreenOut defines the JSON shape sent back in responses.
+# from_attributes=True tells Pydantic to read data directly from SQLAlchemy
+# model attributes (e.g., screen.name) instead of requiring a dict.
 class ScreenOut(BaseModel):
     id: int
     name: str
@@ -65,6 +77,7 @@ async def get_screen_by_slug(slug: str, session: AsyncSession = Depends(get_db))
     return screen
 
 
+# Only designers can create screens — enforced by require_role(UserRole.DESIGNER)
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_screen(
     body: ScreenCreate,
@@ -82,6 +95,7 @@ async def create_screen(
     )
     session.add(screen)
     await session.flush()
+    # Record who created what and when, for compliance and troubleshooting
     await log_audit(
         session, AuditAction.SCREEN_SAVE, user=current_user.username,
         details=f"Created screen '{body.name}'",
@@ -100,7 +114,8 @@ async def update_screen(
     if not screen:
         raise HTTPException(status_code=404, detail="Screen not found")
 
-    # Save version before updating
+    # Save the current version before updating, so we can roll back if needed.
+    # This creates a version history entry — like a simple "undo" at the database level.
     version = ScreenVersion(
         screen_id=screen.id,
         version=screen.version,
@@ -118,6 +133,7 @@ async def update_screen(
     screen.sort_order = body.sort_order
     screen.version += 1
     await session.flush()
+    # Audit log records who changed what and when, for compliance and troubleshooting
     await log_audit(
         session, AuditAction.SCREEN_SAVE, user=current_user.username,
         details=f"Updated screen '{body.name}' to v{screen.version}",
@@ -151,7 +167,9 @@ async def get_screen_versions(screen_id: int, session: AsyncSession = Depends(ge
     return result.scalars().all()
 
 
-# Screen Templates
+# --- Screen Templates ---
+# Reusable screen layouts with placeholder bindings that can be instantiated
+# for different equipment (e.g., one "Motor Control" template used for many motors).
 class TemplateCreate(BaseModel):
     name: str
     description: str | None = None

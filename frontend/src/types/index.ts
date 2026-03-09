@@ -1,9 +1,28 @@
+/**
+ * types/index.ts — TypeScript interfaces for the entire application.
+ *
+ * These interfaces define the "shape" of data flowing between the frontend and backend.
+ * They exist ONLY at compile time for type checking — no JavaScript code is generated
+ * from them. If the backend sends a field you didn't declare here, TypeScript won't
+ * know about it; if it omits a required field, TypeScript will flag the error.
+ *
+ * Key TypeScript concepts used throughout this file:
+ *   - `|` means "union type" (or): `'bool' | 'int'` means the value must be one or the other.
+ *   - `?` after a property name means it's optional — may be present or undefined.
+ *   - `Record<K, V>` is a dictionary/map type: Record<string, unknown> means an object
+ *     with string keys and values of any type.
+ *   - `unknown` is the type-safe version of `any` — you must check what it is before using it.
+ *   - `null` is used for fields the backend may explicitly return as null (e.g., no value set).
+ */
+
+// TagValue is a real-time snapshot of a single tag's current state, received over
+// the WebSocket. This is what widgets bind to for live data display.
 export interface TagValue {
   tag_id: number;
   name: string;
-  value: unknown;
-  quality: string;
-  timestamp: string;
+  value: unknown;        // `unknown` because tags can be bool, int, float, or string
+  quality: string;       // e.g. "good", "bad" — indicates if the value is trustworthy
+  timestamp: string;     // ISO 8601 string from the server
   description?: string;
   display_name?: string;
 }
@@ -15,16 +34,19 @@ export interface TagLabel {
   description: string | null;
 }
 
+// Tag is the full configuration of a tag as stored in the database. This is richer
+// than TagValue — it includes how the tag connects to hardware (address, data_source_id),
+// how it should be displayed, and whether alarms/trending/simulation are enabled.
 export interface Tag {
   id: number;
-  name: string;
-  display_name: string | null;
+  name: string;                                     // unique identifier, e.g. "Motor1.Speed"
+  display_name: string | null;                      // human-friendly label, e.g. "Motor 1 Speed"
   description: string | null;
-  data_source_id: number | null;
-  address: string | null;
-  data_type: 'bool' | 'int' | 'float' | 'string';
+  data_source_id: number | null;                    // which PLC/device this tag reads from
+  address: string | null;                           // protocol-specific address on the device
+  data_type: 'bool' | 'int' | 'float' | 'string';  // union type — only these four values are valid
   access_mode: 'read' | 'write' | 'read_write';
-  engineering_units: string | null;
+  engineering_units: string | null;                 // e.g. "RPM", "°C", "psi"
   display_format: string | null;
   min_value: number | null;
   max_value: number | null;
@@ -32,11 +54,11 @@ export interface Tag {
   trending_enabled: boolean;
   trending_sample_rate_ms: number | null;
   alarm_enabled: boolean;
-  alarm_config: Record<string, unknown> | null;
+  alarm_config: Record<string, unknown> | null;     // flexible JSON — shape varies by alarm type
   simulation_enabled: boolean;
   simulation_behavior: string | null;
   simulation_config: Record<string, unknown> | null;
-  enum_mapping: Record<string, string> | null;
+  enum_mapping: Record<string, string> | null;      // maps numeric values to display strings
   labels: TagLabel[];
 }
 
@@ -60,6 +82,12 @@ export interface ImportResult {
 
 export type ImportConflictMode = 'skip' | 'update';
 
+// AlarmData represents an alarm event. Alarms follow a state machine:
+//   active_unacked  → operator hasn't seen it yet, condition is still true
+//   active_acked    → operator acknowledged it, but condition is still true
+//   inactive_unacked → condition cleared on its own before anyone acknowledged
+//   inactive        → acknowledged AND cleared — fully resolved
+// This pattern is standard in industrial alarm management (ISA-18.2).
 export interface AlarmData {
   id: number;
   tag_id: number;
@@ -69,8 +97,8 @@ export interface AlarmData {
   severity: 'info' | 'warning' | 'critical';
   state: 'active_unacked' | 'active_acked' | 'inactive_unacked' | 'inactive';
   triggered_at: string;
-  acknowledged_at: string | null;
-  acknowledged_by: string | null;
+  acknowledged_at: string | null;   // null until an operator acknowledges
+  acknowledged_by: string | null;   // username of who acknowledged
   trigger_value: string | null;
 }
 
@@ -81,14 +109,17 @@ export interface ScreenResolution {
   height: number;
 }
 
+// ScreenData is a saved screen layout. The `layout` field is a JSON string containing
+// the array of Widget objects — it's stored as a string in the database and parsed
+// by the frontend when the screen is loaded.
 export interface ScreenData {
   id: number;
   name: string;
-  slug: string;
-  layout: string;
+  slug: string;               // URL-friendly name, e.g. "main-overview" for /screen/main-overview
+  layout: string;             // JSON string of Widget[] — parsed at runtime
   layout_mode: LayoutMode;
-  target_resolution: string | null; // JSON: {"width": 1920, "height": 1080} or null
-  version: number;
+  target_resolution: string | null;
+  version: number;            // incremented on each save — used for optimistic concurrency
   is_default: boolean;
   sort_order: number;
 }
@@ -101,14 +132,18 @@ export interface TextStyle {
   italic?: boolean;
 }
 
+// Widget represents a single UI element placed on a screen by the designer.
+// Position (x, y) and size (w, h) are in grid units or pixels depending on layout mode.
+// The `props` bag holds type-specific config (e.g., which tag to bind to, colors, labels)
+// using Record<string, unknown> so any widget type can store whatever it needs.
 export interface Widget {
-  id: string;
-  type: string;
+  id: string;              // unique ID generated when the widget is created
+  type: string;            // determines which component renders (e.g. "gauge", "toggle")
   x: number;
   y: number;
   w: number;
   h: number;
-  props: Record<string, unknown>;
+  props: Record<string, unknown>;  // type-specific configuration — varies per widget type
   visible?: boolean;       // runtime visibility (default true)
   visibleTag?: string;     // tag-driven visibility: show when tag is truthy
   visibleRoles?: string[]; // role-based visibility: show only for these roles
@@ -117,7 +152,7 @@ export interface Widget {
   enabledRoles?: string[]; // role-based enabled: enabled only for these roles
   showInfo?: boolean;      // show info icon when tag has description (default true)
   chrome?: 'full' | 'compact' | 'none'; // display chrome level (default: full)
-  parentId?: string;   // links widget to a container widget for grouping
+  parentId?: string;       // links widget to a container widget for grouping
 }
 
 export interface UserData {
@@ -148,6 +183,8 @@ export interface JobHistoryEntry {
   changed_at: string;
 }
 
+// A "type alias" — ProtocolType is just a shorthand for this union of string literals.
+// Using it in DataSourceData below ensures only valid protocol names are accepted.
 export type ProtocolType = 'opcua' | 'modbus_tcp' | 'ethernet_ip' | 'mqtt' | 'simulation';
 
 export interface DataSourceData {
@@ -165,18 +202,20 @@ export interface TrendDataPoint {
   string_value: string | null;
 }
 
+// ProductionRun tracks a manufacturing run's output and OEE (Overall Equipment Effectiveness).
+// OEE = Availability x Performance x Quality — a standard manufacturing KPI.
 export interface ProductionRun {
   id: number;
   job_name: string | null;
   start_time: string;
-  end_time: string | null;
+  end_time: string | null;       // null while the run is still in progress
   good_count: number;
   reject_count: number;
   target_count: number | null;
-  availability: number | null;
-  performance: number | null;
-  quality: number | null;
-  oee: number | null;
+  availability: number | null;   // fraction of planned time the machine was running
+  performance: number | null;    // actual speed vs. ideal speed
+  quality: number | null;        // good parts / total parts
+  oee: number | null;            // overall equipment effectiveness (0.0 to 1.0)
   shift: string | null;
 }
 
@@ -234,6 +273,8 @@ export interface ProjectData {
   updated_at: string;
 }
 
+// `extends` means ProjectDetail has all the fields of ProjectData plus the ones below.
+// This avoids duplicating the shared fields — a core TypeScript inheritance pattern.
 export interface ProjectDetail extends ProjectData {
   tag_count: number;
   screen_count: number;

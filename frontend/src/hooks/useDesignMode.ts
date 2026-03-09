@@ -1,3 +1,14 @@
+/**
+ * useDesignMode — State machine for the drag-and-drop screen designer/editor.
+ *
+ * This is the "brain" of the screen editor. It manages widget CRUD (create, read,
+ * update, delete), selection, clipboard (copy/cut/paste), undo/redo history,
+ * alignment/distribution, z-ordering (which widget is on top), zoom, and locking.
+ *
+ * All widget mutations flow through `commitWidgets`, which automatically saves
+ * undo history before applying changes — the "single source of truth" pattern.
+ */
+
 import { useState, useCallback, useMemo } from 'react';
 import type { Widget, LayoutMode } from '../types';
 
@@ -9,6 +20,9 @@ export interface GridSettings {
   canvasHeight: number;
 }
 
+// HistoryEntry stores a snapshot of the entire widget array at a point in time.
+// Undo/redo works by swapping between these snapshots rather than trying to
+// reverse individual operations (which would be much more complex and error-prone).
 interface HistoryEntry {
   widgets: Widget[];
   description: string;
@@ -81,6 +95,9 @@ const DEFAULT_GRID: GridSettings = {
   canvasHeight: 1080,
 };
 
+// MAX_HISTORY caps the undo stack to prevent unbounded memory growth.
+// Each entry stores a full copy of the widget array, so 50 entries is a
+// reasonable balance between undo depth and memory usage.
 const MAX_HISTORY = 50;
 
 let nextWidgetId = 1;
@@ -92,6 +109,8 @@ export function useDesignMode(): DesignModeState {
   const [editing, setEditing] = useState(false);
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('absolute');
   const [widgets, setWidgets] = useState<Widget[]>([]);
+  // Selection uses Set<string> for O(1) lookups — checking "is this widget selected?"
+  // with Set.has() is instant, whereas Array.includes() would scan the entire list.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [clipboard, setClipboard] = useState<Widget[]>([]);
   const [gridSettings, setGridSettingsState] = useState<GridSettings>(DEFAULT_GRID);
@@ -99,10 +118,14 @@ export function useDesignMode(): DesignModeState {
   const [zoom, setZoomState] = useState(1);
   const [lockedIds, setLockedIds] = useState<Set<string>>(new Set());
 
-  // Undo/redo stacks (using state for reactivity of canUndo/canRedo)
+  // Undo/redo stacks stored as state (not refs) so canUndo/canRedo trigger re-renders
+  // when they change, keeping the UI toolbar buttons enabled/disabled correctly.
   const [undoStack, setUndoStack] = useState<HistoryEntry[]>([]);
   const [redoStack, setRedoStack] = useState<HistoryEntry[]>([]);
 
+  // pushHistory saves a widget snapshot to the undo stack and clears the redo stack.
+  // Redo is cleared because once you make a new change after undoing, the old
+  // "future" no longer makes sense — this matches how undo/redo works in every editor.
   const pushHistory = useCallback((ws: Widget[], description: string) => {
     setUndoStack(prev => {
       const next = [...prev, { widgets: ws, description }];
@@ -111,6 +134,9 @@ export function useDesignMode(): DesignModeState {
     setRedoStack([]);
   }, []);
 
+  // commitWidgets wraps EVERY widget mutation. It saves the current state to the undo
+  // stack before applying the change, then marks the screen as dirty (unsaved).
+  // This guarantees that every change is undoable and that the save indicator is accurate.
   const commitWidgets = useCallback((updater: (prev: Widget[]) => Widget[], description: string) => {
     setWidgets(prev => {
       pushHistory(prev, description);
@@ -137,7 +163,8 @@ export function useDesignMode(): DesignModeState {
     setSelectedIds(new Set());
   }, []);
 
-  // Selection
+  // Selection — additive mode (Shift+click) toggles individual items in/out of the
+  // selection set; non-additive mode replaces the selection with a single item.
   const select = useCallback((id: string, additive = false) => {
     setSelectedIds(prev => {
       if (additive) {
@@ -248,7 +275,9 @@ export function useDesignMode(): DesignModeState {
     setSelectedIds(new Set(duped.map(w => w.id)));
   }, [widgets, selectedIds, commitWidgets, layoutMode]);
 
-  // Z-order (array index = z-order, later = on top)
+  // Z-order: widgets render in array order — later index = visually on top.
+  // bringToFront moves selected widgets to the END of the array so they render last (on top).
+  // sendToBack moves them to the START so they render first (behind everything).
   const bringToFront = useCallback(() => {
     commitWidgets(prev => {
       const sel = prev.filter(w => selectedIds.has(w.id));
@@ -265,6 +294,8 @@ export function useDesignMode(): DesignModeState {
     }, 'Send to back');
   }, [commitWidgets, selectedIds]);
 
+  // bringForward/sendBackward swap adjacent elements one position at a time,
+  // like bubble sort — moving a widget one layer up or down in the stack.
   const bringForward = useCallback(() => {
     commitWidgets(prev => {
       const arr = [...prev];
@@ -338,7 +369,8 @@ export function useDesignMode(): DesignModeState {
     }, `Distribute ${direction}`);
   }, [commitWidgets, selectedIds, lockedIds]);
 
-  // Undo/Redo
+  // Undo: pop the most recent snapshot from undoStack, save current state to redoStack,
+  // then restore the snapshot. Redo does the exact reverse.
   const undo = useCallback(() => {
     setUndoStack(prev => {
       if (prev.length === 0) return prev;
@@ -386,6 +418,10 @@ export function useDesignMode(): DesignModeState {
   const canUndo = undoStack.length > 0;
   const canRedo = redoStack.length > 0;
 
+  // useMemo creates a stable object reference that only changes when its dependencies
+  // change. Without this, returning a new object literal `{ editing, widgets, ... }`
+  // every render would cause every component consuming this hook to re-render, even
+  // if none of the actual values changed.
   return useMemo(() => ({
     editing, layoutMode, widgets, selectedIds, clipboard, gridSettings, dirty, zoom,
     enterEditMode, exitEditMode,

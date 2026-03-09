@@ -1,3 +1,21 @@
+/**
+ * PropertyPanel — the right sidebar in the screen designer that shows editable
+ * properties for the currently selected widget. Different widget types show
+ * different property fields (e.g. gauges show min/max/warning/critical, buttons
+ * show color/confirm/script).
+ *
+ * Key sub-components defined in this file:
+ *   - TagPicker: a searchable dropdown that lets designers bind widgets to tags
+ *     from the backend. It fetches the full tag list and provides type-ahead
+ *     filtering so designers can quickly find tags in large systems.
+ *   - TextStyleEditor: controls for font, size, bold, italic, color
+ *   - Section/Field: layout helpers for organizing the property form
+ *   - RoleSelector: lets designers restrict widget visibility/interactivity by role
+ *   - ControlGroupEditor: for building multi-control widgets with mixed types
+ *
+ * All property changes are applied immediately via onUpdateProps/onUpdateWidget
+ * callbacks — there is no "save" button; the designer sees changes in real time.
+ */
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import type { Widget, TextStyle, Tag, LayoutMode } from '../../types';
 import { api } from '../../lib/api';
@@ -15,6 +33,10 @@ interface Props {
   onToggleLock: () => void;
 }
 
+// TagPicker — a searchable dropdown for binding a widget to a backend tag.
+// Wrapped in memo() to avoid re-fetching and re-rendering when unrelated
+// properties change. Caps visible items at 50 to avoid DOM performance issues
+// in systems with thousands of tags.
 const TagPicker = memo(function TagPicker({ value, onChange }: { value: string; onChange: (tag: string) => void }) {
   const [tags, setTags] = useState<Tag[]>([]);
   const [open, setOpen] = useState(false);

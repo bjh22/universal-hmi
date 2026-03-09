@@ -1,8 +1,15 @@
 """
 Industrial HMI — FastAPI Application
+
+This is the application entry point that wires everything together: routes,
+middleware, services, and static file serving.  FastAPI is created here,
+configured with all API routers, and given a "lifespan" that controls what
+happens when the server starts up and shuts down.
 """
 
 import logging
+# asynccontextmanager lets us write a single function that handles both
+# startup (before yield) and shutdown (after yield) logic for the app.
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -30,19 +37,29 @@ alarm_service = AlarmService(tag_engine, async_session)
 trend_service = TrendService(tag_engine)
 
 
+# FastAPI's "lifespan" pattern: an async context manager that replaces the older
+# @app.on_event("startup") / @app.on_event("shutdown") decorators.
+# Everything before `yield` runs once at startup; everything after runs at shutdown.
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    # --- Startup ---
     logger.info(f"Starting {settings.app_name} v{settings.app_version}")
+
+    # Initialization order matters — each service depends on the previous ones:
+    # 1. Database tables must exist before we can query anything
     await init_db()
 
     async with async_session() as session:
+        # 2. Tags first — they're the central data model everything else references
         await tag_engine.load_tags(session)
+        # 3. Alarms and trends depend on tags being loaded
         await alarm_service.load_alarm_configs(session)
         await trend_service.load_trending_tags(session)
+        # 4. Protocol drivers connect to external equipment (PLC, MQTT, etc.)
         await driver_manager.load_and_connect(session)
 
     tag_engine.set_driver_manager(driver_manager)
+    # Attach services to app.state so route handlers can access them
     app.state.alarm_service = alarm_service
     app.state.trend_service = trend_service
 
@@ -52,14 +69,17 @@ async def lifespan(app: FastAPI):
     await integration_manager.load_and_start(app)
     app.state.integration_manager = integration_manager
 
+    # 5. Start background tasks last — simulation generates tag values,
+    #    alarms evaluate them, trends record them
     await tag_engine.start_simulation()
     await alarm_service.start()
     await trend_service.start()
     logger.info("All services started")
 
-    yield
+    yield  # App is running and serving requests while we "pause" here
 
-    # Shutdown
+    # --- Shutdown (runs when the server receives SIGTERM/SIGINT) ---
+    # Stop services gracefully so background tasks finish cleanly
     logger.info("Shutting down services")
     await integration_manager.stop_all()
     await tag_engine.stop_simulation()
@@ -74,7 +94,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS for development
+# CORS (Cross-Origin Resource Sharing) middleware.
+# Browsers block requests from one origin (e.g., localhost:5173) to another
+# (localhost:8080) by default for security. This middleware tells the browser
+# "it's OK, allow these cross-origin requests."
+# allow_origins=["*"] means "allow any origin" — fine for development, but in
+# production you'd restrict this to your actual domain.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -83,7 +108,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# API routes
+# Register API routers — FastAPI's way of organizing endpoints into separate
+# files. Each router handles one resource (auth, tags, screens, etc.) so this
+# file stays clean while the actual endpoint logic lives in app/api/*.py.
 app.include_router(auth.router)
 app.include_router(branding.router)
 app.include_router(preferences.router)
@@ -113,11 +140,18 @@ async def health():
     }
 
 
-# Serve frontend static files in production
+# --- Static file serving for production ---
+# In production, `npm run build` compiles the React app into static HTML/JS/CSS
+# files. The backend serves these directly so you only need one server.
 _static_dir = Path(__file__).resolve().parent.parent / "static"
 if _static_dir.is_dir():
+    # Serve JS/CSS bundles from /assets (Vite's default output directory)
     app.mount("/assets", StaticFiles(directory=_static_dir / "assets"), name="assets")
 
+    # Catch-all route: any URL that isn't an /api or /ws endpoint gets
+    # index.html. This enables client-side routing — the React app reads the
+    # URL and renders the correct page itself (e.g., /alarms, /trends).
+    # Without this, refreshing a page like /alarms would return a 404.
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
         """Serve the React SPA for all non-API routes."""

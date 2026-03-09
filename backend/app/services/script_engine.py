@@ -1,6 +1,12 @@
 """
 Script Engine: Sandboxed Python script execution for button actions.
 Restricted to safe builtins and a limited set of modules.
+
+Runs user-written Python scripts triggered by button clicks in the HMI. For example,
+an operator might click "Start Sequence" which runs a script that writes to multiple
+tags in a specific order. Scripts are sandboxed to prevent dangerous operations —
+no file I/O, no network access, no arbitrary imports. This is critical because
+scripts are authored by HMI designers and executed on the server.
 """
 
 import asyncio
@@ -15,6 +21,8 @@ from typing import Any
 from app.core.config import settings
 from app.services.tag_engine import TagEngine
 
+# Only these modules are available to scripts. Notably absent: os, sys, subprocess,
+# socket, shutil — anything that could access the filesystem, network, or run processes.
 ALLOWED_MODULES = {
     "math": math,
     "datetime": datetime,
@@ -23,6 +31,10 @@ ALLOWED_MODULES = {
     "collections": {"OrderedDict": OrderedDict},
 }
 
+# Whitelist of Python built-in functions available to scripts. By replacing
+# __builtins__ in the script's globals, we prevent access to dangerous functions
+# like open() (file access), eval() (code injection), __import__() (loading
+# arbitrary modules), and exec(). Only safe, data-manipulation builtins are allowed.
 SAFE_BUILTINS = {
     "abs": abs,
     "bool": bool,
@@ -49,6 +61,10 @@ SAFE_BUILTINS = {
 
 
 class ScriptContext:
+    """Provides a safe API for scripts to interact with the system. Scripts can only
+    read/write tag values and create audit log entries — they cannot access the
+    database, filesystem, or network directly.
+    """
     def __init__(self, tag_engine: TagEngine, user: str | None = None, role: str | None = None):
         self._tag_engine = tag_engine
         self.user = user
@@ -66,6 +82,10 @@ class ScriptContext:
         self.audit_entries.append(message)
 
 
+# ThreadPoolExecutor runs scripts in separate OS threads. This is critical because
+# exec() is a blocking call — if it ran directly in the async event loop, it would
+# freeze the ENTIRE server (no HTTP requests, no WebSocket updates) until the script
+# finishes. By offloading to a thread, the event loop stays responsive.
 _executor = ThreadPoolExecutor(max_workers=2)
 
 
@@ -78,6 +98,8 @@ async def execute_script(
 ) -> dict:
     ctx = ScriptContext(tag_engine, user=user, role=role)
 
+    # Build the sandbox: replace Python's default __builtins__ with our safe whitelist,
+    # inject the script API (read_tag, write_tag, log), and add allowed modules
     script_globals = {
         "__builtins__": SAFE_BUILTINS,
         "read_tag": ctx.read_tag,
@@ -93,6 +115,9 @@ async def execute_script(
 
     loop = asyncio.get_event_loop()
     try:
+        # asyncio.wait_for wraps the executor call with a timeout (default 5 seconds).
+        # This kills scripts that run too long (e.g., infinite loops like "while True"),
+        # preventing them from hanging the server indefinitely.
         await asyncio.wait_for(
             loop.run_in_executor(_executor, _run_script, script, script_globals),
             timeout=settings.script_timeout_seconds,
@@ -105,4 +130,7 @@ async def execute_script(
 
 
 def _run_script(script: str, globals_dict: dict):
+    # exec() executes arbitrary Python code — normally very dangerous, but the
+    # restricted globals_dict (with SAFE_BUILTINS replacing __builtins__) limits
+    # what the script can do. It can only use whitelisted functions and modules.
     exec(script, globals_dict)  # noqa: S102
