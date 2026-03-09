@@ -1,10 +1,10 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { Search, Download, UserPlus, Plus, Pencil, Trash2, Upload, X, Plug, Unplug, FolderSearch, Tag as TagIcon, CheckSquare, Square, MinusSquare, Filter, HardDriveUpload, CheckCircle2, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Search, Download, UserPlus, Plus, Pencil, Trash2, Upload, X, Plug, Unplug, FolderSearch, Tag as TagIcon, CheckSquare, Square, MinusSquare, Filter, HardDriveUpload, CheckCircle2, AlertTriangle, RefreshCw, ChevronRight, ChevronDown, Folder, FolderOpen, Loader2 } from 'lucide-react';
 import { api } from '../lib/api';
 import { PROTOCOL_CONFIGS } from '../lib/protocolConfigs';
 import { IntegrationsTab } from '../components/settings/IntegrationsTab';
 import { THEME_PRESETS, ACCENT_SWATCHES, applyTheme, DEFAULT_ACCENT, DEFAULT_PRESET } from '../lib/theme';
-import type { Tag, TagLabel, DataSourceData, ProtocolType, AuditEntry, UserData, BrowsedTag, UserListEntry, ImportPreviewTag, ImportConflictMode, TagValue } from '../types';
+import type { Tag, TagLabel, DataSourceData, ProtocolType, AuditEntry, UserData, BrowsedTag, BrowsedNode, UserListEntry, ImportPreviewTag, ImportConflictMode, TagValue } from '../types';
 
 interface Props {
   user: UserData | null;
@@ -1194,6 +1194,114 @@ function mapBrowseDataType(dt: string | undefined): 'bool' | 'int' | 'float' | '
   return 'float';
 }
 
+interface TreeNodeState {
+  node: BrowsedNode;
+  expanded: boolean;
+  children: TreeNodeState[] | null; // null = not loaded yet
+  loading: boolean;
+  depth: number;
+}
+
+function BrowseTreeRow({ item, existingAddresses, createdAddresses, onCreateTag, onToggle }: {
+  item: TreeNodeState;
+  existingAddresses: Set<string>;
+  createdAddresses: Set<string>;
+  onCreateTag: (node: BrowsedNode) => void;
+  onToggle: (nodeId: string) => void;
+}) {
+  const isVariable = item.node.node_class === 'variable';
+  const tagAddress = item.node.relative_address || item.node.node_id || '';
+  const alreadyExists = existingAddresses.has(tagAddress) || existingAddresses.has(item.node.node_id) || createdAddresses.has(tagAddress);
+
+  return (
+    <tr className="border-b border-slate-700/50 hover:bg-slate-700/30">
+      <td className="px-3 py-1.5 text-slate-200">
+        <div className="flex items-center gap-1" style={{ paddingLeft: `${item.depth * 20}px` }}>
+          {isVariable ? (
+            <span className="w-5 h-5 flex items-center justify-center flex-shrink-0" />
+          ) : (
+            <button
+              onClick={() => onToggle(item.node.node_id)}
+              className="w-5 h-5 flex items-center justify-center flex-shrink-0 text-slate-400 hover:text-white"
+            >
+              {item.loading ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : item.expanded ? (
+                <ChevronDown size={14} />
+              ) : (
+                <ChevronRight size={14} />
+              )}
+            </button>
+          )}
+          {isVariable ? (
+            <TagIcon size={14} className="text-blue-400 flex-shrink-0" />
+          ) : item.expanded ? (
+            <FolderOpen size={14} className="text-yellow-400 flex-shrink-0" />
+          ) : (
+            <Folder size={14} className="text-yellow-400 flex-shrink-0" />
+          )}
+          <span className="truncate ml-1">{item.node.name}</span>
+        </div>
+      </td>
+      <td className="px-3 py-1.5 text-slate-400 font-mono text-xs">
+        {isVariable ? (
+          item.node.relative_address ? (
+            <span title={item.node.node_id}>{item.node.relative_address}</span>
+          ) : (
+            item.node.node_id || '\u2014'
+          )
+        ) : (
+          <span className="text-slate-500 italic">folder</span>
+        )}
+      </td>
+      <td className="px-3 py-1.5 text-slate-400 text-xs">{isVariable ? (item.node.data_type || '\u2014') : ''}</td>
+      <td className="px-3 py-1.5 text-right">
+        {isVariable && (
+          alreadyExists ? (
+            <span className="text-xs text-green-400">Exists</span>
+          ) : (
+            <button
+              onClick={() => onCreateTag(item.node)}
+              className="px-2 py-1 bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-hover)] rounded text-xs text-white flex items-center gap-1 ml-auto"
+            >
+              <Plus size={12} /> Create
+            </button>
+          )
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function flattenTree(nodes: TreeNodeState[], filter: string): TreeNodeState[] {
+  const result: TreeNodeState[] = [];
+  const lowerFilter = filter.toLowerCase();
+
+  function walk(items: TreeNodeState[]) {
+    for (const item of items) {
+      if (filter) {
+        // When filtering, show all variables that match (skip folder structure)
+        if (item.node.node_class === 'variable') {
+          const name = item.node.name?.toLowerCase() || '';
+          const addr = (item.node.relative_address || item.node.node_id || '').toLowerCase();
+          if (name.includes(lowerFilter) || addr.includes(lowerFilter)) {
+            result.push(item);
+          }
+        }
+        // Always walk children if loaded
+        if (item.children) walk(item.children);
+      } else {
+        result.push(item);
+        if (item.expanded && item.children) {
+          walk(item.children);
+        }
+      }
+    }
+  }
+  walk(nodes);
+  return result;
+}
+
 function BrowseTagsDialog({ dsId, dsName, existingTags, onCreateTag, onClose }: {
   dsId: number;
   dsName: string;
@@ -1201,16 +1309,34 @@ function BrowseTagsDialog({ dsId, dsName, existingTags, onCreateTag, onClose }: 
   onCreateTag: (tag: Omit<Tag, 'id'>) => void;
   onClose: () => void;
 }) {
-  const [browsedTags, setBrowsedTags] = useState<BrowsedTag[]>([]);
+  const [tree, setTree] = useState<TreeNodeState[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [filter, setFilter] = useState('');
   const [createdAddresses, setCreatedAddresses] = useState<Set<string>>(new Set());
 
+  // Load root level on mount
   useEffect(() => {
     let cancelled = false;
-    api.browseDataSource(dsId)
-      .then(r => { if (!cancelled) { setBrowsedTags(r.tags || []); setLoading(false); } })
-      .catch(err => { if (!cancelled) { setError(err instanceof Error ? err.message : String(err)); setLoading(false); } });
+    api.browseDataSourceLevel(dsId, null)
+      .then(r => {
+        if (cancelled) return;
+        const nodes: TreeNodeState[] = (r.nodes || []).map(n => ({
+          node: n,
+          expanded: false,
+          children: n.node_class === 'object' && n.has_children ? null : (n.node_class === 'object' ? [] : null),
+          loading: false,
+          depth: 0,
+        }));
+        setTree(nodes);
+        setLoading(false);
+      })
+      .catch(err => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : String(err));
+          setLoading(false);
+        }
+      });
     return () => { cancelled = true; };
   }, [dsId]);
 
@@ -1222,8 +1348,99 @@ function BrowseTagsDialog({ dsId, dsName, existingTags, onCreateTag, onClose }: 
     return set;
   }, [existingTags, dsId]);
 
-  const handleCreate = useCallback((t: BrowsedTag) => {
-    // Prefer relative_address (prefix-stripped) so tags work across machines
+  const handleToggle = useCallback(async (nodeId: string) => {
+    // Find and toggle the node in the tree
+    function toggleInTree(items: TreeNodeState[]): TreeNodeState[] {
+      return items.map(item => {
+        if (item.node.node_id === nodeId) {
+          if (item.children === null) {
+            // Need to load children
+            return { ...item, loading: true };
+          }
+          return { ...item, expanded: !item.expanded };
+        }
+        if (item.children) {
+          return { ...item, children: toggleInTree(item.children) };
+        }
+        return item;
+      });
+    }
+
+    setTree(prev => {
+      const updated = toggleInTree(prev);
+      return updated;
+    });
+
+    // Check if we need to load children
+    function findNode(items: TreeNodeState[]): TreeNodeState | null {
+      for (const item of items) {
+        if (item.node.node_id === nodeId) return item;
+        if (item.children) {
+          const found = findNode(item.children);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+
+    const targetNode = findNode(tree);
+    if (!targetNode || targetNode.children !== null) return;
+
+    // Load children from server
+    try {
+      const r = await api.browseDataSourceLevel(dsId, nodeId);
+      const childNodes: TreeNodeState[] = (r.nodes || []).map(n => ({
+        node: n,
+        expanded: false,
+        children: n.node_class === 'object' && n.has_children ? null : (n.node_class === 'object' ? [] : null),
+        loading: false,
+        depth: (targetNode.depth || 0) + 1,
+      }));
+
+      function setChildrenInTree(items: TreeNodeState[]): TreeNodeState[] {
+        return items.map(item => {
+          if (item.node.node_id === nodeId) {
+            return { ...item, children: childNodes, expanded: true, loading: false };
+          }
+          if (item.children) {
+            return { ...item, children: setChildrenInTree(item.children) };
+          }
+          return item;
+        });
+      }
+
+      setTree(prev => setChildrenInTree(prev));
+    } catch {
+      function clearLoadingInTree(items: TreeNodeState[]): TreeNodeState[] {
+        return items.map(item => {
+          if (item.node.node_id === nodeId) {
+            return { ...item, children: [], loading: false };
+          }
+          if (item.children) {
+            return { ...item, children: clearLoadingInTree(item.children) };
+          }
+          return item;
+        });
+      }
+      setTree(prev => clearLoadingInTree(prev));
+    }
+  }, [dsId, tree]);
+
+  const handleCreate = useCallback((node: BrowsedNode) => {
+    const address = node.relative_address || node.node_id || '';
+    const name = node.name || '';
+    onCreateTag({
+      ...EMPTY_TAG,
+      name,
+      data_source_id: dsId,
+      address,
+      data_type: mapBrowseDataType(node.data_type),
+      access_mode: 'read',
+    });
+    setCreatedAddresses(prev => new Set(prev).add(address));
+  }, [dsId, onCreateTag]);
+
+  const handleCreateFromBrowsed = useCallback((t: BrowsedTag) => {
     const address = t.relative_address || t.node_id || t.address || '';
     const name = t.name || t.display_name || '';
     onCreateTag({
@@ -1237,65 +1454,187 @@ function BrowseTagsDialog({ dsId, dsName, existingTags, onCreateTag, onClose }: 
     setCreatedAddresses(prev => new Set(prev).add(address));
   }, [dsId, onCreateTag]);
 
+  // Visible rows for the tree/filtered view
+  const visibleRows = useMemo(() => flattenTree(tree, filter), [tree, filter]);
+
+  // Count of new (uncreated) variables visible
+  const newVariableCount = useMemo(() => {
+    return visibleRows.filter(r => {
+      if (r.node.node_class !== 'variable') return false;
+      const addr = r.node.relative_address || r.node.node_id || '';
+      return !existingAddresses.has(addr) && !existingAddresses.has(r.node.node_id) && !createdAddresses.has(addr);
+    }).length;
+  }, [visibleRows, existingAddresses, createdAddresses]);
+
+  const handleCreateAll = useCallback(() => {
+    for (const row of visibleRows) {
+      if (row.node.node_class !== 'variable') continue;
+      const addr = row.node.relative_address || row.node.node_id || '';
+      if (existingAddresses.has(addr) || existingAddresses.has(row.node.node_id) || createdAddresses.has(addr)) continue;
+      handleCreate(row.node);
+    }
+  }, [visibleRows, existingAddresses, createdAddresses, handleCreate]);
+
+  // Fallback: full browse mode for non-OPC-UA or if lazy browse fails
+  const [fallbackMode, setFallbackMode] = useState(false);
+  const [fallbackTags, setFallbackTags] = useState<BrowsedTag[]>([]);
+  const [fallbackLoading, setFallbackLoading] = useState(false);
+
+  const handleFullBrowse = useCallback(() => {
+    setFallbackLoading(true);
+    api.browseDataSource(dsId)
+      .then(r => {
+        setFallbackTags(r.tags || []);
+        setFallbackMode(true);
+        setFallbackLoading(false);
+      })
+      .catch(() => setFallbackLoading(false));
+  }, [dsId]);
+
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-3xl max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
+      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-3xl max-h-[80vh] flex flex-col p-6" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold text-slate-100">Browse Tags: {dsName}</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
         </div>
-        {loading && <p className="text-slate-400 text-sm py-4 text-center">Browsing data source...</p>}
-        {error && <p className="text-red-400 text-sm py-4 text-center">{error}</p>}
-        {!loading && !error && browsedTags.length === 0 && (
-          <p className="text-slate-500 text-sm py-4 text-center">No tags found on this data source</p>
-        )}
-        {browsedTags.length > 0 && (
-          <div className="max-h-96 overflow-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-700 text-slate-400">
-                  <th className="text-left px-3 py-2 font-medium">Name</th>
-                  <th className="text-left px-3 py-2 font-medium">Node ID / Address</th>
-                  <th className="text-left px-3 py-2 font-medium">Type</th>
-                  <th className="px-3 py-2 font-medium w-28"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {browsedTags.map((t, i) => {
-                  const tagAddress = t.relative_address || t.node_id || t.address || '';
-                  const fullAddress = t.node_id || t.address || '';
-                  const alreadyExists = existingAddresses.has(tagAddress) || existingAddresses.has(fullAddress) || createdAddresses.has(tagAddress);
-                  return (
-                    <tr key={i} className="border-b border-slate-700/50">
-                      <td className="px-3 py-2 text-slate-200">{t.name || t.display_name || '\u2014'}</td>
-                      <td className="px-3 py-2 text-slate-400 font-mono text-xs">
-                        {t.relative_address ? (
-                          <span title={fullAddress}>{t.relative_address}</span>
-                        ) : (
-                          fullAddress || '\u2014'
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-slate-400">{t.data_type || '\u2014'}</td>
-                      <td className="px-3 py-2 text-right">
-                        {alreadyExists ? (
-                          <span className="text-xs text-green-400">Exists</span>
-                        ) : (
-                          <button
-                            onClick={() => handleCreate(t)}
-                            className="px-2 py-1 bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-hover)] rounded text-xs text-white flex items-center gap-1 ml-auto"
-                          >
-                            <Plus size={12} /> Create Tag
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+
+        {/* Search + actions bar */}
+        <div className="flex items-center gap-2 mb-3">
+          <div className="relative flex-1">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Filter tags by name or address..."
+              value={filter}
+              onChange={e => setFilter(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-slate-100 placeholder-slate-400"
+            />
           </div>
-        )}
-        <div className="flex justify-end mt-4">
+          {!fallbackMode && newVariableCount > 0 && (
+            <button
+              onClick={handleCreateAll}
+              className="px-3 py-1.5 bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-hover)] rounded text-xs text-white flex items-center gap-1 whitespace-nowrap"
+            >
+              <Plus size={12} /> Create All ({newVariableCount})
+            </button>
+          )}
+          {!fallbackMode && (
+            <button
+              onClick={handleFullBrowse}
+              disabled={fallbackLoading}
+              className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-xs text-slate-300 flex items-center gap-1 whitespace-nowrap"
+              title="Load entire tag tree at once (slower for large servers)"
+            >
+              {fallbackLoading ? <Loader2 size={12} className="animate-spin" /> : <FolderSearch size={12} />}
+              Full Scan
+            </button>
+          )}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-auto min-h-0">
+          {loading && <p className="text-slate-400 text-sm py-4 text-center"><Loader2 size={16} className="inline animate-spin mr-2" />Loading...</p>}
+          {error && <p className="text-red-400 text-sm py-4 text-center">{error}</p>}
+
+          {!loading && !error && !fallbackMode && (
+            <>
+              {tree.length === 0 ? (
+                <p className="text-slate-500 text-sm py-4 text-center">No tags found on this data source</p>
+              ) : visibleRows.length === 0 && filter ? (
+                <p className="text-slate-500 text-sm py-4 text-center">No matches for &ldquo;{filter}&rdquo; in loaded nodes. Try expanding more folders or use Full Scan.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-slate-800 z-10">
+                    <tr className="border-b border-slate-700 text-slate-400">
+                      <th className="text-left px-3 py-2 font-medium">Name</th>
+                      <th className="text-left px-3 py-2 font-medium">Address</th>
+                      <th className="text-left px-3 py-2 font-medium w-20">Type</th>
+                      <th className="px-3 py-2 font-medium w-24"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleRows.map((item) => (
+                      <BrowseTreeRow
+                        key={item.node.node_id}
+                        item={item}
+                        existingAddresses={existingAddresses}
+                        createdAddresses={createdAddresses}
+                        onCreateTag={handleCreate}
+                        onToggle={handleToggle}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </>
+          )}
+
+          {/* Fallback flat list mode (full browse) */}
+          {fallbackMode && (
+            <>
+              {fallbackTags.length === 0 ? (
+                <p className="text-slate-500 text-sm py-4 text-center">No tags found</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-slate-800 z-10">
+                    <tr className="border-b border-slate-700 text-slate-400">
+                      <th className="text-left px-3 py-2 font-medium">Name</th>
+                      <th className="text-left px-3 py-2 font-medium">Node ID / Address</th>
+                      <th className="text-left px-3 py-2 font-medium">Type</th>
+                      <th className="px-3 py-2 font-medium w-24"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fallbackTags
+                      .filter(t => {
+                        if (!filter) return true;
+                        const lower = filter.toLowerCase();
+                        const name = (t.name || t.display_name || '').toLowerCase();
+                        const addr = (t.relative_address || t.node_id || t.address || '').toLowerCase();
+                        return name.includes(lower) || addr.includes(lower);
+                      })
+                      .map((t, i) => {
+                        const tagAddress = t.relative_address || t.node_id || t.address || '';
+                        const fullAddress = t.node_id || t.address || '';
+                        const alreadyExists = existingAddresses.has(tagAddress) || existingAddresses.has(fullAddress) || createdAddresses.has(tagAddress);
+                        return (
+                          <tr key={i} className="border-b border-slate-700/50">
+                            <td className="px-3 py-2 text-slate-200">{t.name || t.display_name || '\u2014'}</td>
+                            <td className="px-3 py-2 text-slate-400 font-mono text-xs">
+                              {t.relative_address ? (
+                                <span title={fullAddress}>{t.relative_address}</span>
+                              ) : (
+                                fullAddress || '\u2014'
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-slate-400">{t.data_type || '\u2014'}</td>
+                            <td className="px-3 py-2 text-right">
+                              {alreadyExists ? (
+                                <span className="text-xs text-green-400">Exists</span>
+                              ) : (
+                                <button
+                                  onClick={() => handleCreateFromBrowsed(t)}
+                                  className="px-2 py-1 bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-hover)] rounded text-xs text-white flex items-center gap-1 ml-auto"
+                                >
+                                  <Plus size={12} /> Create
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-700">
+          <span className="text-xs text-slate-500">
+            {filter ? `${visibleRows.filter(r => r.node.node_class === 'variable').length} matching tags` : `Click folders to expand. Tags load one level at a time.`}
+          </span>
           <button onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300">Close</button>
         </div>
       </div>

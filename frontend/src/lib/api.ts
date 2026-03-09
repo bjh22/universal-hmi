@@ -14,6 +14,7 @@ import type {
   UserData,
   UserListEntry,
   BrowsedTag,
+  BrowsedNode,
   JobData,
   JobHistoryEntry,
   DataSourceData,
@@ -222,6 +223,13 @@ export const api = {
     request<{ connected: boolean; address_prefix?: string }>(`/datasources/${id}/connect`, { method: 'POST' }),
   browseDataSource: (id: number) =>
     request<{ tags: BrowsedTag[]; address_prefix?: string }>(`/datasources/${id}/browse`, { method: 'POST' }),
+  browseDataSourceLevel: (id: number, parentNodeId?: string | null) =>
+    request<{ nodes: BrowsedNode[]; address_prefix?: string }>(`/datasources/${id}/browse-level`, {
+      method: 'POST',
+      body: JSON.stringify({ parent_node_id: parentNodeId || null }),
+    }),
+  clearBrowseCache: (id: number) =>
+    request(`/datasources/${id}/browse-cache-clear`, { method: 'POST' }),
 
   // Users
   getUsers: () => request<UserListEntry[]>('/users/'),

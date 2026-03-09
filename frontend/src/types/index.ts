@@ -244,6 +244,15 @@ export interface BrowsedTag {
   data_type?: string;
 }
 
+export interface BrowsedNode {
+  node_id: string;
+  name: string;
+  node_class: 'variable' | 'object';
+  data_type?: string;
+  relative_address?: string;
+  has_children?: boolean;
+}
+
 export interface UserListEntry {
   id: number;
   username: string;
