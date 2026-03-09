@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import type { Widget, TagValue, AlarmData } from '../../types';
+import { ErrorBoundary } from './ErrorBoundary';
 import { StatusIndicator } from './StatusIndicator';
 import { GaugeWidget, type GaugeDisplayMode } from './GaugeWidget';
 import { CounterWidget } from './CounterWidget';
@@ -48,7 +49,7 @@ export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, 
   const p = widget.props as Record<string, unknown>;
   const chrome = widget.chrome;
 
-  switch (widget.type) {
+  const content = (() => { switch (widget.type) {
     case 'status_indicator':
       return <StatusIndicator title={p.title as string} tag={p.tag as string} tagValues={tagValues} mapping={p.mapping as Record<string, { label: string; color: string }>} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
     case 'gauge':
@@ -93,7 +94,9 @@ export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, 
           Unknown widget: {widget.type}
         </div>
       );
-  }
+  } })();
+
+  return <ErrorBoundary>{content}</ErrorBoundary>;
 }, (prev, next) => {
   // Custom comparator: skip re-render if the widget's own tags haven't changed
   if (prev.widget !== next.widget) return false;

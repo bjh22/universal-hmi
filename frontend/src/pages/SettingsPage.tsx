@@ -157,7 +157,8 @@ function EnumMappingEditor({ mapping, onChange }: {
 }) {
   const entries = useMemo(() => {
     if (!mapping) return [];
-    const parsed = typeof mapping === 'string' ? JSON.parse(mapping) : mapping;
+    let parsed: Record<string, string> = {};
+    try { parsed = typeof mapping === 'string' ? JSON.parse(mapping) : mapping; } catch { /* ignore malformed */ }
     return Object.entries(parsed)
       .sort(([a], [b]) => Number(a) - Number(b))
       .map(([k, v]) => ({ key: k, label: v as string }));

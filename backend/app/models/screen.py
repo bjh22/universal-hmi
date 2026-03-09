@@ -37,7 +37,7 @@ class ScreenVersion(Base):
     __tablename__ = "screen_versions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    screen_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    screen_id: Mapped[int] = mapped_column(ForeignKey("screens.id", ondelete="CASCADE"), nullable=False, index=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     layout: Mapped[str] = mapped_column(Text, nullable=False)
     saved_by: Mapped[str | None] = mapped_column(String(100), nullable=True)

@@ -63,16 +63,26 @@ class DriverManager:
 
         self._drivers[ds.id] = driver
 
-    def _schedule_reconnect(self, ds_id: int, driver: ProtocolDriver):
+    def _schedule_reconnect(self, ds_id: int, driver: ProtocolDriver, max_retries: int = 50):
         async def _reconnect():
             delay = 2
-            while not driver.connected:
+            attempts = 0
+            while not driver.connected and attempts < max_retries:
                 await asyncio.sleep(delay)
+                attempts += 1
                 try:
-                    await driver.connect()
+                    await asyncio.wait_for(driver.connect(), timeout=15)
                     logger.info(f"Reconnected to {driver.name}")
                 except Exception:
                     delay = min(delay * 2, 60)
+                    logger.debug(
+                        f"Reconnect attempt {attempts}/{max_retries} for {driver.name} "
+                        f"failed, next retry in {delay}s"
+                    )
+            if not driver.connected:
+                logger.error(
+                    f"Gave up reconnecting to {driver.name} after {max_retries} attempts"
+                )
 
         if ds_id in self._reconnect_tasks:
             self._reconnect_tasks[ds_id].cancel()

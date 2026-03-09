@@ -122,7 +122,8 @@ export function FactoryConfigPage({ user, tagValues }: Props) {
   const formatValue = (tag: Tag, value: unknown): string => {
     if (value == null || value === '') return '—';
     if (tag.enum_mapping) {
-      const em = typeof tag.enum_mapping === 'string' ? JSON.parse(tag.enum_mapping) : tag.enum_mapping;
+      let em: Record<string, string> = {};
+      try { em = typeof tag.enum_mapping === 'string' ? JSON.parse(tag.enum_mapping) : tag.enum_mapping; } catch { /* ignore */ }
       const mapped = em[String(value)];
       if (mapped) return mapped;
     }

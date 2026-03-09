@@ -197,7 +197,8 @@ function SetpointEditor({ value, onChange, tags }: {
 // ─── Read-only Setpoint Display (grouped, collapsible) ───
 function JobSetpointDisplay({ setpoints, tags }: { setpoints: string | null; tags: Tag[] }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const sp = JSON.parse(setpoints || '{}');
+  let sp: Record<string, unknown> = {};
+  try { sp = JSON.parse(setpoints || '{}'); } catch { /* ignore malformed */ }
   const entries = Object.entries(sp);
   if (entries.length === 0) return <p className="text-xs text-slate-500 italic mb-3">No setpoints</p>;
   const grouped = groupEntries(entries, tags);
@@ -395,7 +396,7 @@ function HistoryDialog({ jobId, jobName, onRestore, onClose }: {
               {expanded === h.id && (
                 <div className="px-4 pb-3 border-t border-slate-700 pt-2">
                   <pre className="text-xs text-slate-400 bg-slate-950 rounded p-2 max-h-48 overflow-auto mb-2">
-                    {JSON.stringify(JSON.parse(h.setpoints || '{}'), null, 2)}
+                    {(() => { try { return JSON.stringify(JSON.parse(h.setpoints || '{}'), null, 2); } catch { return h.setpoints || '{}'; } })()}
                   </pre>
                   <button
                     onClick={() => { onRestore(h.setpoints); onClose(); }}

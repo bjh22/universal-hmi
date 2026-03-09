@@ -1,7 +1,11 @@
 """
 EtherNet/IP (CIP) protocol driver using pycomm3.
+
+All pycomm3 calls are synchronous and must be run in a thread executor
+to avoid blocking the async event loop.
 """
 
+import asyncio
 from typing import Any
 
 from app.drivers.base import ProtocolDriver
@@ -12,6 +16,11 @@ class EthernetIpDriver(ProtocolDriver):
         super().__init__(name, config)
         self._plc = None
 
+    async def _run_sync(self, func, *args):
+        """Run a blocking pycomm3 call in the default thread executor."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, func, *args)
+
     async def connect(self):
         try:
             from pycomm3 import LogixDriver
@@ -19,7 +28,7 @@ class EthernetIpDriver(ProtocolDriver):
             ip = self.config.get("ip_address", "192.168.1.1")
             slot = self.config.get("slot", 0)
             self._plc = LogixDriver(f"{ip}/{slot}")
-            self._plc.open()
+            await self._run_sync(self._plc.open)
             self.connected = True
         except Exception:
             self.connected = False
@@ -28,7 +37,7 @@ class EthernetIpDriver(ProtocolDriver):
     async def disconnect(self):
         if self._plc:
             try:
-                self._plc.close()
+                await self._run_sync(self._plc.close)
             except Exception:
                 pass
         self.connected = False
@@ -36,19 +45,19 @@ class EthernetIpDriver(ProtocolDriver):
     async def read_tag(self, address: str) -> Any:
         if not self._plc:
             return None
-        result = self._plc.read(address)
+        result = await self._run_sync(self._plc.read, address)
         return result.value if result else None
 
     async def write_tag(self, address: str, value: Any) -> bool:
         if not self._plc:
             return False
-        result = self._plc.write((address, value))
+        result = await self._run_sync(self._plc.write, (address, value))
         return bool(result)
 
     async def read_tags(self, addresses: list[str]) -> dict[str, Any]:
         if not self._plc:
             return {}
-        results = self._plc.read(*addresses)
+        results = await self._run_sync(self._plc.read, *addresses)
         if not isinstance(results, list):
             results = [results]
         return {addr: r.value for addr, r in zip(addresses, results) if r}
@@ -56,7 +65,7 @@ class EthernetIpDriver(ProtocolDriver):
     async def browse(self) -> list[dict]:
         if not self._plc:
             return []
-        tag_list = self._plc.get_tag_list()
+        tag_list = await self._run_sync(self._plc.get_tag_list)
         return [
             {
                 "name": t.tag_name,

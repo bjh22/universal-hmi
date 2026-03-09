@@ -13,7 +13,7 @@ class TrendData(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id"), nullable=False, index=True)
+    tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id", ondelete="CASCADE"), nullable=False, index=True)
     timestamp: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, index=True, default=lambda: datetime.now(timezone.utc)
     )

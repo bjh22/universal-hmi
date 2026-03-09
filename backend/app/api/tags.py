@@ -182,7 +182,12 @@ async def get_tag_by_name(tag_name: str, session: AsyncSession = Depends(get_db)
 
 
 @router.get("/values")
-async def get_all_tag_values():
+async def get_all_tag_values(
+    _user: User = Depends(require_role(
+        UserRole.UNAUTHENTICATED, UserRole.OPERATOR, UserRole.SUPERVISOR,
+        UserRole.ENGINEER, UserRole.DESIGNER,
+    )),
+):
     return tag_engine.get_all_values()
 
 
@@ -205,6 +210,10 @@ async def write_tag_value(
     tag_name: str,
     body: dict,
     session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(
+        UserRole.OPERATOR, UserRole.SUPERVISOR,
+        UserRole.ENGINEER, UserRole.DESIGNER,
+    )),
 ):
     value = body.get("value")
     if value is None:
