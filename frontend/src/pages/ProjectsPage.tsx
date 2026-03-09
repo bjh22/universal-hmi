@@ -35,6 +35,7 @@ export function ProjectsPage({ user }: Props) {
   const [showDelete, setShowDelete] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showLoadConfirm, setShowLoadConfirm] = useState(false);
+  const [dirtyChanges, setDirtyChanges] = useState<{ section: string; added: string[]; removed: string[]; modified: { name: string; fields: string[] }[] }[]>([]);
 
   // Form state
   const [formName, setFormName] = useState('');
@@ -261,7 +262,12 @@ export function ProjectsPage({ user }: Props) {
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-medium text-white text-sm">{p.name}</span>
+                  <span className="font-medium text-white text-sm flex items-center gap-1.5">
+                    {p.name}
+                    {p.is_active && (
+                      <span className="text-xs bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded font-normal">Active</span>
+                    )}
+                  </span>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-slate-400">v{p.version}</span>
                     {p.has_snapshot && (
@@ -323,7 +329,23 @@ export function ProjectsPage({ user }: Props) {
                       <span className="flex items-center gap-1.5"><Save size={16} /> Save</span>
                     </button>
                     <button
-                      onClick={() => setShowLoadConfirm(true)}
+                      onClick={async () => {
+                        if (activeProject && activeProject.id !== detail.id) {
+                          try {
+                            const result = await api.getActiveProjectDirty();
+                            if (result.dirty) {
+                              setDirtyChanges(result.changes);
+                              setShowLoadConfirm(true);
+                              return;
+                            }
+                          } catch {
+                            setDirtyChanges([]);
+                            setShowLoadConfirm(true);
+                            return;
+                          }
+                        }
+                        handleLoad(detail.id);
+                      }}
                       disabled={busy || !detail.has_snapshot}
                       className={btnPrimary}
                       title={!detail.has_snapshot ? 'No saved snapshot to load' : undefined}
@@ -447,27 +469,64 @@ export function ProjectsPage({ user }: Props) {
       )}
 
       {/* Load Confirm */}
-      {showLoadConfirm && detail && (
-        <Dialog title="Load Project" onClose={() => setShowLoadConfirm(false)}>
+      {showLoadConfirm && detail && activeProject && (
+        <Dialog title="Switch Project" onClose={() => setShowLoadConfirm(false)}>
           <p className="text-sm text-slate-300 mb-4">
-            Loading <strong>{detail.name}</strong> will replace all current tags, screens, data sources, and jobs with this project's saved snapshot.
+            Switch from <strong>{activeProject.name}</strong> to <strong>{detail.name}</strong>? There are unsaved changes:
           </p>
-          <p className="text-sm text-amber-400 mb-4">
-            Any unsaved changes to the current HMI state will be lost.
-          </p>
+          {dirtyChanges.length > 0 && (
+            <div className="bg-slate-900 rounded-md border border-slate-700 p-3 mb-4 max-h-64 overflow-y-auto space-y-1">
+              {dirtyChanges.map(c => (
+                <details key={c.section} className="group">
+                  <summary className="flex items-center justify-between cursor-pointer py-1 hover:bg-slate-800/50 rounded px-1 -mx-1">
+                    <span className="text-xs font-medium text-slate-300">{c.section}</span>
+                    <span className="text-xs text-slate-400 space-x-2">
+                      {c.added.length > 0 && (
+                        <span className="text-green-400">+{c.added.length}</span>
+                      )}
+                      {c.removed.length > 0 && (
+                        <span className="text-red-400">-{c.removed.length}</span>
+                      )}
+                      {c.modified.length > 0 && (
+                        <span className="text-amber-400">~{c.modified.length}</span>
+                      )}
+                    </span>
+                  </summary>
+                  <div className="pl-3 pb-1 space-y-1">
+                    {c.added.map(name => (
+                      <div key={`a-${name}`} className="text-xs text-green-400">+ {name}</div>
+                    ))}
+                    {c.removed.map(name => (
+                      <div key={`r-${name}`} className="text-xs text-red-400">- {name}</div>
+                    ))}
+                    {c.modified.map(m => (
+                      <div key={`m-${m.name}`}>
+                        <div className="text-xs text-amber-400">~ {m.name}</div>
+                        {m.fields.map((f, i) => (
+                          <div key={i} className="text-xs text-slate-500 pl-3 font-mono">{f}</div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              ))}
+            </div>
+          )}
           <div className="flex justify-end gap-2">
             <button onClick={() => setShowLoadConfirm(false)} className={btnSecondary} disabled={busy}>Cancel</button>
-            {activeProject && activeProject.id !== detail.id && (
-              <button
-                onClick={() => handleSaveAndLoad(activeProject.id, detail.id)}
-                disabled={busy}
-                className={btnSecondary}
-              >
-                {busy ? 'Working...' : `Save "${activeProject.name}" & Load`}
-              </button>
-            )}
-            <button onClick={() => handleLoad(detail.id)} disabled={busy} className={btnDanger}>
-              {busy ? 'Loading...' : 'Discard & Load'}
+            <button
+              onClick={() => handleLoad(detail.id)}
+              disabled={busy}
+              className={btnSecondary}
+            >
+              {busy ? 'Working...' : 'Switch without saving'}
+            </button>
+            <button
+              onClick={() => handleSaveAndLoad(activeProject.id, detail.id)}
+              disabled={busy}
+              className={btnPrimary}
+            >
+              {busy ? 'Working...' : 'Save & Switch'}
             </button>
           </div>
         </Dialog>
