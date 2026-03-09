@@ -37,7 +37,7 @@ export function ToggleWidget({ title, tag, tagValues, titleStyle, valueStyle, ch
           }`}
         />
       </button>
-      <div className={`text-sm font-medium ${value ? 'text-green-400' : 'text-slate-400'} ${isNone ? '' : 'mt-2'}`} style={textStyleToCSS(valueStyle)}>
+      <div className={`text-base font-medium ${value ? 'text-green-400' : 'text-slate-400'} ${isNone ? '' : 'mt-2'}`} style={textStyleToCSS(valueStyle)}>
         {value ? 'ON' : 'OFF'}
       </div>
     </div>

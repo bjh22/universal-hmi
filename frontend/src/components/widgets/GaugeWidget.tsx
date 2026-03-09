@@ -199,11 +199,11 @@ function NumericGauge({ value, color, units, decimalPlaces, valueFontSize, value
 
 // ─── Default sizes per mode ───
 const DEFAULTS: Record<GaugeDisplayMode, { valueFontSize: number; barThickness: number; gaugeSize: number }> = {
-  bar:      { valueFontSize: 30, barThickness: 12, gaugeSize: 100 },
-  radial:   { valueFontSize: 14, barThickness: 6,  gaugeSize: 100 },
-  donut:    { valueFontSize: 16, barThickness: 8,  gaugeSize: 100 },
-  vertical: { valueFontSize: 24, barThickness: 32, gaugeSize: 100 },
-  numeric:  { valueFontSize: 36, barThickness: 12, gaugeSize: 100 },
+  bar:      { valueFontSize: 36, barThickness: 12, gaugeSize: 100 },
+  radial:   { valueFontSize: 18, barThickness: 6,  gaugeSize: 100 },
+  donut:    { valueFontSize: 20, barThickness: 8,  gaugeSize: 100 },
+  vertical: { valueFontSize: 30, barThickness: 32, gaugeSize: 100 },
+  numeric:  { valueFontSize: 42, barThickness: 12, gaugeSize: 100 },
 };
 
 // ─── Main component ───

@@ -55,7 +55,7 @@ export function LightIndicator({ title, tag, writeTag, onColor = '#22c55e', offC
           title={writeTag ? 'Click to toggle' : undefined}
         />
         {chrome === 'none' && title && (
-          <span className="text-xs text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>
+          <span className="text-sm text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>
             {title}
           </span>
         )}

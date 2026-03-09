@@ -40,13 +40,13 @@ export function ParameterInput({ title, tag, tagValues, min = 0, max = 100, unit
           onClick={() => setShowKeypad(true)}
           className="text-left group"
         >
-          <div className="text-2xl font-bold text-slate-100 group-hover:text-blue-300 transition-colors" style={textStyleToCSS(valueStyle)}>
+          <div className="text-3xl font-bold text-slate-100 group-hover:text-blue-300 transition-colors" style={textStyleToCSS(valueStyle)}>
             {currentValue.toFixed(decimalPlaces)}
-            <span className="text-sm font-normal text-slate-400 ml-1">{units}</span>
+            <span className="text-base font-normal text-slate-400 ml-1">{units}</span>
           </div>
-          {shouldShowExtras(chrome) && <div className="text-xs text-blue-400 group-hover:text-blue-300 mt-1">Tap to change</div>}
+          {shouldShowExtras(chrome) && <div className="text-sm text-blue-400 group-hover:text-blue-300 mt-1">Tap to change</div>}
         </button>
-        {shouldShowExtras(chrome) && <div className="text-xs text-slate-500">Range: {min} – {max} {units}</div>}
+        {shouldShowExtras(chrome) && <div className="text-sm text-slate-500">Range: {min} – {max} {units}</div>}
       </div>
       {showKeypad && (
         <NumericKeypad

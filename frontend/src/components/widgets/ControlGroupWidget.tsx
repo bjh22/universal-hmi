@@ -38,10 +38,10 @@ function ToggleControl({ item, tagValues, valueStyle }: { item: ControlItem & { 
     <div className="flex items-center justify-between gap-2 py-1.5">
       <div className="flex items-center gap-1 min-w-0">
         {longDesc && <InlineInfoButton description={longDesc} title={item.label} />}
-        <span className="text-xs text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{item.label}</span>
+        <span className="text-sm text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{item.label}</span>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
-        <span className={`text-[10px] font-medium ${value ? 'text-green-400' : 'text-slate-500'}`}>
+        <span className={`text-xs font-medium ${value ? 'text-green-400' : 'text-slate-500'}`}>
           {value ? 'ON' : 'OFF'}
         </span>
         <button
@@ -68,11 +68,11 @@ function ValueControl({ item, tagValues, valueStyle }: { item: ControlItem & { t
     <div className="flex items-center justify-between gap-2 py-1.5">
       <div className="flex items-center gap-1 min-w-0">
         {longDesc && <InlineInfoButton description={longDesc} title={item.label} />}
-        <span className="text-xs text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{item.label}</span>
+        <span className="text-sm text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{item.label}</span>
       </div>
-      <span className="text-sm font-semibold text-slate-100 tabular-nums flex-shrink-0" style={textStyleToCSS(valueStyle)}>
+      <span className="text-base font-semibold text-slate-100 tabular-nums flex-shrink-0" style={textStyleToCSS(valueStyle)}>
         {display}
-        {item.units && <span className="text-xs text-slate-500 font-normal ml-1">{item.units}</span>}
+        {item.units && <span className="text-sm text-slate-500 font-normal ml-1">{item.units}</span>}
       </span>
     </div>
   );
@@ -101,7 +101,7 @@ function ButtonControl({ item, tagValues }: { item: ControlItem & { type: 'butto
     <div className="py-1">
       <div className="flex items-center gap-1">
         {longDesc && <InlineInfoButton description={longDesc} title={item.label} />}
-        <button onClick={handleClick} className={`flex-1 px-3 py-1.5 rounded-md text-xs text-white font-medium ${cls}`}>
+        <button onClick={handleClick} className={`flex-1 px-3 py-1.5 rounded-md text-sm text-white font-medium ${cls}`}>
           {item.label}
         </button>
       </div>
@@ -133,14 +133,14 @@ function InputControl({ item, tagValues, valueStyle }: { item: ControlItem & { t
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1 min-w-0">
             {longDesc && <InlineInfoButton description={longDesc} title={item.label} />}
-            <span className="text-xs text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{item.label}</span>
+            <span className="text-sm text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{item.label}</span>
           </div>
-          <span className="text-sm font-semibold text-slate-100 tabular-nums flex-shrink-0 group-hover:text-blue-300 transition-colors" style={textStyleToCSS(valueStyle)}>
+          <span className="text-base font-semibold text-slate-100 tabular-nums flex-shrink-0 group-hover:text-blue-300 transition-colors" style={textStyleToCSS(valueStyle)}>
             {currentValue.toFixed(dp)}
-            {item.units && <span className="text-xs text-slate-500 font-normal ml-1">{item.units}</span>}
+            {item.units && <span className="text-sm text-slate-500 font-normal ml-1">{item.units}</span>}
           </span>
         </div>
-        <div className="text-[10px] text-blue-400 group-hover:text-blue-300 mt-0.5">Tap to change</div>
+        <div className="text-xs text-blue-400 group-hover:text-blue-300 mt-0.5">Tap to change</div>
       </button>
       {showKeypad && (
         <NumericKeypad
@@ -184,7 +184,7 @@ export function ControlGroupWidget({ title, controls = [], tagValues, columns = 
           </div>
         ))}
         {controls.length === 0 && (
-          <div className="text-xs text-slate-600 italic text-center py-4">No controls configured</div>
+          <div className="text-sm text-slate-600 italic text-center py-4">No controls configured</div>
         )}
       </div>
     </div>

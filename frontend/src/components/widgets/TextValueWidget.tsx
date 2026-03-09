@@ -29,11 +29,11 @@ export function TextValueWidget({ title, tag, tagValues, units, format, titleSty
   return (
     <div className={`${getContainerClasses(chrome)} h-full flex flex-col justify-center`}>
       {shouldShowTitle(chrome) && <div className={getTitleClasses(chrome)} style={textStyleToCSS(titleStyle)}>{title}</div>}
-      <div className="text-2xl font-bold text-slate-100" style={textStyleToCSS(valueStyle)}>
+      <div className="text-3xl font-bold text-slate-100" style={textStyleToCSS(valueStyle)}>
         {display}
-        {units && <span className="text-sm font-normal text-slate-400 ml-1">{units}</span>}
+        {units && <span className="text-base font-normal text-slate-400 ml-1">{units}</span>}
       </div>
-      {shouldShowExtras(chrome) && tv && <div className="text-xs text-slate-500 mt-1">{tv.display_name || tag}</div>}
+      {shouldShowExtras(chrome) && tv && <div className="text-sm text-slate-500 mt-1">{tv.display_name || tag}</div>}
     </div>
   );
 }

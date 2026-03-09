@@ -44,7 +44,7 @@ export function CommandButton({ title, tag, value, script, color = 'blue', confi
       <button
         onClick={handleClick}
         disabled={pending}
-        className={`px-6 py-3 rounded-lg font-medium text-sm transition-colors min-h-[44px] min-w-[44px] ${
+        className={`px-6 py-3 rounded-lg font-medium text-base transition-colors min-h-[44px] min-w-[44px] ${
           COLORS[color] || COLORS.blue
         } ${pending ? 'opacity-50 cursor-wait' : ''}`}
       >
