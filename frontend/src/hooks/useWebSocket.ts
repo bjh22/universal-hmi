@@ -85,6 +85,10 @@ export function useWebSocket() {
       } else if (msg.type === 'alarm') {
         const alarm = msg.data as AlarmData;
         setAlarms((prev) => {
+          // Remove fully resolved alarms so they don't accumulate
+          if (alarm.state === 'inactive') {
+            return prev.filter((a) => a.id !== alarm.id);
+          }
           // Update existing alarm or prepend new one
           const idx = prev.findIndex((a) => a.id === alarm.id);
           if (idx >= 0) {

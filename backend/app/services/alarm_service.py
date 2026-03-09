@@ -106,6 +106,13 @@ class AlarmService:
         retire those stale alarms before loading the new configs, otherwise the old
         alarm persists in the DB and in-memory alongside any new alarm the eval loop
         creates from the updated config.
+
+        IMPORTANT: We do NOT remove stale alarms from _active_alarms before calling
+        load_alarm_configs(). The stale alarm sitting in _active_alarms acts as a
+        guard — it prevents the eval loop from seeing "no active alarm" and creating
+        a duplicate during the awaits inside load_alarm_configs(). The atomic swap
+        at the end of load_alarm_configs() naturally drops the stale alarm (since
+        it's INACTIVE in DB and won't be restored).
         """
         async with self._session_factory() as session:
             # Build a set of currently configured alarm tag_ids and their configs
@@ -129,7 +136,7 @@ class AlarmService:
                 ]))
             )
             now = datetime.now(timezone.utc)
-            stale_tag_ids: set[int] = set()
+            retired_any = False
             for alarm in active_result.scalars().all():
                 new_cfg = new_config_by_tag.get(alarm.tag_id)
                 is_stale = False
@@ -146,7 +153,7 @@ class AlarmService:
                         is_stale = True
 
                 if is_stale:
-                    stale_tag_ids.add(alarm.tag_id)
+                    retired_any = True
                     # Transition to INACTIVE and record history
                     alarm.state = AlarmState.INACTIVE
                     alarm.cleared_at = now
@@ -155,16 +162,11 @@ class AlarmService:
                         alarm.acknowledged_by = "system:config_change"
                     self._record_history_obj(session, alarm)
 
-            if stale_tag_ids:
+            if retired_any:
                 await session.commit()
-                # Broadcast removals so frontends drop the stale alarms
-                for tag_id in stale_tag_ids:
-                    old_alarm = self._active_alarms.pop(tag_id, None)
-                    if old_alarm:
-                        old_alarm.state = AlarmState.INACTIVE
-                        old_alarm.cleared_at = now
-                        self._broadcast_alarm(old_alarm)
 
+            # Reload configs — the atomic swap in load_alarm_configs will
+            # naturally exclude retired alarms (they're INACTIVE in DB now).
             await self.load_alarm_configs(session)
             # Push a fresh snapshot so all frontends have consistent alarm state
             self.broadcast_alarms_snapshot()
