@@ -40,12 +40,12 @@ const LABEL_COLORS = [
   '#ec4899', '#06b6d4', '#f97316', '#6366f1', '#14b8a6',
 ];
 
-const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white outline-none focus:border-blue-500';
+const inputCls = 'w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-md px-3 py-2 text-sm text-white outline-none focus:border-blue-500';
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="text-xs text-slate-400 mb-1 block">{label}</label>
+      <label className="text-xs text-[var(--hmi-text-secondary)] mb-1 block">{label}</label>
       {children}
     </div>
   );
@@ -60,11 +60,11 @@ function DeleteConfirmDialog({ title, name, onConfirm, onCancel }: {
 }) {
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onCancel}>
-      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 max-w-sm" onClick={e => e.stopPropagation()}>
-        <div className="text-slate-100 font-medium mb-2">{title}</div>
-        <p className="text-sm text-slate-400 mb-4">Are you sure you want to delete <span className="text-slate-200 font-mono">{name}</span>? This cannot be undone.</p>
+      <div className="bg-[var(--hmi-bg-elevated)] rounded-xl border border-[var(--hmi-border)] p-6 max-w-sm" onClick={e => e.stopPropagation()}>
+        <div className="text-[var(--hmi-text-primary)] font-medium mb-2">{title}</div>
+        <p className="text-sm text-[var(--hmi-text-secondary)] mb-4">Are you sure you want to delete <span className="text-[var(--hmi-text-primary)] font-mono">{name}</span>? This cannot be undone.</p>
         <div className="flex justify-end gap-2">
-          <button onClick={onCancel} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300">Cancel</button>
+          <button onClick={onCancel} className="px-4 py-2 bg-[var(--hmi-bg-input)] rounded-lg text-sm text-[var(--hmi-text-secondary)]">Cancel</button>
           <button onClick={onConfirm} className="px-4 py-2 bg-red-600 rounded-lg text-sm text-white hover:bg-red-700">Delete</button>
         </div>
       </div>
@@ -89,10 +89,10 @@ function DataSourceDialog({ ds, onSave, onClose }: {
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-lg max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+      <div className="bg-[var(--hmi-bg-elevated)] rounded-xl border border-[var(--hmi-border)] w-full max-w-lg max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-slate-100">{form.id != null ? 'Edit Data Source' : 'New Data Source'}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
+          <h2 className="text-lg font-semibold text-[var(--hmi-text-primary)]">{form.id != null ? 'Edit Data Source' : 'New Data Source'}</h2>
+          <button onClick={onClose} className="text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)]"><X size={20} /></button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <Field label="Name *">
@@ -111,7 +111,7 @@ function DataSourceDialog({ ds, onSave, onClose }: {
               </select>
             </Field>
             <Field label="Enabled">
-              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer pt-2">
+              <label className="flex items-center gap-2 text-sm text-[var(--hmi-text-secondary)] cursor-pointer pt-2">
                 <input type="checkbox" checked={form.enabled} onChange={e => setForm(f => ({ ...f, enabled: e.target.checked }))} className="accent-blue-500" />
                 {form.enabled ? 'Yes' : 'No'}
               </label>
@@ -119,8 +119,8 @@ function DataSourceDialog({ ds, onSave, onClose }: {
           </div>
 
           {protoFields.length > 0 && (
-            <fieldset className="border border-slate-700 rounded-lg p-3">
-              <legend className="text-xs text-slate-400 px-2">Connection Settings</legend>
+            <fieldset className="border border-[var(--hmi-border)] rounded-lg p-3">
+              <legend className="text-xs text-[var(--hmi-text-secondary)] px-2">Connection Settings</legend>
               <div className="space-y-3">
                 {protoFields.map(f => (
                   <Field key={f.key} label={f.label}>
@@ -141,7 +141,7 @@ function DataSourceDialog({ ds, onSave, onClose }: {
           )}
 
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 hover:bg-slate-600">Cancel</button>
+            <button type="button" onClick={onClose} className="px-4 py-2 bg-[var(--hmi-bg-input)] rounded-lg text-sm text-[var(--hmi-text-secondary)] hover:bg-[var(--hmi-border-subtle)]">Cancel</button>
             <button type="submit" className="px-4 py-2 bg-[var(--hmi-accent)] rounded-lg text-sm text-white hover:bg-[var(--hmi-accent-dark)]">{form.id != null ? 'Save' : 'Create'}</button>
           </div>
         </form>
@@ -198,15 +198,15 @@ function EnumMappingEditor({ mapping, onChange }: {
             value={entry.key}
             onChange={e => updateEntry(i, 'key', e.target.value)}
             placeholder="Value"
-            className="w-16 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white"
+            className="w-16 bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded px-1.5 py-0.5 text-xs text-white"
           />
-          <span className="text-slate-500 text-xs">=</span>
+          <span className="text-[var(--hmi-text-muted)] text-xs">=</span>
           <input
             type="text"
             value={entry.label}
             onChange={e => updateEntry(i, 'label', e.target.value)}
             placeholder="Label"
-            className="flex-1 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white"
+            className="flex-1 bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded px-1.5 py-0.5 text-xs text-white"
           />
           <button type="button" onClick={() => removeEntry(i)} className="text-red-400 hover:text-red-300 text-xs px-1">&times;</button>
         </div>
@@ -276,10 +276,10 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+      <div className="bg-[var(--hmi-bg-elevated)] rounded-xl border border-[var(--hmi-border)] w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-slate-100">{form.id != null ? 'Edit Tag' : 'New Tag'}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
+          <h2 className="text-lg font-semibold text-[var(--hmi-text-primary)]">{form.id != null ? 'Edit Tag' : 'New Tag'}</h2>
+          <button onClick={onClose} className="text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)]"><X size={20} /></button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Identity */}
@@ -288,14 +288,14 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
           </Field>
           <Field label="Labels">
             <div ref={labelRef} className="relative">
-              <div className="flex flex-wrap gap-1.5 min-h-[38px] w-full bg-slate-700 border border-slate-600 rounded-md px-2 py-1.5 cursor-text"
+              <div className="flex flex-wrap gap-1.5 min-h-[38px] w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-md px-2 py-1.5 cursor-text"
                 onClick={() => setShowLabelDropdown(true)}>
                 {(form.labels || []).map(l => (
                   <span key={l.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs text-white"
                     style={{ backgroundColor: l.color || '#3b82f6' }}>
                     {l.name}
                     <button type="button" onClick={e => { e.stopPropagation(); toggleLabel(l); }}
-                      className="hover:text-slate-200 ml-0.5">&times;</button>
+                      className="hover:text-[var(--hmi-text-primary)] ml-0.5">&times;</button>
                   </span>
                 ))}
                 <input
@@ -307,11 +307,11 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
                 />
               </div>
               {showLabelDropdown && filteredLabels.length > 0 && (
-                <div className="absolute z-10 mt-1 w-full bg-slate-700 border border-slate-600 rounded-md shadow-lg max-h-40 overflow-y-auto">
+                <div className="absolute z-10 mt-1 w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-md shadow-lg max-h-40 overflow-y-auto">
                   {filteredLabels.map(l => (
                     <button key={l.id} type="button"
                       onClick={() => { toggleLabel(l); setShowLabelDropdown(false); }}
-                      className="w-full text-left px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-600 flex items-center gap-2">
+                      className="w-full text-left px-3 py-1.5 text-sm text-[var(--hmi-text-primary)] hover:bg-[var(--hmi-border-subtle)] flex items-center gap-2">
                       <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: l.color || '#3b82f6' }} />
                       {l.name}
                     </button>
@@ -392,9 +392,9 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
           )}
 
           {/* Trending */}
-          <fieldset className="border border-slate-700 rounded-lg p-3">
-            <legend className="text-xs text-slate-400 px-2">Trending</legend>
-            <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+          <fieldset className="border border-[var(--hmi-border)] rounded-lg p-3">
+            <legend className="text-xs text-[var(--hmi-text-secondary)] px-2">Trending</legend>
+            <label className="flex items-center gap-2 text-sm text-[var(--hmi-text-secondary)] cursor-pointer">
               <input type="checkbox" checked={form.trending_enabled} onChange={e => set('trending_enabled', e.target.checked)} className="accent-blue-500" />
               Enabled
             </label>
@@ -411,12 +411,12 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
           </fieldset>
 
           {/* Alarm (boolean tags only) */}
-          <fieldset className="border border-slate-700 rounded-lg p-3">
-            <legend className="text-xs text-slate-400 px-2">Alarm</legend>
+          <fieldset className="border border-[var(--hmi-border)] rounded-lg p-3">
+            <legend className="text-xs text-[var(--hmi-text-secondary)] px-2">Alarm</legend>
             {form.data_type !== 'bool' ? (
-              <p className="text-xs text-slate-500">Alarms are only supported on boolean tags. Use PLC-side logic for analog threshold alarming.</p>
+              <p className="text-xs text-[var(--hmi-text-muted)]">Alarms are only supported on boolean tags. Use PLC-side logic for analog threshold alarming.</p>
             ) : (
-              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+              <label className="flex items-center gap-2 text-sm text-[var(--hmi-text-secondary)] cursor-pointer">
                 <input type="checkbox" checked={form.alarm_enabled} onChange={e => {
                   const enabled = e.target.checked;
                   set('alarm_enabled', enabled);
@@ -445,10 +445,10 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
           </fieldset>
 
           {/* Simulation */}
-          <fieldset className="border border-slate-700 rounded-lg p-3">
-            <legend className="text-xs text-slate-400 px-2">Simulation</legend>
+          <fieldset className="border border-[var(--hmi-border)] rounded-lg p-3">
+            <legend className="text-xs text-[var(--hmi-text-secondary)] px-2">Simulation</legend>
             <div className="flex items-center gap-4">
-              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+              <label className="flex items-center gap-2 text-sm text-[var(--hmi-text-secondary)] cursor-pointer">
                 <input type="checkbox" checked={form.simulation_enabled} onChange={e => set('simulation_enabled', e.target.checked)} className="accent-blue-500" />
                 Enabled
               </label>
@@ -467,9 +467,9 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
 
           {/* Enum Mapping */}
           {(form.data_type === 'int' || form.enum_mapping) && (
-            <fieldset className="border border-slate-700 rounded-lg p-3">
-              <legend className="text-xs text-slate-400 px-2">Enum Mapping</legend>
-              <p className="text-xs text-slate-500 mb-2">Map integer values to display labels (e.g. 0=Stopped, 1=Running)</p>
+            <fieldset className="border border-[var(--hmi-border)] rounded-lg p-3">
+              <legend className="text-xs text-[var(--hmi-text-secondary)] px-2">Enum Mapping</legend>
+              <p className="text-xs text-[var(--hmi-text-muted)] mb-2">Map integer values to display labels (e.g. 0=Stopped, 1=Running)</p>
               <EnumMappingEditor
                 mapping={form.enum_mapping}
                 onChange={m => set('enum_mapping', m)}
@@ -478,7 +478,7 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
           )}
 
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 hover:bg-slate-600">Cancel</button>
+            <button type="button" onClick={onClose} className="px-4 py-2 bg-[var(--hmi-bg-input)] rounded-lg text-sm text-[var(--hmi-text-secondary)] hover:bg-[var(--hmi-border-subtle)]">Cancel</button>
             <button type="submit" className="px-4 py-2 bg-[var(--hmi-accent)] rounded-lg text-sm text-white hover:bg-[var(--hmi-accent-dark)]">{form.id != null ? 'Save' : 'Create'}</button>
           </div>
         </form>
@@ -523,19 +523,19 @@ function BulkEditDialog({ tagCount, dataSources, onApply, onClose }: {
 
   const enabledCount = Object.values(fields).filter(f => f.enabled).length;
 
-  const rowCls = 'flex items-center gap-3 py-2 border-b border-slate-700/50';
-  const checkCls = 'text-slate-500 hover:text-slate-300 flex-shrink-0';
-  const labelCls = 'text-sm text-slate-400 w-36 flex-shrink-0';
-  const ctrlCls = 'flex-1 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-white outline-none disabled:opacity-40';
+  const rowCls = 'flex items-center gap-3 py-2 border-b border-[var(--hmi-border)]/50';
+  const checkCls = 'text-[var(--hmi-text-muted)] hover:text-[var(--hmi-text-secondary)] flex-shrink-0';
+  const labelCls = 'text-sm text-[var(--hmi-text-secondary)] w-36 flex-shrink-0';
+  const ctrlCls = 'flex-1 bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded px-2 py-1 text-sm text-white outline-none disabled:opacity-40';
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 w-full max-w-lg" onClick={e => e.stopPropagation()}>
+      <div className="bg-[var(--hmi-bg-elevated)] rounded-xl border border-[var(--hmi-border)] p-6 w-full max-w-lg" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-1">
-          <h2 className="text-lg font-semibold text-slate-100">Edit Fields</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
+          <h2 className="text-lg font-semibold text-[var(--hmi-text-primary)]">Edit Fields</h2>
+          <button onClick={onClose} className="text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)]"><X size={20} /></button>
         </div>
-        <p className="text-sm text-slate-500 mb-4">
+        <p className="text-sm text-[var(--hmi-text-muted)] mb-4">
           Editing {tagCount} tag{tagCount !== 1 ? 's' : ''}. Check a field to change its value on all selected tags.
         </p>
 
@@ -609,7 +609,7 @@ function BulkEditDialog({ tagCount, dataSources, onApply, onClose }: {
                 {fields[key].enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
               </button>
               <span className={labelCls}>{label}</span>
-              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+              <label className="flex items-center gap-2 text-sm text-[var(--hmi-text-secondary)] cursor-pointer">
                 <input type="checkbox"
                   checked={fields[key].value as boolean}
                   onChange={e => setValue(key, e.target.checked)}
@@ -641,7 +641,7 @@ function BulkEditDialog({ tagCount, dataSources, onApply, onClose }: {
         </div>
 
         <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 hover:bg-slate-600">Cancel</button>
+          <button onClick={onClose} className="px-4 py-2 bg-[var(--hmi-bg-input)] rounded-lg text-sm text-[var(--hmi-text-secondary)] hover:bg-[var(--hmi-border-subtle)]">Cancel</button>
           <button
             onClick={handleApply}
             disabled={enabledCount === 0}
@@ -676,14 +676,14 @@ function BulkLabelDialog({ mode, tagCount, allLabels, onApply, onClose }: {
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+      <div className="bg-[var(--hmi-bg-elevated)] rounded-xl border border-[var(--hmi-border)] p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-slate-100">
+          <h2 className="text-lg font-semibold text-[var(--hmi-text-primary)]">
             {mode === 'add' ? 'Add' : 'Remove'} Labels
           </h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
+          <button onClick={onClose} className="text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)]"><X size={20} /></button>
         </div>
-        <p className="text-sm text-slate-400 mb-3">
+        <p className="text-sm text-[var(--hmi-text-secondary)] mb-3">
           {mode === 'add' ? 'Add labels to' : 'Remove labels from'} {tagCount} selected tag{tagCount !== 1 ? 's' : ''}
         </p>
         <div className="space-y-1 max-h-60 overflow-y-auto mb-4">
@@ -691,20 +691,20 @@ function BulkLabelDialog({ mode, tagCount, allLabels, onApply, onClose }: {
             <button
               key={l.id}
               onClick={() => toggleLabel(l.id)}
-              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition-colors ${selected.has(l.id) ? 'bg-[var(--hmi-accent-bg)] border border-[var(--hmi-accent)]/40' : 'hover:bg-slate-700 border border-transparent'}`}
+              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition-colors ${selected.has(l.id) ? 'bg-[var(--hmi-accent-bg)] border border-[var(--hmi-accent)]/40' : 'hover:bg-[var(--hmi-bg-input)] border border-transparent'}`}
             >
               {selected.has(l.id)
                 ? <CheckSquare size={16} className="text-blue-400 flex-shrink-0" />
-                : <Square size={16} className="text-slate-500 flex-shrink-0" />}
+                : <Square size={16} className="text-[var(--hmi-text-muted)] flex-shrink-0" />}
               <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: l.color || '#3b82f6' }} />
-              <span className="text-slate-200">{l.name}</span>
-              {l.description && <span className="text-slate-500 text-xs ml-auto truncate max-w-32">{l.description}</span>}
+              <span className="text-[var(--hmi-text-primary)]">{l.name}</span>
+              {l.description && <span className="text-[var(--hmi-text-muted)] text-xs ml-auto truncate max-w-32">{l.description}</span>}
             </button>
           ))}
-          {allLabels.length === 0 && <p className="text-sm text-slate-500 text-center py-4">No labels created yet</p>}
+          {allLabels.length === 0 && <p className="text-sm text-[var(--hmi-text-muted)] text-center py-4">No labels created yet</p>}
         </div>
         <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 hover:bg-slate-600">Cancel</button>
+          <button onClick={onClose} className="px-4 py-2 bg-[var(--hmi-bg-input)] rounded-lg text-sm text-[var(--hmi-text-secondary)] hover:bg-[var(--hmi-border-subtle)]">Cancel</button>
           <button
             onClick={() => onApply(Array.from(selected))}
             disabled={selected.size === 0}
@@ -917,10 +917,10 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-4xl max-h-[85vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+      <div className="bg-[var(--hmi-bg-elevated)] rounded-xl border border-[var(--hmi-border)] w-full max-w-4xl max-h-[85vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-slate-100">Import Tags</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
+          <h2 className="text-lg font-semibold text-[var(--hmi-text-primary)]">Import Tags</h2>
+          <button onClick={onClose} className="text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)]"><X size={20} /></button>
         </div>
 
         {/* Format selector */}
@@ -929,7 +929,7 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
             <button
               key={f}
               onClick={() => handleFormatChange(f)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${format === f ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${format === f ? 'bg-[var(--hmi-accent)] text-white' : 'bg-[var(--hmi-bg-input)] text-[var(--hmi-text-secondary)] hover:bg-[var(--hmi-border-subtle)]'}`}
             >
               {formatInfo[f].label}
             </button>
@@ -937,13 +937,13 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
         </div>
 
         <div className="mb-4">
-          <p className="text-xs text-slate-400 mb-2">{formatInfo[format].desc}</p>
+          <p className="text-xs text-[var(--hmi-text-secondary)] mb-2">{formatInfo[format].desc}</p>
           <div className="mb-3">
-            <label className="block text-xs text-slate-400 mb-1">Data Source <span className="text-red-400">*</span></label>
+            <label className="block text-xs text-[var(--hmi-text-secondary)] mb-1">Data Source <span className="text-red-400">*</span></label>
             <select
               value={dataSourceId ?? ''}
               onChange={e => setDataSourceId(e.target.value ? Number(e.target.value) : null)}
-              className="w-64 px-3 py-1.5 bg-slate-900 border border-slate-600 rounded-lg text-sm text-slate-200"
+              className="w-64 px-3 py-1.5 bg-[var(--hmi-bg-surface)] border border-[var(--hmi-border-subtle)] rounded-lg text-sm text-[var(--hmi-text-primary)]"
             >
               <option value="">Select a data source...</option>
               {dataSources.map(ds => (
@@ -961,13 +961,13 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
         {/* Optional prefix for PLC imports */}
         {format !== 'hmi_csv' && (
           <div className="mb-4">
-            <label className="block text-xs text-slate-400 mb-1">Tag name prefix (optional)</label>
+            <label className="block text-xs text-[var(--hmi-text-secondary)] mb-1">Tag name prefix (optional)</label>
             <input
               type="text"
               value={prefix}
               onChange={e => handlePrefixChange(e.target.value)}
               placeholder="e.g. PLC1"
-              className="w-48 px-3 py-1.5 bg-slate-900 border border-slate-600 rounded-lg text-sm text-slate-200"
+              className="w-48 px-3 py-1.5 bg-[var(--hmi-bg-surface)] border border-[var(--hmi-border-subtle)] rounded-lg text-sm text-[var(--hmi-text-primary)]"
             />
           </div>
         )}
@@ -979,12 +979,12 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
               <button onClick={toggleSelectAll} className="text-xs text-blue-400 hover:text-blue-300">
                 {selectedCount === totalCount ? 'Deselect All' : 'Select All'}
               </button>
-              <span className="text-sm text-slate-400">{selectedCount} of {totalCount} selected</span>
+              <span className="text-sm text-[var(--hmi-text-secondary)]">{selectedCount} of {totalCount} selected</span>
             </div>
             <div className="overflow-auto mb-4">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b border-slate-700 text-slate-400">
+                  <tr className="border-b border-[var(--hmi-border)] text-[var(--hmi-text-secondary)]">
                     <th className="px-2 py-1 w-8">
                       <input
                         type="checkbox"
@@ -1001,13 +1001,13 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
                     const key = row.name || String(i);
                     const checked = selectedNames.has(key);
                     return (
-                      <tr key={i} className={`border-b border-slate-700/50 cursor-pointer ${checked ? '' : 'opacity-50'}`} onClick={() => toggleTagSelection(key)}>
+                      <tr key={i} className={`border-b border-[var(--hmi-border)]/50 cursor-pointer ${checked ? '' : 'opacity-50'}`} onClick={() => toggleTagSelection(key)}>
                         <td className="px-2 py-1" onClick={e => e.stopPropagation()}>
                           <input type="checkbox" checked={checked} onChange={() => toggleTagSelection(key)} className="accent-blue-600" />
                         </td>
-                        {headers.map(h => <td key={h} className="px-2 py-1 text-slate-300 truncate max-w-32">{row[h]}</td>)}
+                        {headers.map(h => <td key={h} className="px-2 py-1 text-[var(--hmi-text-secondary)] truncate max-w-32">{row[h]}</td>)}
                         {existingTagNames.has(row.name) && (
-                          <td className="px-2 py-1"><span className="px-1.5 py-0.5 rounded text-[10px] font-medium text-slate-300 bg-slate-600">exists</span></td>
+                          <td className="px-2 py-1"><span className="px-1.5 py-0.5 rounded text-[10px] font-medium text-[var(--hmi-text-secondary)] bg-[var(--hmi-border-subtle)]">exists</span></td>
                         )}
                       </tr>
                     );
@@ -1020,7 +1020,7 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
 
         {/* PLC import preview */}
         {format !== 'hmi_csv' && previewLoading && (
-          <div className="text-sm text-slate-400 mb-4">Analyzing file...</div>
+          <div className="text-sm text-[var(--hmi-text-secondary)] mb-4">Analyzing file...</div>
         )}
         {previewError && (
           <div className="text-sm text-red-400 mb-4">{previewError}</div>
@@ -1032,19 +1032,19 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
               <button onClick={toggleSelectAll} className="text-xs text-blue-400 hover:text-blue-300">
                 {selectedCount === totalCount ? 'Deselect All' : 'Select All'}
               </button>
-              <span className="text-slate-400">{selectedCount} of {totalCount} selected</span>
-              <span className="text-slate-500">|</span>
-              <span className="text-slate-400">{Object.keys(previewGroups).length} groups</span>
+              <span className="text-[var(--hmi-text-secondary)]">{selectedCount} of {totalCount} selected</span>
+              <span className="text-[var(--hmi-text-muted)]">|</span>
+              <span className="text-[var(--hmi-text-secondary)]">{Object.keys(previewGroups).length} groups</span>
               {previewEnumCount > 0 && (
                 <>
-                  <span className="text-slate-500">|</span>
+                  <span className="text-[var(--hmi-text-muted)]">|</span>
                   <span className="text-amber-400">{previewEnumCount} enum tags</span>
                 </>
               )}
             </div>
 
             {/* Grouped tree view */}
-            <div className="overflow-auto mb-4 border border-slate-700 rounded-lg">
+            <div className="overflow-auto mb-4 border border-[var(--hmi-border)] rounded-lg">
               {Object.entries(previewGroups)
                 .sort(([, a], [, b]) => b - a)
                 .map(([group]) => {
@@ -1055,7 +1055,7 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
                   const someGroupSelected = groupSelectedCount > 0 && !allGroupSelected;
                   return (
                     <div key={group}>
-                      <div className="w-full flex items-center gap-2 px-3 py-1.5 bg-slate-750 hover:bg-slate-700 border-b border-slate-700">
+                      <div className="w-full flex items-center gap-2 px-3 py-1.5 bg-[var(--hmi-bg-input)]/70 hover:bg-[var(--hmi-bg-input)] border-b border-[var(--hmi-border)]">
                         <input
                           type="checkbox"
                           checked={allGroupSelected}
@@ -1067,21 +1067,21 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
                           onClick={() => toggleGroup(group)}
                           className="flex items-center justify-between flex-1 text-left"
                         >
-                          <span className="text-sm text-slate-200 font-medium">
-                            <span className="text-slate-500 mr-1">{isExpanded ? '\u25BC' : '\u25B6'}</span>
+                          <span className="text-sm text-[var(--hmi-text-primary)] font-medium">
+                            <span className="text-[var(--hmi-text-muted)] mr-1">{isExpanded ? '\u25BC' : '\u25B6'}</span>
                             {group}
                           </span>
-                          <span className="text-xs text-slate-500">{groupSelectedCount} / {groupTags.length} selected</span>
+                          <span className="text-xs text-[var(--hmi-text-muted)]">{groupSelectedCount} / {groupTags.length} selected</span>
                         </button>
                       </div>
                       {isExpanded && (
-                        <div className="bg-slate-900">
+                        <div className="bg-[var(--hmi-bg-surface)]">
                           {groupTags.map((tag, i) => {
                             const checked = selectedNames.has(tag.name);
                             return (
                               <div
                                 key={i}
-                                className={`flex items-center gap-2 px-4 py-1 border-b border-slate-800 text-xs cursor-pointer ${checked ? '' : 'opacity-50'}`}
+                                className={`flex items-center gap-2 px-4 py-1 border-b border-[var(--hmi-border)] text-xs cursor-pointer ${checked ? '' : 'opacity-50'}`}
                                 onClick={() => toggleTagSelection(tag.name)}
                               >
                                 <input
@@ -1091,18 +1091,18 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
                                   onClick={e => e.stopPropagation()}
                                   className="accent-blue-600"
                                 />
-                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium text-white ${typeBadgeColor[tag.data_type] || 'bg-slate-600'}`}>
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium text-white ${typeBadgeColor[tag.data_type] || 'bg-[var(--hmi-border-subtle)]'}`}>
                                   {tag.data_type}
                                 </span>
                                 {tag.has_enum && (
                                   <span className="px-1.5 py-0.5 rounded text-[10px] font-medium text-amber-300 bg-amber-900/40">enum</span>
                                 )}
                                 {existingTagNames.has(tag.name) && (
-                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-medium text-slate-300 bg-slate-600">exists</span>
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-medium text-[var(--hmi-text-secondary)] bg-[var(--hmi-border-subtle)]">exists</span>
                                 )}
-                                <span className="text-slate-300 font-mono truncate flex-1">{tag.name}</span>
+                                <span className="text-[var(--hmi-text-secondary)] font-mono truncate flex-1">{tag.name}</span>
                                 {tag.display_name && (
-                                  <span className="text-slate-500 truncate max-w-48">{tag.display_name}</span>
+                                  <span className="text-[var(--hmi-text-muted)] truncate max-w-48">{tag.display_name}</span>
                                 )}
                               </div>
                             );
@@ -1118,8 +1118,8 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
 
         {/* Conflict resolution */}
         {hasData && existingCount > 0 && (
-          <div className="mb-4 p-3 bg-slate-900 border border-slate-700 rounded-lg">
-            <div className="text-sm text-slate-300 mb-2">
+          <div className="mb-4 p-3 bg-[var(--hmi-bg-surface)] border border-[var(--hmi-border)] rounded-lg">
+            <div className="text-sm text-[var(--hmi-text-secondary)] mb-2">
               <span className="text-blue-400 font-medium">{newCount} new</span>
               {' and '}
               <span className="text-amber-400 font-medium">{existingCount} existing</span>
@@ -1128,16 +1128,16 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
             <div className="flex gap-4 mb-2">
               <label className="flex items-center gap-1.5 text-sm cursor-pointer">
                 <input type="radio" name="conflict" checked={conflictMode === 'skip'} onChange={() => setConflictMode('skip')} className="accent-blue-600" />
-                <span className="text-slate-300">Skip existing</span>
+                <span className="text-[var(--hmi-text-secondary)]">Skip existing</span>
               </label>
               <label className="flex items-center gap-1.5 text-sm cursor-pointer">
                 <input type="radio" name="conflict" checked={conflictMode === 'update'} onChange={() => setConflictMode('update')} className="accent-blue-600" />
-                <span className="text-slate-300">Update existing</span>
+                <span className="text-[var(--hmi-text-secondary)]">Update existing</span>
               </label>
             </div>
             {conflictMode === 'update' && (
               <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
-                <span className="text-xs text-slate-500 w-full mb-0.5">Fields to update:</span>
+                <span className="text-xs text-[var(--hmi-text-muted)] w-full mb-0.5">Fields to update:</span>
                 {[
                   { key: 'display_name', label: 'Display Name' },
                   { key: 'data_type', label: 'Data Type' },
@@ -1158,7 +1158,7 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
                       })}
                       className="accent-blue-600"
                     />
-                    <span className="text-slate-400">{f.label}</span>
+                    <span className="text-[var(--hmi-text-secondary)]">{f.label}</span>
                   </label>
                 ))}
               </div>
@@ -1168,7 +1168,7 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
 
         {hasData && (
           <div className="flex justify-end gap-2">
-            <button onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300">Cancel</button>
+            <button onClick={onClose} className="px-4 py-2 bg-[var(--hmi-bg-input)] rounded-lg text-sm text-[var(--hmi-text-secondary)]">Cancel</button>
             <button
               onClick={handleImport}
               disabled={selectedCount === 0 || dataSourceId === null}
@@ -1214,15 +1214,15 @@ function BrowseTreeRow({ item, existingAddresses, createdAddresses, onCreateTag,
   const alreadyExists = existingAddresses.has(tagAddress) || existingAddresses.has(item.node.node_id) || createdAddresses.has(tagAddress);
 
   return (
-    <tr className="border-b border-slate-700/50 hover:bg-slate-700/30">
-      <td className="px-3 py-1.5 text-slate-200">
+    <tr className="border-b border-[var(--hmi-border)]/50 hover:bg-[var(--hmi-bg-input)]/30">
+      <td className="px-3 py-1.5 text-[var(--hmi-text-primary)]">
         <div className="flex items-center gap-1" style={{ paddingLeft: `${item.depth * 20}px` }}>
           {isVariable ? (
             <span className="w-5 h-5 flex items-center justify-center flex-shrink-0" />
           ) : (
             <button
               onClick={() => onToggle(item.node.node_id)}
-              className="w-5 h-5 flex items-center justify-center flex-shrink-0 text-slate-400 hover:text-white"
+              className="w-5 h-5 flex items-center justify-center flex-shrink-0 text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)]"
             >
               {item.loading ? (
                 <Loader2 size={14} className="animate-spin" />
@@ -1243,7 +1243,7 @@ function BrowseTreeRow({ item, existingAddresses, createdAddresses, onCreateTag,
           <span className="truncate ml-1">{item.node.name}</span>
         </div>
       </td>
-      <td className="px-3 py-1.5 text-slate-400 font-mono text-xs">
+      <td className="px-3 py-1.5 text-[var(--hmi-text-secondary)] font-mono text-xs">
         {isVariable ? (
           item.node.relative_address ? (
             <span title={item.node.node_id}>{item.node.relative_address}</span>
@@ -1251,10 +1251,10 @@ function BrowseTreeRow({ item, existingAddresses, createdAddresses, onCreateTag,
             item.node.node_id || '\u2014'
           )
         ) : (
-          <span className="text-slate-500 italic">folder</span>
+          <span className="text-[var(--hmi-text-muted)] italic">folder</span>
         )}
       </td>
-      <td className="px-3 py-1.5 text-slate-400 text-xs">{isVariable ? (item.node.data_type || '\u2014') : ''}</td>
+      <td className="px-3 py-1.5 text-[var(--hmi-text-secondary)] text-xs">{isVariable ? (item.node.data_type || '\u2014') : ''}</td>
       <td className="px-3 py-1.5 text-right">
         {isVariable && (
           alreadyExists ? (
@@ -1493,22 +1493,22 @@ function BrowseTagsDialog({ dsId, dsName, existingTags, onCreateTag, onClose }: 
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-3xl max-h-[80vh] flex flex-col p-6" onClick={e => e.stopPropagation()}>
+      <div className="bg-[var(--hmi-bg-elevated)] rounded-xl border border-[var(--hmi-border)] w-full max-w-3xl max-h-[80vh] flex flex-col p-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold text-slate-100">Browse Tags: {dsName}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
+          <h2 className="text-lg font-semibold text-[var(--hmi-text-primary)]">Browse Tags: {dsName}</h2>
+          <button onClick={onClose} className="text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)]"><X size={20} /></button>
         </div>
 
         {/* Search + actions bar */}
         <div className="flex items-center gap-2 mb-3">
           <div className="relative flex-1">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--hmi-text-secondary)]" />
             <input
               type="text"
               placeholder="Filter tags by name or address..."
               value={filter}
               onChange={e => setFilter(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-slate-100 placeholder-slate-400"
+              className="w-full pl-8 pr-3 py-1.5 bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded text-sm text-[var(--hmi-text-primary)] placeholder-[var(--hmi-text-muted)]"
             />
           </div>
           {!fallbackMode && newVariableCount > 0 && (
@@ -1523,7 +1523,7 @@ function BrowseTagsDialog({ dsId, dsName, existingTags, onCreateTag, onClose }: 
             <button
               onClick={handleFullBrowse}
               disabled={fallbackLoading}
-              className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-xs text-slate-300 flex items-center gap-1 whitespace-nowrap"
+              className="px-3 py-1.5 bg-[var(--hmi-bg-input)] hover:bg-[var(--hmi-border-subtle)] rounded text-xs text-[var(--hmi-text-secondary)] flex items-center gap-1 whitespace-nowrap"
               title="Load entire tag tree at once (slower for large servers)"
             >
               {fallbackLoading ? <Loader2 size={12} className="animate-spin" /> : <FolderSearch size={12} />}
@@ -1534,19 +1534,19 @@ function BrowseTagsDialog({ dsId, dsName, existingTags, onCreateTag, onClose }: 
 
         {/* Content */}
         <div className="flex-1 overflow-auto min-h-0">
-          {loading && <p className="text-slate-400 text-sm py-4 text-center"><Loader2 size={16} className="inline animate-spin mr-2" />Loading...</p>}
+          {loading && <p className="text-[var(--hmi-text-secondary)] text-sm py-4 text-center"><Loader2 size={16} className="inline animate-spin mr-2" />Loading...</p>}
           {error && <p className="text-red-400 text-sm py-4 text-center">{error}</p>}
 
           {!loading && !error && !fallbackMode && (
             <>
               {tree.length === 0 ? (
-                <p className="text-slate-500 text-sm py-4 text-center">No tags found on this data source</p>
+                <p className="text-[var(--hmi-text-muted)] text-sm py-4 text-center">No tags found on this data source</p>
               ) : visibleRows.length === 0 && filter ? (
-                <p className="text-slate-500 text-sm py-4 text-center">No matches for &ldquo;{filter}&rdquo; in loaded nodes. Try expanding more folders or use Full Scan.</p>
+                <p className="text-[var(--hmi-text-muted)] text-sm py-4 text-center">No matches for &ldquo;{filter}&rdquo; in loaded nodes. Try expanding more folders or use Full Scan.</p>
               ) : (
                 <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-slate-800 z-10">
-                    <tr className="border-b border-slate-700 text-slate-400">
+                  <thead className="sticky top-0 bg-[var(--hmi-bg-elevated)] z-10">
+                    <tr className="border-b border-[var(--hmi-border)] text-[var(--hmi-text-secondary)]">
                       <th className="text-left px-3 py-2 font-medium">Name</th>
                       <th className="text-left px-3 py-2 font-medium">Address</th>
                       <th className="text-left px-3 py-2 font-medium w-20">Type</th>
@@ -1574,11 +1574,11 @@ function BrowseTagsDialog({ dsId, dsName, existingTags, onCreateTag, onClose }: 
           {fallbackMode && (
             <>
               {fallbackTags.length === 0 ? (
-                <p className="text-slate-500 text-sm py-4 text-center">No tags found</p>
+                <p className="text-[var(--hmi-text-muted)] text-sm py-4 text-center">No tags found</p>
               ) : (
                 <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-slate-800 z-10">
-                    <tr className="border-b border-slate-700 text-slate-400">
+                  <thead className="sticky top-0 bg-[var(--hmi-bg-elevated)] z-10">
+                    <tr className="border-b border-[var(--hmi-border)] text-[var(--hmi-text-secondary)]">
                       <th className="text-left px-3 py-2 font-medium">Name</th>
                       <th className="text-left px-3 py-2 font-medium">Node ID / Address</th>
                       <th className="text-left px-3 py-2 font-medium">Type</th>
@@ -1599,16 +1599,16 @@ function BrowseTagsDialog({ dsId, dsName, existingTags, onCreateTag, onClose }: 
                         const fullAddress = t.node_id || t.address || '';
                         const alreadyExists = existingAddresses.has(tagAddress) || existingAddresses.has(fullAddress) || createdAddresses.has(tagAddress);
                         return (
-                          <tr key={i} className="border-b border-slate-700/50">
-                            <td className="px-3 py-2 text-slate-200">{t.name || t.display_name || '\u2014'}</td>
-                            <td className="px-3 py-2 text-slate-400 font-mono text-xs">
+                          <tr key={i} className="border-b border-[var(--hmi-border)]/50">
+                            <td className="px-3 py-2 text-[var(--hmi-text-primary)]">{t.name || t.display_name || '\u2014'}</td>
+                            <td className="px-3 py-2 text-[var(--hmi-text-secondary)] font-mono text-xs">
                               {t.relative_address ? (
                                 <span title={fullAddress}>{t.relative_address}</span>
                               ) : (
                                 fullAddress || '\u2014'
                               )}
                             </td>
-                            <td className="px-3 py-2 text-slate-400">{t.data_type || '\u2014'}</td>
+                            <td className="px-3 py-2 text-[var(--hmi-text-secondary)]">{t.data_type || '\u2014'}</td>
                             <td className="px-3 py-2 text-right">
                               {alreadyExists ? (
                                 <span className="text-xs text-green-400">Exists</span>
@@ -1631,11 +1631,11 @@ function BrowseTagsDialog({ dsId, dsName, existingTags, onCreateTag, onClose }: 
           )}
         </div>
 
-        <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-700">
-          <span className="text-xs text-slate-500">
+        <div className="flex items-center justify-between mt-4 pt-3 border-t border-[var(--hmi-border)]">
+          <span className="text-xs text-[var(--hmi-text-muted)]">
             {filter ? `${visibleRows.filter(r => r.node.node_class === 'variable').length} matching tags` : `Click folders to expand. Tags load one level at a time.`}
           </span>
-          <button onClick={onClose} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300">Close</button>
+          <button onClick={onClose} className="px-4 py-2 bg-[var(--hmi-bg-input)] rounded-lg text-sm text-[var(--hmi-text-secondary)]">Close</button>
         </div>
       </div>
     </div>
@@ -2045,7 +2045,7 @@ export function SettingsPage({ user, tagValues }: Props) {
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-slate-100 mb-4">Settings</h1>
+      <h1 className="text-xl font-bold text-[var(--hmi-text-primary)] mb-4">Settings</h1>
 
       <div className="flex gap-1 mb-4">
         {tabList.map((t) => (
@@ -2053,7 +2053,7 @@ export function SettingsPage({ user, tagValues }: Props) {
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              tab === t.key ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
+              tab === t.key ? 'bg-[var(--hmi-accent)] text-white' : 'bg-[var(--hmi-bg-elevated)] text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)]'
             }`}
           >
             {t.label}
@@ -2065,7 +2065,7 @@ export function SettingsPage({ user, tagValues }: Props) {
       {tab === 'branding' && (
         <div className="max-w-lg space-y-6">
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">Site Title</label>
+            <label className="text-xs text-[var(--hmi-text-secondary)] mb-1 block">Site Title</label>
             <input
               type="text"
               value={brandTitle}
@@ -2073,11 +2073,11 @@ export function SettingsPage({ user, tagValues }: Props) {
               placeholder="Industrial HMI"
               className={inputCls}
             />
-            <p className="text-xs text-slate-500 mt-1">Shown in the browser tab and login page.</p>
+            <p className="text-xs text-[var(--hmi-text-muted)] mt-1">Shown in the browser tab and login page.</p>
           </div>
 
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">Navigation Title</label>
+            <label className="text-xs text-[var(--hmi-text-secondary)] mb-1 block">Navigation Title</label>
             <input
               type="text"
               value={brandNavTitle}
@@ -2085,28 +2085,28 @@ export function SettingsPage({ user, tagValues }: Props) {
               placeholder="HMI"
               className={inputCls}
             />
-            <p className="text-xs text-slate-500 mt-1">Shown in the sidebar navigation rail.</p>
+            <p className="text-xs text-[var(--hmi-text-muted)] mt-1">Shown in the sidebar navigation rail.</p>
           </div>
 
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">Favicon</label>
+            <label className="text-xs text-[var(--hmi-text-secondary)] mb-1 block">Favicon</label>
             <div className="flex items-center gap-4">
               {brandFaviconPreview ? (
-                <img src={brandFaviconPreview} alt="Favicon" className="w-10 h-10 rounded bg-slate-700 p-1 object-contain" />
+                <img src={brandFaviconPreview} alt="Favicon" className="w-10 h-10 rounded bg-[var(--hmi-bg-input)] p-1 object-contain" />
               ) : (
-                <div className="w-10 h-10 rounded bg-slate-700 flex items-center justify-center text-slate-500 text-xs">None</div>
+                <div className="w-10 h-10 rounded bg-[var(--hmi-bg-input)] flex items-center justify-center text-[var(--hmi-text-muted)] text-xs">None</div>
               )}
               <div className="flex gap-2">
                 <button
                   onClick={() => brandFileRef.current?.click()}
-                  className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-sm text-white rounded-lg"
+                  className="px-3 py-1.5 bg-[var(--hmi-bg-input)] hover:bg-[var(--hmi-border-subtle)] text-sm text-white rounded-lg"
                 >
                   Choose Image
                 </button>
                 {(brandFaviconPreview || brandFaviconData) && (
                   <button
                     onClick={() => { setBrandFaviconPreview(null); setBrandFaviconData(''); setBrandMsg(''); }}
-                    className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-sm text-red-400 rounded-lg"
+                    className="px-3 py-1.5 bg-[var(--hmi-bg-input)] hover:bg-[var(--hmi-border-subtle)] text-sm text-red-400 rounded-lg"
                   >
                     Remove
                   </button>
@@ -2132,12 +2132,12 @@ export function SettingsPage({ user, tagValues }: Props) {
                 }}
               />
             </div>
-            <p className="text-xs text-slate-500 mt-1">Recommended: 32x32 or 64x64 PNG, ICO, or SVG.</p>
+            <p className="text-xs text-[var(--hmi-text-muted)] mt-1">Recommended: 32x32 or 64x64 PNG, ICO, or SVG.</p>
           </div>
 
           {/* ── Theme: Accent Color ── */}
           <div>
-            <label className="text-xs text-slate-400 mb-1.5 block">Accent Color</label>
+            <label className="text-xs text-[var(--hmi-text-secondary)] mb-1.5 block">Accent Color</label>
             <div className="flex items-center gap-2 flex-wrap">
               {ACCENT_SWATCHES.map((s) => (
                 <button
@@ -2158,33 +2158,33 @@ export function SettingsPage({ user, tagValues }: Props) {
                   setBrandMsg('');
                 }}
                 placeholder="#2563eb"
-                className="w-24 bg-slate-700 border border-slate-600 rounded-lg px-2 py-1.5 text-sm text-white outline-none focus:border-blue-500 font-mono"
+                className="w-24 bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-lg px-2 py-1.5 text-sm text-white outline-none focus:border-blue-500 font-mono"
               />
             </div>
-            <p className="text-xs text-slate-500 mt-1">Used for active navigation, buttons, and highlights.</p>
+            <p className="text-xs text-[var(--hmi-text-muted)] mt-1">Used for active navigation, buttons, and highlights.</p>
           </div>
 
           {/* ── Theme: Background Preset ── */}
           <div>
-            <label className="text-xs text-slate-400 mb-1.5 block">Background Preset</label>
+            <label className="text-xs text-[var(--hmi-text-secondary)] mb-1.5 block">Background Preset</label>
             <div className="flex items-center gap-3 flex-wrap">
               {Object.entries(THEME_PRESETS).map(([key, preset]) => (
                 <button
                   key={key}
                   onClick={() => { setBrandPreset(key); applyTheme(brandAccent, key); setBrandMsg(''); }}
                   className={`flex flex-col items-center gap-1.5 p-2 rounded-lg border-2 transition-colors ${
-                    brandPreset === key ? 'border-white' : 'border-transparent hover:border-slate-600'
+                    brandPreset === key ? 'border-white' : 'border-transparent hover:border-[var(--hmi-border-subtle)]'
                   }`}
                 >
                   {/* Mini preview */}
-                  <div className="flex w-16 h-10 rounded overflow-hidden border border-slate-600">
+                  <div className="flex w-16 h-10 rounded overflow-hidden border border-[var(--hmi-border-subtle)]">
                     <div className="w-4" style={{ backgroundColor: preset.bgSurface }} />
                     <div className="flex-1 flex flex-col">
                       <div className="h-2" style={{ backgroundColor: preset.bgSurface }} />
                       <div className="flex-1" style={{ backgroundColor: preset.bgBody }} />
                     </div>
                   </div>
-                  <span className="text-xs text-slate-300">{preset.label}</span>
+                  <span className="text-xs text-[var(--hmi-text-secondary)]">{preset.label}</span>
                 </button>
               ))}
             </div>
@@ -2239,12 +2239,12 @@ export function SettingsPage({ user, tagValues }: Props) {
       {tab === 'preferences' && (
         <div className="max-w-lg space-y-6">
           <div>
-            <label className="text-xs text-slate-400 mb-1.5 block">Default Screen Layout</label>
+            <label className="text-xs text-[var(--hmi-text-secondary)] mb-1.5 block">Default Screen Layout</label>
             <div className="flex gap-2">
               <button
                 onClick={() => { setPrefLayout('grid'); setPrefMsg(''); }}
                 className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  prefLayout === 'grid' ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'
+                  prefLayout === 'grid' ? 'bg-[var(--hmi-accent)] text-white' : 'bg-[var(--hmi-bg-input)] text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)]'
                 }`}
               >
                 Grid
@@ -2252,30 +2252,30 @@ export function SettingsPage({ user, tagValues }: Props) {
               <button
                 onClick={() => { setPrefLayout('absolute'); setPrefMsg(''); }}
                 className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  prefLayout === 'absolute' ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'
+                  prefLayout === 'absolute' ? 'bg-[var(--hmi-accent)] text-white' : 'bg-[var(--hmi-bg-input)] text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)]'
                 }`}
               >
                 Absolute
               </button>
             </div>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-[var(--hmi-text-muted)] mt-1">
               {prefLayout === 'grid' ? 'Responsive 12-column grid layout' : 'Fixed pixel positioning for panel PCs'}
             </p>
           </div>
 
           {prefLayout === 'absolute' && (
             <div>
-              <label className="text-xs text-slate-400 mb-1.5 block">Default Target Resolution</label>
+              <label className="text-xs text-[var(--hmi-text-secondary)] mb-1.5 block">Default Target Resolution</label>
               <select
                 value={prefResolution}
                 onChange={e => { setPrefResolution(e.target.value); setPrefMsg(''); }}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+                className="w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
               >
                 <option value="1920x1080">1920 × 1080 (Full HD)</option>
                 <option value="1366x768">1366 × 768 (HD)</option>
                 <option value="1024x768">1024 × 768 (XGA)</option>
               </select>
-              <p className="text-xs text-slate-500 mt-1">Default resolution for new absolute-layout screens.</p>
+              <p className="text-xs text-[var(--hmi-text-muted)] mt-1">Default resolution for new absolute-layout screens.</p>
             </div>
           )}
 
@@ -2314,26 +2314,26 @@ export function SettingsPage({ user, tagValues }: Props) {
           {/* Search & Filter Bar */}
           <div className="flex gap-3 mb-2 flex-wrap items-center">
             <div className="relative flex-1 max-w-sm">
-              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--hmi-text-muted)]" />
               <input
                 type="text"
                 placeholder="Search name, description, group, address, labels..."
                 value={tagSearch}
                 onChange={e => setTagSearch(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-8 pr-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+                className="w-full bg-[var(--hmi-bg-elevated)] border border-[var(--hmi-border)] rounded-lg pl-8 pr-3 py-2 text-sm text-white outline-none focus:border-blue-500"
               />
             </div>
             <select
               value={tagLabelFilter}
               onChange={e => setTagLabelFilter(e.target.value)}
-              className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 outline-none"
+              className="bg-[var(--hmi-bg-elevated)] border border-[var(--hmi-border)] rounded-lg px-3 py-2 text-sm text-[var(--hmi-text-secondary)] outline-none"
             >
               <option value="all">All Labels</option>
               {allLabels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
             <button
               onClick={() => setShowAdvFilters(f => !f)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm ${showAdvFilters || tagTypeFilter !== 'all' || tagSourceFilter !== 'all' ? 'bg-[var(--hmi-accent-bg)] text-[var(--hmi-accent-text)] border border-[var(--hmi-accent)]/40' : 'bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-300'}`}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm ${showAdvFilters || tagTypeFilter !== 'all' || tagSourceFilter !== 'all' ? 'bg-[var(--hmi-accent-bg)] text-[var(--hmi-accent-text)] border border-[var(--hmi-accent)]/40' : 'bg-[var(--hmi-bg-elevated)] border border-[var(--hmi-border)] text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-secondary)]'}`}
             >
               <Filter size={14} /> Filters
               {(tagTypeFilter !== 'all' || tagSourceFilter !== 'all') && (
@@ -2342,12 +2342,18 @@ export function SettingsPage({ user, tagValues }: Props) {
                 </span>
               )}
             </button>
-            <span className="self-center text-xs text-slate-500">{filteredTags.length} / {tags.length} tags</span>
+            <span className="self-center text-xs text-[var(--hmi-text-muted)]">{filteredTags.length} / {tags.length} tags</span>
             {canManage && (
               <div className="flex gap-2 ml-auto">
                 <button
+                  onClick={() => api.exportTagsCsv().catch(() => alert('Export failed'))}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-[var(--hmi-bg-input)] hover:bg-[var(--hmi-border-subtle)] text-[var(--hmi-text-secondary)] rounded-lg text-sm font-medium"
+                >
+                  <Download size={16} /> Export
+                </button>
+                <button
                   onClick={() => setShowTagImport(true)}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm font-medium"
+                  className="flex items-center gap-1.5 px-3 py-2 bg-[var(--hmi-bg-input)] hover:bg-[var(--hmi-border-subtle)] text-[var(--hmi-text-secondary)] rounded-lg text-sm font-medium"
                 >
                   <Upload size={16} /> Import
                 </button>
@@ -2363,11 +2369,11 @@ export function SettingsPage({ user, tagValues }: Props) {
 
           {/* Advanced Filters */}
           {showAdvFilters && (
-            <div className="flex gap-3 mb-2 flex-wrap items-center bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2">
+            <div className="flex gap-3 mb-2 flex-wrap items-center bg-[var(--hmi-bg-elevated)]/50 border border-[var(--hmi-border)] rounded-lg px-3 py-2">
               <select
                 value={tagTypeFilter}
                 onChange={e => setTagTypeFilter(e.target.value)}
-                className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-300 outline-none"
+                className="bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-lg px-3 py-1.5 text-sm text-[var(--hmi-text-secondary)] outline-none"
               >
                 <option value="all">All Types</option>
                 <option value="bool">Bool</option>
@@ -2381,7 +2387,7 @@ export function SettingsPage({ user, tagValues }: Props) {
                   const v = e.target.value;
                   setTagSourceFilter(v === 'all' || v === 'none' ? v : Number(v));
                 }}
-                className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-300 outline-none"
+                className="bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-lg px-3 py-1.5 text-sm text-[var(--hmi-text-secondary)] outline-none"
               >
                 <option value="all">All Sources</option>
                 <option value="none">Simulation</option>
@@ -2390,7 +2396,7 @@ export function SettingsPage({ user, tagValues }: Props) {
               {(tagTypeFilter !== 'all' || tagSourceFilter !== 'all') && (
                 <button
                   onClick={() => { setTagTypeFilter('all'); setTagSourceFilter('all'); }}
-                  className="text-xs text-slate-500 hover:text-slate-300"
+                  className="text-xs text-[var(--hmi-text-muted)] hover:text-[var(--hmi-text-secondary)]"
                 >
                   Clear filters
                 </button>
@@ -2402,27 +2408,27 @@ export function SettingsPage({ user, tagValues }: Props) {
           {canManage && selectedTagIds.size > 0 && (
             <div className="flex items-center gap-3 mb-2 bg-[var(--hmi-accent-bg)] border border-[var(--hmi-accent)]/30 rounded-lg px-4 py-2">
               <span className="text-sm text-blue-300 font-medium">{selectedTagIds.size} selected</span>
-              <div className="h-4 w-px bg-slate-600" />
+              <div className="h-4 w-px bg-[var(--hmi-border-subtle)]" />
               <button
                 onClick={() => setBulkLabelDialog('add')}
-                className="text-sm text-slate-300 hover:text-white px-2 py-1 rounded hover:bg-slate-700"
+                className="text-sm text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)] px-2 py-1 rounded hover:bg-[var(--hmi-bg-input)]"
               >
                 Add Labels
               </button>
               <button
                 onClick={() => setBulkLabelDialog('remove')}
-                className="text-sm text-slate-300 hover:text-white px-2 py-1 rounded hover:bg-slate-700"
+                className="text-sm text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)] px-2 py-1 rounded hover:bg-[var(--hmi-bg-input)]"
               >
                 Remove Labels
               </button>
-              <div className="h-4 w-px bg-slate-600" />
+              <div className="h-4 w-px bg-[var(--hmi-border-subtle)]" />
               <button
                 onClick={() => setShowBulkEdit(true)}
-                className="text-sm text-slate-300 hover:text-white px-2 py-1 rounded hover:bg-slate-700"
+                className="text-sm text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)] px-2 py-1 rounded hover:bg-[var(--hmi-bg-input)]"
               >
                 Edit Fields
               </button>
-              <div className="h-4 w-px bg-slate-600" />
+              <div className="h-4 w-px bg-[var(--hmi-border-subtle)]" />
               <button
                 onClick={() => setBulkDeleteConfirm(true)}
                 className="text-sm text-red-400 hover:text-red-300 px-2 py-1 rounded hover:bg-red-900/30"
@@ -2431,7 +2437,7 @@ export function SettingsPage({ user, tagValues }: Props) {
               </button>
               <button
                 onClick={() => setSelectedTagIds(new Set())}
-                className="ml-auto text-xs text-slate-500 hover:text-slate-300"
+                className="ml-auto text-xs text-[var(--hmi-text-muted)] hover:text-[var(--hmi-text-secondary)]"
               >
                 Clear selection
               </button>
@@ -2439,13 +2445,13 @@ export function SettingsPage({ user, tagValues }: Props) {
           )}
 
           {/* Tag Table */}
-          <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+          <div className="bg-[var(--hmi-bg-elevated)] rounded-xl border border-[var(--hmi-border)] overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-700 text-slate-400">
+                <tr className="border-b border-[var(--hmi-border)] text-[var(--hmi-text-secondary)]">
                   {canManage && (
                     <th className="w-10 px-3 py-3">
-                      <button onClick={toggleSelectAll} className="text-slate-500 hover:text-slate-300">
+                      <button onClick={toggleSelectAll} className="text-[var(--hmi-text-muted)] hover:text-[var(--hmi-text-secondary)]">
                         {selectedTagIds.size === filteredTags.length && filteredTags.length > 0
                           ? <CheckSquare size={16} />
                           : selectedTagIds.size > 0
@@ -2470,18 +2476,18 @@ export function SettingsPage({ user, tagValues }: Props) {
                 {filteredTags.map((tag) => (
                   <tr
                     key={tag.id}
-                    className={`border-b border-slate-700/50 hover:bg-slate-700/30 ${selectedTagIds.has(tag.id) ? 'bg-[var(--hmi-accent-bg)]' : ''}`}
+                    className={`border-b border-[var(--hmi-border)]/50 hover:bg-[var(--hmi-bg-input)]/30 ${selectedTagIds.has(tag.id) ? 'bg-[var(--hmi-accent-bg)]' : ''}`}
                   >
                     {canManage && (
                       <td className="w-10 px-3 py-2">
-                        <button onClick={() => toggleTagSelection(tag.id)} className="text-slate-500 hover:text-slate-300">
+                        <button onClick={() => toggleTagSelection(tag.id)} className="text-[var(--hmi-text-muted)] hover:text-[var(--hmi-text-secondary)]">
                           {selectedTagIds.has(tag.id) ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
                         </button>
                       </td>
                     )}
                     <td className="px-4 py-2">
-                      <div className="text-slate-200">{tag.display_name || tag.name}</div>
-                      {tag.display_name && <div className="text-[10px] text-slate-500 font-mono truncate max-w-48">{tag.name}</div>}
+                      <div className="text-[var(--hmi-text-primary)]">{tag.display_name || tag.name}</div>
+                      {tag.display_name && <div className="text-[10px] text-[var(--hmi-text-muted)] font-mono truncate max-w-48">{tag.name}</div>}
                     </td>
                     <td className="px-4 py-2">
                       <div className="flex flex-wrap gap-1">
@@ -2492,25 +2498,25 @@ export function SettingsPage({ user, tagValues }: Props) {
                                 {l.name}
                               </span>
                             ))
-                          : <span className="text-slate-500">{'\u2014'}</span>}
+                          : <span className="text-[var(--hmi-text-muted)]">{'\u2014'}</span>}
                       </div>
                     </td>
-                    <td className="px-4 py-2 text-slate-400 text-xs">
+                    <td className="px-4 py-2 text-[var(--hmi-text-secondary)] text-xs">
                       {tag.data_source_id ? dsNameMap.get(tag.data_source_id) || `#${tag.data_source_id}` : '\u2014'}
                     </td>
-                    <td className="px-4 py-2 text-slate-400">{tag.data_type}</td>
-                    <td className="px-4 py-2 text-slate-400">{tag.access_mode}</td>
-                    <td className="px-4 py-2 text-slate-400">{tag.engineering_units || '\u2014'}</td>
+                    <td className="px-4 py-2 text-[var(--hmi-text-secondary)]">{tag.data_type}</td>
+                    <td className="px-4 py-2 text-[var(--hmi-text-secondary)]">{tag.access_mode}</td>
+                    <td className="px-4 py-2 text-[var(--hmi-text-secondary)]">{tag.engineering_units || '\u2014'}</td>
                     <td className="px-4 py-2 text-center">{tag.trending_enabled ? '\u2713' : ''}</td>
                     <td className="px-4 py-2 text-center">{tag.alarm_enabled ? '\u2713' : ''}</td>
                     <td className="px-4 py-2 text-center">{tag.simulation_enabled ? '\u2713' : ''}</td>
                     {canManage && (
                       <td className="px-4 py-2">
                         <div className="flex gap-1 justify-end">
-                          <button onClick={() => setEditTag(tag)} className="p-1 text-slate-500 hover:text-blue-400" title="Edit">
+                          <button onClick={() => setEditTag(tag)} className="p-1 text-[var(--hmi-text-muted)] hover:text-blue-400" title="Edit">
                             <Pencil size={14} />
                           </button>
-                          <button onClick={() => setDeleteTagTarget(tag)} className="p-1 text-slate-500 hover:text-red-400" title="Delete">
+                          <button onClick={() => setDeleteTagTarget(tag)} className="p-1 text-[var(--hmi-text-muted)] hover:text-red-400" title="Delete">
                             <Trash2 size={14} />
                           </button>
                         </div>
@@ -2519,7 +2525,7 @@ export function SettingsPage({ user, tagValues }: Props) {
                   </tr>
                 ))}
                 {filteredTags.length === 0 && (
-                  <tr><td colSpan={canManage ? 11 : 10} className="px-4 py-8 text-center text-slate-500">No tags found</td></tr>
+                  <tr><td colSpan={canManage ? 11 : 10} className="px-4 py-8 text-center text-[var(--hmi-text-muted)]">No tags found</td></tr>
                 )}
               </tbody>
             </table>
@@ -2530,11 +2536,11 @@ export function SettingsPage({ user, tagValues }: Props) {
           {showTagImport && <TagImportDialog dataSources={dataSources} existingTagNames={new Set(tags.map(t => t.name))} onImportCsv={handleCsvImport} onImportCodesys={handleCodesysImport} onImportRslogix={handleRslogixImport} onClose={() => setShowTagImport(false)} />}
           {bulkDeleteConfirm && (
             <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setBulkDeleteConfirm(false)}>
-              <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 max-w-sm" onClick={e => e.stopPropagation()}>
-                <div className="text-slate-100 font-medium mb-2">Delete {selectedTagIds.size} Tags</div>
-                <p className="text-sm text-slate-400 mb-4">Are you sure you want to delete {selectedTagIds.size} selected tags? This cannot be undone.</p>
+              <div className="bg-[var(--hmi-bg-elevated)] rounded-xl border border-[var(--hmi-border)] p-6 max-w-sm" onClick={e => e.stopPropagation()}>
+                <div className="text-[var(--hmi-text-primary)] font-medium mb-2">Delete {selectedTagIds.size} Tags</div>
+                <p className="text-sm text-[var(--hmi-text-secondary)] mb-4">Are you sure you want to delete {selectedTagIds.size} selected tags? This cannot be undone.</p>
                 <div className="flex justify-end gap-2">
-                  <button onClick={() => setBulkDeleteConfirm(false)} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300">Cancel</button>
+                  <button onClick={() => setBulkDeleteConfirm(false)} className="px-4 py-2 bg-[var(--hmi-bg-input)] rounded-lg text-sm text-[var(--hmi-text-secondary)]">Cancel</button>
                   <button onClick={handleBulkDelete} className="px-4 py-2 bg-red-600 rounded-lg text-sm text-white hover:bg-red-700">Delete {selectedTagIds.size} Tags</button>
                 </div>
               </div>
@@ -2561,11 +2567,11 @@ export function SettingsPage({ user, tagValues }: Props) {
           {/* Label Management */}
           <div className="mt-6">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-slate-300 flex items-center gap-1.5"><TagIcon size={14} /> Labels</h2>
+              <h2 className="text-sm font-semibold text-[var(--hmi-text-secondary)] flex items-center gap-1.5"><TagIcon size={14} /> Labels</h2>
               {canManage && (
                 <button
                   onClick={() => setEditLabel({ name: '', color: LABEL_COLORS[allLabels.length % LABEL_COLORS.length], description: '' })}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-xs font-medium"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--hmi-bg-input)] hover:bg-[var(--hmi-border-subtle)] text-[var(--hmi-text-secondary)] rounded-lg text-xs font-medium"
                 >
                   <Plus size={14} /> New Label
                 </button>
@@ -2579,28 +2585,28 @@ export function SettingsPage({ user, tagValues }: Props) {
                   {canManage && (
                     <>
                       <button onClick={() => setEditLabel({ id: l.id, name: l.name, color: l.color || '#3b82f6', description: l.description || '' })}
-                        className="hover:text-slate-200 ml-1" title="Edit">
+                        className="hover:text-[var(--hmi-text-primary)] ml-1" title="Edit">
                         <Pencil size={10} />
                       </button>
                       <button onClick={() => setDeleteLabelTarget(l)}
-                        className="hover:text-slate-200" title="Delete">
+                        className="hover:text-[var(--hmi-text-primary)]" title="Delete">
                         <Trash2 size={10} />
                       </button>
                     </>
                   )}
                 </div>
               ))}
-              {allLabels.length === 0 && <span className="text-slate-500 text-xs">No labels defined yet</span>}
+              {allLabels.length === 0 && <span className="text-[var(--hmi-text-muted)] text-xs">No labels defined yet</span>}
             </div>
           </div>
 
           {/* Label Edit Dialog */}
           {editLabel && (
             <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setEditLabel(null)}>
-              <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+              <div className="bg-[var(--hmi-bg-elevated)] rounded-xl border border-[var(--hmi-border)] w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-slate-100">{editLabel.id != null ? 'Edit Label' : 'New Label'}</h2>
-                  <button onClick={() => setEditLabel(null)} className="text-slate-400 hover:text-white"><X size={20} /></button>
+                  <h2 className="text-lg font-semibold text-[var(--hmi-text-primary)]">{editLabel.id != null ? 'Edit Label' : 'New Label'}</h2>
+                  <button onClick={() => setEditLabel(null)} className="text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)]"><X size={20} /></button>
                 </div>
                 <div className="space-y-3">
                   <Field label="Name *">
@@ -2609,7 +2615,7 @@ export function SettingsPage({ user, tagValues }: Props) {
                   <Field label="Color">
                     <div className="flex items-center gap-2">
                       <input type="color" value={editLabel.color} onChange={e => setEditLabel(l => l ? { ...l, color: e.target.value } : l)}
-                        className="w-8 h-8 rounded border border-slate-600 cursor-pointer bg-transparent" />
+                        className="w-8 h-8 rounded border border-[var(--hmi-border-subtle)] cursor-pointer bg-transparent" />
                       <div className="flex gap-1">
                         {LABEL_COLORS.map(c => (
                           <button key={c} type="button" onClick={() => setEditLabel(l => l ? { ...l, color: c } : l)}
@@ -2623,7 +2629,7 @@ export function SettingsPage({ user, tagValues }: Props) {
                     <input value={editLabel.description} onChange={e => setEditLabel(l => l ? { ...l, description: e.target.value } : l)} className={inputCls} />
                   </Field>
                   <div className="flex justify-end gap-2 pt-2">
-                    <button onClick={() => setEditLabel(null)} className="px-4 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 hover:bg-slate-600">Cancel</button>
+                    <button onClick={() => setEditLabel(null)} className="px-4 py-2 bg-[var(--hmi-bg-input)] rounded-lg text-sm text-[var(--hmi-text-secondary)] hover:bg-[var(--hmi-border-subtle)]">Cancel</button>
                     <button onClick={() => editLabel.name.trim() && handleSaveLabel(editLabel)} className="px-4 py-2 bg-[var(--hmi-accent)] rounded-lg text-sm text-white hover:bg-[var(--hmi-accent-dark)]">
                       {editLabel.id != null ? 'Save' : 'Create'}
                     </button>
@@ -2651,11 +2657,11 @@ export function SettingsPage({ user, tagValues }: Props) {
           )}
           <div className="space-y-2">
             {dataSources.map((ds) => (
-              <div key={ds.id} className="bg-slate-800 rounded-xl p-4 border border-slate-700 flex items-center gap-4">
+              <div key={ds.id} className="bg-[var(--hmi-bg-elevated)] rounded-xl p-4 border border-[var(--hmi-border)] flex items-center gap-4">
                 <div className={`w-3 h-3 rounded-full flex-shrink-0 ${ds.connected ? 'bg-green-400' : 'bg-red-400'}`} />
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-slate-200">{ds.name}</div>
-                  <div className="text-xs text-slate-400">
+                  <div className="font-medium text-[var(--hmi-text-primary)]">{ds.name}</div>
+                  <div className="text-xs text-[var(--hmi-text-secondary)]">
                     {PROTOCOL_CONFIGS[ds.protocol]?.label || ds.protocol} {'\u2022'} {ds.enabled ? 'Enabled' : 'Disabled'}
                     {typeof ds.config?.address_prefix === 'string' && (
                       <span className="ml-1" title={`Detected prefix: ${ds.config.address_prefix}`}> {'\u2022'} Prefix: <span className="font-mono">{ds.config.address_prefix}</span></span>
@@ -2670,11 +2676,11 @@ export function SettingsPage({ user, tagValues }: Props) {
                     <button
                       onClick={() => handleConnect(ds)}
                       disabled={connectingId === ds.id}
-                      className="p-1.5 text-slate-500 hover:text-green-400 disabled:opacity-50"
+                      className="p-1.5 text-[var(--hmi-text-muted)] hover:text-green-400 disabled:opacity-50"
                       title={ds.connected ? 'Reconnect' : 'Connect'}
                     >
                       {connectingId === ds.id ? (
-                        <span className="inline-block w-4 h-4 border-2 border-slate-500 border-t-blue-400 rounded-full animate-spin" />
+                        <span className="inline-block w-4 h-4 border-2 border-[var(--hmi-text-muted)] border-t-blue-400 rounded-full animate-spin" />
                       ) : ds.connected ? (
                         <Unplug size={16} />
                       ) : (
@@ -2684,7 +2690,7 @@ export function SettingsPage({ user, tagValues }: Props) {
                     {ds.connected && (
                       <button
                         onClick={() => setBrowseDs(ds)}
-                        className="p-1.5 text-slate-500 hover:text-blue-400"
+                        className="p-1.5 text-[var(--hmi-text-muted)] hover:text-blue-400"
                         title="Browse tags"
                       >
                         <FolderSearch size={16} />
@@ -2692,14 +2698,14 @@ export function SettingsPage({ user, tagValues }: Props) {
                     )}
                     <button
                       onClick={() => setEditDs({ id: ds.id, name: ds.name, protocol: ds.protocol, enabled: ds.enabled, config: ds.config || {} })}
-                      className="p-1.5 text-slate-500 hover:text-blue-400"
+                      className="p-1.5 text-[var(--hmi-text-muted)] hover:text-blue-400"
                       title="Edit"
                     >
                       <Pencil size={16} />
                     </button>
                     <button
                       onClick={() => setDeleteDsTarget(ds)}
-                      className="p-1.5 text-slate-500 hover:text-red-400"
+                      className="p-1.5 text-[var(--hmi-text-muted)] hover:text-red-400"
                       title="Delete"
                     >
                       <Trash2 size={16} />
@@ -2708,7 +2714,7 @@ export function SettingsPage({ user, tagValues }: Props) {
                 )}
               </div>
             ))}
-            {dataSources.length === 0 && <p className="text-slate-500 text-center py-8">No data sources configured</p>}
+            {dataSources.length === 0 && <p className="text-[var(--hmi-text-muted)] text-center py-8">No data sources configured</p>}
           </div>
 
           {editDs && <DataSourceDialog ds={editDs} onSave={handleSaveDs} onClose={() => setEditDs(null)} />}
@@ -2737,28 +2743,28 @@ export function SettingsPage({ user, tagValues }: Props) {
             )}
           </div>
           {showCreateUser && (
-            <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 mb-4">
-              <div className="text-sm font-medium text-slate-300 mb-3">Create User</div>
+            <div className="bg-[var(--hmi-bg-elevated)] border border-[var(--hmi-border)] rounded-xl p-4 mb-4">
+              <div className="text-sm font-medium text-[var(--hmi-text-secondary)] mb-3">Create User</div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-slate-400">Username</label>
+                  <label className="text-xs text-[var(--hmi-text-secondary)]">Username</label>
                   <input value={newUser.username} onChange={e => setNewUser(p => ({ ...p, username: e.target.value }))}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white outline-none mt-1" />
+                    className="w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-md px-3 py-2 text-sm text-white outline-none mt-1" />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400">Display Name</label>
+                  <label className="text-xs text-[var(--hmi-text-secondary)]">Display Name</label>
                   <input value={newUser.display_name} onChange={e => setNewUser(p => ({ ...p, display_name: e.target.value }))}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white outline-none mt-1" />
+                    className="w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-md px-3 py-2 text-sm text-white outline-none mt-1" />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400">Password / PIN</label>
+                  <label className="text-xs text-[var(--hmi-text-secondary)]">Password / PIN</label>
                   <input type="password" value={newUser.password} onChange={e => setNewUser(p => ({ ...p, password: e.target.value }))}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white outline-none mt-1" />
+                    className="w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-md px-3 py-2 text-sm text-white outline-none mt-1" />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400">Role</label>
+                  <label className="text-xs text-[var(--hmi-text-secondary)]">Role</label>
                   <select value={newUser.role} onChange={e => setNewUser(p => ({ ...p, role: e.target.value }))}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white outline-none mt-1">
+                    className="w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-md px-3 py-2 text-sm text-white outline-none mt-1">
                     <option value="operator">Operator</option>
                     <option value="supervisor">Supervisor</option>
                     <option value="engineer">Engineer</option>
@@ -2766,9 +2772,9 @@ export function SettingsPage({ user, tagValues }: Props) {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400">Login Mode</label>
+                  <label className="text-xs text-[var(--hmi-text-secondary)]">Login Mode</label>
                   <select value={newUser.login_mode} onChange={e => setNewUser(p => ({ ...p, login_mode: e.target.value }))}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white outline-none mt-1">
+                    className="w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-md px-3 py-2 text-sm text-white outline-none mt-1">
                     <option value="password">Password</option>
                     <option value="pin">PIN</option>
                   </select>
@@ -2776,14 +2782,14 @@ export function SettingsPage({ user, tagValues }: Props) {
               </div>
               <div className="flex gap-2 mt-3">
                 <button onClick={handleCreateUser} className="px-4 py-2 bg-[var(--hmi-accent)] rounded-md text-sm text-white">Create</button>
-                <button onClick={() => setShowCreateUser(false)} className="px-4 py-2 bg-slate-700 rounded-md text-sm text-slate-300">Cancel</button>
+                <button onClick={() => setShowCreateUser(false)} className="px-4 py-2 bg-[var(--hmi-bg-input)] rounded-md text-sm text-[var(--hmi-text-secondary)]">Cancel</button>
               </div>
             </div>
           )}
-          <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+          <div className="bg-[var(--hmi-bg-elevated)] rounded-xl border border-[var(--hmi-border)] overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-700 text-slate-400">
+                <tr className="border-b border-[var(--hmi-border)] text-[var(--hmi-text-secondary)]">
                   <th className="text-left px-4 py-3 font-medium">Username</th>
                   <th className="text-left px-4 py-3 font-medium">Display Name</th>
                   <th className="text-left px-4 py-3 font-medium">Role</th>
@@ -2792,10 +2798,10 @@ export function SettingsPage({ user, tagValues }: Props) {
               </thead>
               <tbody>
                 {users.map((u) => (
-                  <tr key={u.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                    <td className="px-4 py-2 text-slate-200">{u.username}</td>
-                    <td className="px-4 py-2 text-slate-300">{u.display_name}</td>
-                    <td className="px-4 py-2 capitalize text-slate-400">{u.role}</td>
+                  <tr key={u.id} className="border-b border-[var(--hmi-border)]/50 hover:bg-[var(--hmi-bg-input)]/30">
+                    <td className="px-4 py-2 text-[var(--hmi-text-primary)]">{u.username}</td>
+                    <td className="px-4 py-2 text-[var(--hmi-text-secondary)]">{u.display_name}</td>
+                    <td className="px-4 py-2 capitalize text-[var(--hmi-text-secondary)]">{u.role}</td>
                     <td className="px-4 py-2 text-center">{u.is_active ? '\u2713' : '\u2717'}</td>
                   </tr>
                 ))}
@@ -2810,34 +2816,34 @@ export function SettingsPage({ user, tagValues }: Props) {
         <div>
           <div className="flex gap-3 mb-3">
             <div className="relative flex-1 max-w-xs">
-              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--hmi-text-muted)]" />
               <input
                 type="text"
                 placeholder="Search audit log..."
                 value={auditSearch}
                 onChange={e => setAuditSearch(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-8 pr-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+                className="w-full bg-[var(--hmi-bg-elevated)] border border-[var(--hmi-border)] rounded-lg pl-8 pr-3 py-2 text-sm text-white outline-none focus:border-blue-500"
               />
             </div>
             <select
               value={auditActionFilter}
               onChange={e => setAuditActionFilter(e.target.value)}
-              className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 outline-none"
+              className="bg-[var(--hmi-bg-elevated)] border border-[var(--hmi-border)] rounded-lg px-3 py-2 text-sm text-[var(--hmi-text-secondary)] outline-none"
             >
               <option value="all">All Actions</option>
               {auditActions.map(a => <option key={a} value={a}>{a}</option>)}
             </select>
             <button
               onClick={exportAuditCsv}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--hmi-bg-input)] hover:bg-[var(--hmi-border-subtle)] text-[var(--hmi-text-secondary)] rounded-lg text-sm"
             >
               <Download size={16} /> Export CSV
             </button>
           </div>
-          <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+          <div className="bg-[var(--hmi-bg-elevated)] rounded-xl border border-[var(--hmi-border)] overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-700 text-slate-400">
+                <tr className="border-b border-[var(--hmi-border)] text-[var(--hmi-text-secondary)]">
                   <th className="text-left px-4 py-3 font-medium">Time</th>
                   <th className="text-left px-4 py-3 font-medium">User</th>
                   <th className="text-left px-4 py-3 font-medium">Action</th>
@@ -2847,12 +2853,12 @@ export function SettingsPage({ user, tagValues }: Props) {
               </thead>
               <tbody>
                 {filteredAudit.map((entry) => (
-                  <tr key={entry.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                    <td className="px-4 py-2 text-slate-300 whitespace-nowrap">{new Date(entry.timestamp).toLocaleString()}</td>
-                    <td className="px-4 py-2 text-slate-300">{entry.user || '\u2014'}</td>
-                    <td className="px-4 py-2 text-slate-400">{entry.action}</td>
-                    <td className="px-4 py-2 text-slate-400 truncate max-w-md">{entry.details || '\u2014'}</td>
-                    <td className="px-4 py-2 text-slate-500 text-xs">{entry.source_ip || '\u2014'}</td>
+                  <tr key={entry.id} className="border-b border-[var(--hmi-border)]/50 hover:bg-[var(--hmi-bg-input)]/30">
+                    <td className="px-4 py-2 text-[var(--hmi-text-secondary)] whitespace-nowrap">{new Date(entry.timestamp).toLocaleString()}</td>
+                    <td className="px-4 py-2 text-[var(--hmi-text-secondary)]">{entry.user || '\u2014'}</td>
+                    <td className="px-4 py-2 text-[var(--hmi-text-secondary)]">{entry.action}</td>
+                    <td className="px-4 py-2 text-[var(--hmi-text-secondary)] truncate max-w-md">{entry.details || '\u2014'}</td>
+                    <td className="px-4 py-2 text-[var(--hmi-text-muted)] text-xs">{entry.source_ip || '\u2014'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -2974,43 +2980,43 @@ function SystemUpdateTab({ canManage }: { canManage: boolean }) {
   return (
     <div className="max-w-2xl space-y-6">
       {/* System Information */}
-      <div className="bg-slate-800 rounded-xl border border-slate-700 p-5">
-        <h2 className="text-sm font-semibold text-slate-200 mb-3">System Information</h2>
+      <div className="bg-[var(--hmi-bg-elevated)] rounded-xl border border-[var(--hmi-border)] p-5">
+        <h2 className="text-sm font-semibold text-[var(--hmi-text-primary)] mb-3">System Information</h2>
         {infoError ? (
           <p className="text-sm text-red-400">{infoError}</p>
         ) : systemInfo ? (
           <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
             <div>
-              <span className="text-slate-500">Version</span>
-              <span className="ml-2 text-slate-200 font-mono">{systemInfo.app_version}</span>
+              <span className="text-[var(--hmi-text-muted)]">Version</span>
+              <span className="ml-2 text-[var(--hmi-text-primary)] font-mono">{systemInfo.app_version}</span>
             </div>
             <div>
-              <span className="text-slate-500">Uptime</span>
-              <span className="ml-2 text-slate-200">{formatUptime(systemInfo.uptime_seconds)}</span>
+              <span className="text-[var(--hmi-text-muted)]">Uptime</span>
+              <span className="ml-2 text-[var(--hmi-text-primary)]">{formatUptime(systemInfo.uptime_seconds)}</span>
             </div>
             <div>
-              <span className="text-slate-500">Platform</span>
-              <span className="ml-2 text-slate-200">{systemInfo.platform}</span>
+              <span className="text-[var(--hmi-text-muted)]">Platform</span>
+              <span className="ml-2 text-[var(--hmi-text-primary)]">{systemInfo.platform}</span>
             </div>
             <div>
-              <span className="text-slate-500">Python</span>
-              <span className="ml-2 text-slate-200 font-mono">{systemInfo.python_version}</span>
+              <span className="text-[var(--hmi-text-muted)]">Python</span>
+              <span className="ml-2 text-[var(--hmi-text-primary)] font-mono">{systemInfo.python_version}</span>
             </div>
             <div className="col-span-2">
-              <span className="text-slate-500">Install Path</span>
-              <span className="ml-2 text-slate-200 font-mono text-xs">{systemInfo.install_path}</span>
+              <span className="text-[var(--hmi-text-muted)]">Install Path</span>
+              <span className="ml-2 text-[var(--hmi-text-primary)] font-mono text-xs">{systemInfo.install_path}</span>
             </div>
           </div>
         ) : (
-          <p className="text-sm text-slate-500">Loading...</p>
+          <p className="text-sm text-[var(--hmi-text-muted)]">Loading...</p>
         )}
       </div>
 
       {/* Update Package Upload */}
       {canManage && (
-        <div className="bg-slate-800 rounded-xl border border-slate-700 p-5">
-          <h2 className="text-sm font-semibold text-slate-200 mb-1">Apply Software Update</h2>
-          <p className="text-xs text-slate-500 mb-4">
+        <div className="bg-[var(--hmi-bg-elevated)] rounded-xl border border-[var(--hmi-border)] p-5">
+          <h2 className="text-sm font-semibold text-[var(--hmi-text-primary)] mb-1">Apply Software Update</h2>
+          <p className="text-xs text-[var(--hmi-text-muted)] mb-4">
             Upload a deployment package (.tar.gz or .zip) from a USB drive or local folder.
             Your database, configuration, trends, jobs, and screens are preserved.
           </p>
@@ -3029,16 +3035,16 @@ function SystemUpdateTab({ canManage }: { canManage: boolean }) {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={applying}
-                className="flex items-center gap-2 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-200 rounded-lg text-sm font-medium border border-slate-600"
+                className="flex items-center gap-2 px-4 py-2.5 bg-[var(--hmi-bg-input)] hover:bg-[var(--hmi-border-subtle)] disabled:opacity-50 text-[var(--hmi-text-primary)] rounded-lg text-sm font-medium border border-[var(--hmi-border-subtle)]"
               >
                 <HardDriveUpload size={16} />
                 {selectedFile ? 'Choose Different Package' : 'Select Update Package'}
               </button>
               {selectedFile && (
                 <>
-                  <span className="text-sm text-slate-300 font-mono truncate max-w-xs">{selectedFile.name}</span>
-                  <span className="text-xs text-slate-500">({(selectedFile.size / (1024 * 1024)).toFixed(1)} MB)</span>
-                  <button onClick={handleClear} className="text-slate-500 hover:text-slate-300 ml-1" title="Clear">
+                  <span className="text-sm text-[var(--hmi-text-secondary)] font-mono truncate max-w-xs">{selectedFile.name}</span>
+                  <span className="text-xs text-[var(--hmi-text-muted)]">({(selectedFile.size / (1024 * 1024)).toFixed(1)} MB)</span>
+                  <button onClick={handleClear} className="text-[var(--hmi-text-muted)] hover:text-[var(--hmi-text-secondary)] ml-1" title="Clear">
                     <X size={16} />
                   </button>
                 </>
@@ -3048,7 +3054,7 @@ function SystemUpdateTab({ canManage }: { canManage: boolean }) {
 
           {/* Validating spinner */}
           {validating && (
-            <div className="flex items-center gap-2 text-sm text-slate-400 mb-4">
+            <div className="flex items-center gap-2 text-sm text-[var(--hmi-text-secondary)] mb-4">
               <RefreshCw size={14} className="animate-spin" /> Validating package...
             </div>
           )}
@@ -3072,17 +3078,17 @@ function SystemUpdateTab({ canManage }: { canManage: boolean }) {
               </div>
               {validation.valid ? (
                 <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs ml-6">
-                  <div className="text-slate-400">
-                    Backend code: <span className={validation.has_backend ? 'text-green-400' : 'text-slate-500'}>{validation.has_backend ? 'Included' : 'Not included'}</span>
+                  <div className="text-[var(--hmi-text-secondary)]">
+                    Backend code: <span className={validation.has_backend ? 'text-green-400' : 'text-[var(--hmi-text-muted)]'}>{validation.has_backend ? 'Included' : 'Not included'}</span>
                   </div>
-                  <div className="text-slate-400">
-                    Frontend build: <span className={validation.has_frontend ? 'text-green-400' : 'text-slate-500'}>{validation.has_frontend ? 'Included' : 'Not included'}</span>
+                  <div className="text-[var(--hmi-text-secondary)]">
+                    Frontend build: <span className={validation.has_frontend ? 'text-green-400' : 'text-[var(--hmi-text-muted)]'}>{validation.has_frontend ? 'Included' : 'Not included'}</span>
                   </div>
-                  <div className="text-slate-400">
-                    Python wheels: <span className={validation.has_wheels ? 'text-green-400' : 'text-slate-500'}>{validation.has_wheels ? 'Included' : 'Not included'}</span>
+                  <div className="text-[var(--hmi-text-secondary)]">
+                    Python wheels: <span className={validation.has_wheels ? 'text-green-400' : 'text-[var(--hmi-text-muted)]'}>{validation.has_wheels ? 'Included' : 'Not included'}</span>
                   </div>
-                  <div className="text-slate-400">
-                    Files: <span className="text-slate-300">{validation.file_count}</span>
+                  <div className="text-[var(--hmi-text-secondary)]">
+                    Files: <span className="text-[var(--hmi-text-secondary)]">{validation.file_count}</span>
                   </div>
                 </div>
               ) : (
@@ -3137,7 +3143,7 @@ function SystemUpdateTab({ canManage }: { canManage: boolean }) {
                   {updateResult.message}
                 </span>
               </div>
-              <div className="text-xs text-slate-400 ml-6 space-y-0.5">
+              <div className="text-xs text-[var(--hmi-text-secondary)] ml-6 space-y-0.5">
                 {updateResult.updated_backend && <div>Backend code updated</div>}
                 {updateResult.updated_frontend && <div>Frontend assets updated</div>}
                 {updateResult.updated_dependencies && <div>Python dependencies updated</div>}
@@ -3153,12 +3159,12 @@ function SystemUpdateTab({ canManage }: { canManage: boolean }) {
       )}
 
       {/* Data preservation notice */}
-      <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-5">
-        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">What happens during an update</h3>
+      <div className="bg-[var(--hmi-bg-elevated)]/50 rounded-xl border border-[var(--hmi-border)]/50 p-5">
+        <h3 className="text-xs font-semibold text-[var(--hmi-text-secondary)] uppercase tracking-wider mb-3">What happens during an update</h3>
         <div className="grid grid-cols-2 gap-4 text-xs">
           <div>
             <div className="text-green-400 font-medium mb-1.5">Preserved (never overwritten)</div>
-            <ul className="text-slate-400 space-y-1">
+            <ul className="text-[var(--hmi-text-secondary)] space-y-1">
               <li>Database (trends, jobs, screens, alarms, users, audit trail)</li>
               <li>Configuration (.env file)</li>
               <li>Service registration (systemd / NSSM)</li>
@@ -3166,7 +3172,7 @@ function SystemUpdateTab({ canManage }: { canManage: boolean }) {
           </div>
           <div>
             <div className="text-amber-400 font-medium mb-1.5">Replaced (updated)</div>
-            <ul className="text-slate-400 space-y-1">
+            <ul className="text-[var(--hmi-text-secondary)] space-y-1">
               <li>Backend application code</li>
               <li>Frontend UI assets</li>
               <li>Python dependencies (if new wheels included)</li>
