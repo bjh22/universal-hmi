@@ -538,6 +538,216 @@ For production deployments, make sure to:
 3. Use a persistent database (PostgreSQL recommended for multi-user production).
 4. Place behind a reverse proxy with HTTPS.
 
+---
+
+## Deployment to Panel PCs
+
+The project includes a `deploy.sh` script that packages the entire HMI — backend, frontend, and all Python dependencies — into a self-contained archive for offline installation on industrial panel PCs. No internet connection is required on the target machine.
+
+### Prerequisites (Build Machine)
+
+The packaging step runs on your **development machine** (Linux or macOS with internet access):
+
+| Requirement | Purpose |
+|-------------|---------|
+| Python 3.10+ | Downloads pip wheels for the target |
+| Node.js 18+ | Builds the frontend |
+| `pip` | Downloads offline wheel packages |
+| `zip` (optional) | Creates `.zip` archive for Windows targets |
+
+### Prerequisites (Target Panel PC)
+
+| Platform | Requirement |
+|----------|-------------|
+| **Linux** | Python 3.11+ installed (`sudo apt install python3 python3-venv`) |
+| **Windows** | Python 3.11+ installed and on PATH ([python.org](https://www.python.org/downloads/)) |
+
+No Node.js, npm, or internet connection is needed on the target — the frontend is pre-built and all Python packages are bundled as wheels.
+
+### Step 1: Create the Deployment Package
+
+On your development machine:
+
+```bash
+# Linux target only
+./deploy.sh
+
+# Linux + Windows targets
+./deploy.sh --windows
+```
+
+This performs the following steps automatically:
+1. Builds the frontend with `npm run build` (TypeScript check + Vite production build)
+2. Copies the backend source and built frontend into a release directory
+3. Downloads all Python dependency wheels for offline installation
+4. Downloads Windows-specific wheels (when `--windows` is specified)
+5. Generates platform-specific install scripts (`install.sh` and `install.bat`)
+6. Creates deployment archives in `dist/`:
+   - `dist/hmi-<timestamp>.tar.gz` — Linux deployment package (always created)
+   - `dist/hmi-<timestamp>-windows.zip` — Windows deployment package (when `--windows` is used)
+
+### Step 2: Deploy to the Target
+
+#### Linux Panel PC
+
+```bash
+# 1. Copy the archive to the panel PC (USB drive, SCP, network share, etc.)
+scp dist/hmi-*.tar.gz user@panel-pc:/tmp/
+
+# 2. On the panel PC, extract the archive
+tar -xzf /tmp/hmi-*.tar.gz
+
+# 3. Run the installer (installs to /opt/hmi by default)
+cd hmi-release
+sudo ./install.sh
+
+# Or specify a custom install location
+sudo ./install.sh /home/hmi/app
+```
+
+The Linux installer:
+- Verifies Python 3 is available
+- Creates a Python virtual environment at the install location
+- Installs all dependencies from bundled wheels (fully offline)
+- Copies the application files and built frontend
+- Creates a `.env` file with a generated `HMI_SECRET_KEY`
+- Creates a **systemd service** (`hmi.service`) for auto-start on boot
+- Seeds the database with default users and demo tags
+- Creates convenience scripts (`start.sh`, `seed.sh`)
+
+**After installation:**
+
+```bash
+# Start as a systemd service (auto-starts on boot)
+sudo systemctl enable --now hmi
+
+# Or start manually
+/opt/hmi/start.sh
+
+# Re-seed the database
+/opt/hmi/seed.sh
+
+# View logs
+journalctl -u hmi -f
+
+# Stop the service
+sudo systemctl stop hmi
+```
+
+#### Windows Panel PC
+
+1. Copy `dist/hmi-<timestamp>-windows.zip` to the panel PC (USB drive, network share, etc.)
+2. Extract the archive (right-click > "Extract All" or use 7-Zip)
+3. Open **Command Prompt as Administrator** in the `hmi-release` folder
+4. Run the installer:
+
+```cmd
+install.bat
+
+REM Or specify a custom install location
+install.bat D:\hmi
+```
+
+The Windows installer:
+- Verifies Python is available on PATH
+- Creates a Python virtual environment at the install location (default: `C:\hmi`)
+- Installs all dependencies from bundled wheels (fully offline, uses Windows-specific wheels when available)
+- Copies the application files and built frontend
+- Creates a `.env` file with a generated `HMI_SECRET_KEY`
+- Configures a **Windows Firewall** rule to allow incoming connections on port 8080
+- Seeds the database with default users and demo tags
+- Creates convenience scripts (`start.bat`, `seed.bat`)
+
+**After installation:**
+
+```cmd
+REM Start manually
+C:\hmi\start.bat
+
+REM Re-seed the database
+C:\hmi\seed.bat
+```
+
+**Running as a Windows Service (recommended for production):**
+
+The HMI should run as a service so it starts automatically on boot and survives user logoff. Use [NSSM](https://nssm.cc/) (Non-Sucking Service Manager):
+
+```cmd
+REM Install NSSM, then register the service:
+nssm install HMI_Server "C:\hmi\venv\Scripts\python.exe" run.py
+nssm set HMI_Server AppDirectory "C:\hmi"
+nssm set HMI_Server AppEnvironmentExtra "PATH=C:\hmi\venv\Scripts;%PATH%"
+nssm start HMI_Server
+
+REM Or use Task Scheduler to run start.bat at logon
+```
+
+### Post-Deployment Verification
+
+After installation on either platform, verify the deployment:
+
+1. **Open a browser** on the panel PC and navigate to `http://localhost:8080`
+2. **Log in** with the default credentials: username `admin`, password `admin`
+3. **Check the WebSocket** — the "Connected" indicator in the header should show green
+4. **Verify tag data** — navigate to the Dashboard and confirm simulated tag values are updating
+
+If accessing from another machine on the network, use the panel PC's IP address (e.g., `http://192.168.1.100:8080`).
+
+### Updating an Existing Installation
+
+To deploy a new version to a panel PC that already has the HMI installed:
+
+1. Build a new deployment package on your development machine (`./deploy.sh` or `./deploy.sh --windows`)
+2. Stop the running service on the target:
+   - Linux: `sudo systemctl stop hmi`
+   - Windows: `nssm stop HMI_Server` or close the running `start.bat` window
+3. Copy and extract the new archive to the target
+4. Re-run the installer — it will overwrite application files but **preserve the existing `.env` and database**
+5. Restart the service:
+   - Linux: `sudo systemctl start hmi`
+   - Windows: `nssm start HMI_Server` or run `start.bat`
+
+### Production Configuration
+
+For production panel PC deployments, review these settings in the `.env` file at the install location:
+
+| Variable | Recommendation |
+|----------|----------------|
+| `HMI_SECRET_KEY` | Auto-generated during install — keep the generated value |
+| `HMI_DEBUG` | Set to `false` (default) |
+| `HMI_HOST` | `0.0.0.0` to accept connections from any network interface |
+| `HMI_PORT` | `8080` (default) — change if needed, update firewall rules accordingly |
+| `HMI_ACCESS_TOKEN_EXPIRE_MINUTES` | `480` (8 hours) — adjust to match shift length |
+| `HMI_WS_UPDATE_INTERVAL_MS` | `500` — lower for faster updates, higher to reduce CPU usage |
+| `HMI_TREND_RETENTION_DAYS` | `90` — increase for longer history, monitor disk usage |
+
+### Deployment Directory Structure
+
+After installation, the target machine will have:
+
+```
+/opt/hmi/                          # Linux (or C:\hmi on Windows)
+├── venv/                          # Python virtual environment
+├── app/                           # Backend application
+│   ├── api/                       # Route handlers
+│   ├── core/                      # Config, database, security
+│   ├── drivers/                   # PLC protocol drivers
+│   ├── models/                    # Database models
+│   ├── services/                  # Business logic
+│   ├── main.py                    # FastAPI entry point
+│   └── seed.py                    # Database seeder
+├── static/                        # Built frontend (served by FastAPI)
+│   ├── assets/                    # JS, CSS bundles
+│   └── index.html                 # SPA entry point
+├── data/
+│   └── hmi.db                     # SQLite database
+├── run.py                         # Server entry point
+├── requirements.txt               # Python dependencies list
+├── .env                           # Environment configuration
+├── start.sh (or start.bat)        # Manual start script
+└── seed.sh (or seed.bat)          # Database seed script
+```
+
 ## Project Structure
 
 ```
