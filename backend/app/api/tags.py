@@ -1,7 +1,10 @@
+import csv
+import io
 import json
 import xml.etree.ElementTree as ET
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -231,6 +234,62 @@ async def write_tag_value(
     if not success:
         raise HTTPException(status_code=404, detail="Tag not found")
     return {"success": True}
+
+
+@router.get("/export/csv")
+async def export_tags_csv(
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    """Export all tags as a CSV file."""
+    result = await session.execute(
+        select(Tag).options(selectinload(Tag.labels)).order_by(Tag.name)
+    )
+    tags = result.scalars().all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "name", "display_name", "description", "data_type", "access_mode",
+        "engineering_units", "display_format", "min_value", "max_value",
+        "deadband", "address", "data_source_id",
+        "trending_enabled", "trending_sample_rate_ms",
+        "alarm_enabled", "alarm_config",
+        "simulation_enabled", "simulation_behavior", "simulation_config",
+        "enum_mapping", "labels",
+    ])
+    for tag in tags:
+        label_names = ";".join(l.name for l in tag.labels) if tag.labels else ""
+        writer.writerow([
+            tag.name,
+            tag.display_name or "",
+            tag.description or "",
+            tag.data_type.value if tag.data_type else "",
+            tag.access_mode.value if tag.access_mode else "",
+            tag.engineering_units or "",
+            tag.display_format or "",
+            tag.min_value if tag.min_value is not None else "",
+            tag.max_value if tag.max_value is not None else "",
+            tag.deadband if tag.deadband is not None else "",
+            tag.address or "",
+            tag.data_source_id if tag.data_source_id is not None else "",
+            tag.trending_enabled,
+            tag.trending_sample_rate_ms if tag.trending_sample_rate_ms is not None else "",
+            tag.alarm_enabled,
+            tag.alarm_config or "",
+            tag.simulation_enabled,
+            tag.simulation_behavior or "",
+            tag.simulation_config or "",
+            tag.enum_mapping or "",
+            label_names,
+        ])
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=tags_export.csv"},
+    )
 
 
 @router.post("/import/csv")

@@ -117,6 +117,19 @@ export const api = {
     request<{ updated: number }>('/tags/bulk/remove-labels', { method: 'POST', body: JSON.stringify({ tag_ids: tagIds, label_ids: labelIds }) }),
   bulkUpdateTags: (tagIds: number[], fields: Record<string, unknown>) =>
     request<{ updated: number }>('/tags/bulk/update', { method: 'POST', body: JSON.stringify({ tag_ids: tagIds, fields }) }),
+  exportTagsCsv: async () => {
+    const res = await fetch(`${BASE}/tags/export/csv`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Export failed');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `tags_export_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  },
   importTagsCsv: (tags: Partial<Tag>[], dataSourceId?: number | null, onConflict?: ImportConflictMode, updateFields?: string[]) =>
     request<ImportResult>('/tags/import/csv', {
       method: 'POST',
