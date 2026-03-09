@@ -18,9 +18,9 @@ export function shouldShowTitle(chrome: ChromeLevel = 'full'): boolean {
 export function getTitleClasses(chrome: ChromeLevel = 'full'): string {
   switch (chrome) {
     case 'full':
-      return 'text-xs text-slate-400 mb-2 font-medium uppercase tracking-wider';
+      return 'text-sm text-slate-400 mb-2 font-medium uppercase tracking-wider';
     case 'compact':
-      return 'text-[10px] text-slate-400 mb-1 font-medium uppercase tracking-wider';
+      return 'text-xs text-slate-400 mb-1 font-medium uppercase tracking-wider';
     case 'none':
       return '';
   }

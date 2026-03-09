@@ -60,17 +60,17 @@ export function OeeWidget({ title, availabilityTag, performanceTag, qualityTag, 
       <div className="flex-1 flex flex-col justify-center">
         {/* Main OEE value */}
         <div className="text-center mb-3">
-          <div className={`text-3xl font-bold ${oeeColor(oee)}`} style={textStyleToCSS(valueStyle)}>
+          <div className={`text-4xl font-bold ${oeeColor(oee)}`} style={textStyleToCSS(valueStyle)}>
             {formatVal(oee)}
           </div>
-          <div className="text-[10px] text-slate-500 uppercase">OEE</div>
+          <div className="text-xs text-slate-500 uppercase">OEE</div>
         </div>
 
         {/* Component bars */}
         <div className="space-y-2">
           {metrics.map(m => (
             <div key={m.label} title={m.name}>
-              <div className="flex justify-between text-xs mb-0.5">
+              <div className="flex justify-between text-sm mb-0.5">
                 <span className="text-slate-500">{m.label}</span>
                 <span className={oeeColor(m.value)}>{formatVal(m.value)}</span>
               </div>

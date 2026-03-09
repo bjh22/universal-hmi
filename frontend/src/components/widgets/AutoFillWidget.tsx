@@ -30,7 +30,7 @@ function BoolIndicator({ tag, tagValues, onColor, offColor }: { tag: Tag; tagVal
     <div className="flex items-center justify-between gap-2 py-1.5">
       <div className="flex items-center gap-1 min-w-0">
         {longDesc && <InlineInfoButton description={longDesc} title={tag.display_name || tag.name} />}
-        <span className="text-xs text-slate-300 truncate">{tag.display_name || tag.name}</span>
+        <span className="text-sm text-slate-300 truncate">{tag.display_name || tag.name}</span>
       </div>
       <div
         style={{
@@ -57,11 +57,11 @@ function ValueDisplay({ tag, tagValues, decimalPlaces, valueStyle }: { tag: Tag;
     <div className="flex items-center justify-between gap-2 py-1.5">
       <div className="flex items-center gap-1 min-w-0">
         {longDesc && <InlineInfoButton description={longDesc} title={tag.display_name || tag.name} />}
-        <span className="text-xs text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{tag.display_name || tag.name}</span>
+        <span className="text-sm text-slate-300 truncate" style={textStyleToCSS(valueStyle)}>{tag.display_name || tag.name}</span>
       </div>
-      <span className="text-sm font-semibold text-slate-100 tabular-nums flex-shrink-0" style={textStyleToCSS(valueStyle)}>
+      <span className="text-base font-semibold text-slate-100 tabular-nums flex-shrink-0" style={textStyleToCSS(valueStyle)}>
         {display}
-        {tag.engineering_units && <span className="text-xs text-slate-500 font-normal ml-1">{tag.engineering_units}</span>}
+        {tag.engineering_units && <span className="text-sm text-slate-500 font-normal ml-1">{tag.engineering_units}</span>}
       </span>
     </div>
   );
@@ -118,7 +118,7 @@ export function AutoFillWidget({ title, labelName, columns = 2, onColor = '#22c5
           </div>
         ))}
         {matchedTags.length === 0 && (
-          <div className="text-xs text-slate-600 italic text-center py-4">
+          <div className="text-sm text-slate-600 italic text-center py-4">
             {labelName ? `No tags with label "${labelName}"` : 'Select a label to auto-fill'}
           </div>
         )}

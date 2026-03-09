@@ -22,12 +22,12 @@ export function StatusIndicator({ title, tag, tagValues, mapping = {}, titleStyl
     <div className={`${getContainerClasses(chrome)} h-full flex flex-col justify-center items-center`}>
       {shouldShowTitle(chrome) && <div className={getTitleClasses(chrome)} style={textStyleToCSS(titleStyle)}>{title}</div>}
       <div
-        className="text-lg font-bold px-4 py-2 rounded-lg"
+        className="text-xl font-bold px-4 py-2 rounded-lg"
         style={{ backgroundColor: (mapped?.color || '#6b7280') + '20', color: mapped?.color || '#6b7280', ...textStyleToCSS(valueStyle) }}
       >
         {mapped?.label || strVal || '—'}
       </div>
-      {shouldShowExtras(chrome) && tv && <div className="text-xs text-slate-500 mt-2">{tv.display_name || tag}</div>}
+      {shouldShowExtras(chrome) && tv && <div className="text-sm text-slate-500 mt-2">{tv.display_name || tag}</div>}
     </div>
   );
 }

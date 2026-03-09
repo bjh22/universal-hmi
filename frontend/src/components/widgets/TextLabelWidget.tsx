@@ -23,10 +23,10 @@ export function TextLabelWidget({ title, text, titleStyle, valueStyle, chrome = 
       {text ? (
         <>
           {shouldShowTitle(chrome) && <div className={getTitleClasses(chrome)} style={textStyleToCSS(titleStyle)}>{title}</div>}
-          <div className="text-sm text-slate-200" style={textStyleToCSS(valueStyle)}>{text}</div>
+          <div className="text-base text-slate-200" style={textStyleToCSS(valueStyle)}>{text}</div>
         </>
       ) : (
-        <div className="text-sm text-slate-200" style={textStyleToCSS(titleStyle)}>{displayText}</div>
+        <div className="text-base text-slate-200" style={textStyleToCSS(titleStyle)}>{displayText}</div>
       )}
     </div>
   );

@@ -28,7 +28,7 @@ export function AlarmSummaryWidget({ title, alarms, titleStyle, chrome = 'full' 
         <Badge count={info} color="bg-blue-600" label="Info" />
       </div>
       {active.length === 0 && (
-        <div className="text-xs text-green-400 mt-1">No active alarms</div>
+        <div className="text-sm text-green-400 mt-1">No active alarms</div>
       )}
     </div>
   );
@@ -37,10 +37,10 @@ export function AlarmSummaryWidget({ title, alarms, titleStyle, chrome = 'full' 
 function Badge({ count, color, label }: { count: number; color: string; label: string }) {
   return (
     <div className="flex flex-col items-center gap-1">
-      <div className={`${color} text-white text-lg font-bold rounded-lg w-10 h-10 flex items-center justify-center ${count === 0 ? 'opacity-30' : ''}`}>
+      <div className={`${color} text-white text-xl font-bold rounded-lg w-12 h-12 flex items-center justify-center ${count === 0 ? 'opacity-30' : ''}`}>
         {count}
       </div>
-      <span className="text-[10px] text-slate-500 uppercase">{label}</span>
+      <span className="text-xs text-slate-500 uppercase">{label}</span>
     </div>
   );
 }
