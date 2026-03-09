@@ -41,6 +41,7 @@ export default function App() {
   const auth = useAuthState();
   const [siteTitle, setSiteTitle] = useState('Industrial HMI');
   const [navTitle, setNavTitle] = useState('HMI');
+  const [activeProjectName, setActiveProjectName] = useState<string | null>(null);
 
   useEffect(() => {
     api.getBranding().then((b) => {
@@ -48,6 +49,7 @@ export default function App() {
       setNavTitle(b.nav_title);
       applyBranding(b);
     }).catch(() => {});
+    api.getActiveProject().then(p => setActiveProjectName(p.name)).catch(() => {});
   }, []);
 
   return (
@@ -66,6 +68,7 @@ export default function App() {
               alarms={alarms}
               onLogout={auth.logout}
               navTitle={navTitle}
+              activeProjectName={activeProjectName}
             >
               <Suspense fallback={<PageLoader />}>
                 <Routes>

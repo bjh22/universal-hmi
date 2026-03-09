@@ -245,6 +245,7 @@ export const api = {
 
   // Projects
   getProjects: () => request<ProjectData[]>('/projects/'),
+  getActiveProject: () => request<{ id: number | null; name: string | null }>('/projects/active'),
   getProject: (id: number) => request<ProjectDetail>(`/projects/${id}`),
   createProject: (data: { name: string; description?: string; version?: string }) =>
     request<ProjectData>('/projects/', { method: 'POST', body: JSON.stringify(data) }),

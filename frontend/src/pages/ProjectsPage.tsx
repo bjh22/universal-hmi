@@ -200,11 +200,7 @@ export function ProjectsPage({ user }: Props) {
   }, []);
 
   // Find which project currently has the most recent snapshot_saved_at (the "active" one)
-  const activeProject = projects.reduce<ProjectData | null>((best, p) => {
-    if (!p.snapshot_saved_at) return best;
-    if (!best || !best.snapshot_saved_at) return p;
-    return p.snapshot_saved_at > best.snapshot_saved_at ? p : best;
-  }, null);
+  const activeProject = projects.find(p => p.is_active) || null;
 
   return (
     <div className="space-y-4">

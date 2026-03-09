@@ -227,6 +227,7 @@ export interface ProjectData {
   name: string;
   description: string | null;
   version: string;
+  is_active: boolean;
   has_snapshot: boolean;
   snapshot_saved_at: string | null;
   created_at: string;

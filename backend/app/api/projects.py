@@ -1,5 +1,7 @@
 import json
+import re
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -43,6 +45,7 @@ class ProjectOut(BaseModel):
     name: str
     description: str | None
     version: str
+    is_active: bool = False
     has_snapshot: bool = False
     snapshot_saved_at: datetime | None = None
     created_at: datetime
@@ -130,6 +133,28 @@ class ImportResultResponse(BaseModel):
     warnings: list[str] = []
 
 
+# ─── Helpers ───
+
+# Repo-root projects directory for auto-saved snapshots
+_PROJECTS_DIR = Path(__file__).resolve().parents[3] / "projects"
+
+
+def _save_snapshot_to_disk(project_name: str, snapshot_data: dict) -> None:
+    """Write a project snapshot to the projects/ directory as a .hmi.json file."""
+    _PROJECTS_DIR.mkdir(exist_ok=True)
+    safe_name = re.sub(r"[^\w\-]+", "_", project_name).strip("_").lower()
+    path = _PROJECTS_DIR / f"{safe_name}.hmi.json"
+    path.write_text(json.dumps(snapshot_data, indent=2) + "\n", encoding="utf-8")
+
+
+async def _set_active_project(session: AsyncSession, project_id: int) -> None:
+    """Clear is_active on all projects, then set it on the given project."""
+    await session.execute(update(Project).values(is_active=False))
+    await session.execute(
+        update(Project).where(Project.id == project_id).values(is_active=True)
+    )
+
+
 # ─── CRUD endpoints ───
 
 
@@ -140,12 +165,22 @@ async def list_projects(session: AsyncSession = Depends(get_db)):
     return [
         ProjectOut(
             id=p.id, name=p.name, description=p.description, version=p.version,
-            has_snapshot=p.snapshot is not None,
+            is_active=p.is_active, has_snapshot=p.snapshot is not None,
             snapshot_saved_at=p.snapshot_saved_at,
             created_at=p.created_at, updated_at=p.updated_at,
         )
         for p in projects
     ]
+
+
+@router.get("/active")
+async def get_active_project(session: AsyncSession = Depends(get_db)):
+    """Return the currently active project's id and name, or null if none."""
+    result = await session.execute(select(Project).where(Project.is_active == True))  # noqa: E712
+    project = result.scalar_one_or_none()
+    if not project:
+        return {"id": None, "name": None}
+    return {"id": project.id, "name": project.name}
 
 
 @router.post("/", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)
@@ -404,6 +439,7 @@ async def save_project(
     project.snapshot = json.dumps(snapshot_data)
     project.snapshot_saved_at = datetime.now(timezone.utc)
     await session.flush()
+    _save_snapshot_to_disk(project.name, snapshot_data)
     return {"status": "saved", "snapshot_saved_at": project.snapshot_saved_at.isoformat()}
 
 
@@ -475,6 +511,8 @@ async def load_project(
 
     await session.flush()
 
+    await _set_active_project(session, project.id)
+
     # Reload tag engine and alarm service so in-memory state matches new DB
     await tag_engine.reload(session)
     await request.app.state.alarm_service.load_alarm_configs(session)
@@ -514,6 +552,9 @@ async def create_blank_project(
     project.snapshot = json.dumps(empty_snapshot)
     project.snapshot_saved_at = datetime.now(timezone.utc)
     await session.flush()
+    _save_snapshot_to_disk(project.name, empty_snapshot)
+
+    await _set_active_project(session, project.id)
 
     await tag_engine.reload(session)
     await request.app.state.alarm_service.load_alarm_configs(session)
@@ -521,7 +562,7 @@ async def create_blank_project(
 
     return ProjectOut(
         id=project.id, name=project.name, description=project.description, version=project.version,
-        has_snapshot=True, snapshot_saved_at=project.snapshot_saved_at,
+        is_active=True, has_snapshot=True, snapshot_saved_at=project.snapshot_saved_at,
         created_at=project.created_at, updated_at=project.updated_at,
     )
 
@@ -555,6 +596,9 @@ async def create_demo_project(
     project.snapshot = json.dumps(snapshot_data)
     project.snapshot_saved_at = datetime.now(timezone.utc)
     await session.flush()
+    _save_snapshot_to_disk(project.name, snapshot_data)
+
+    await _set_active_project(session, project.id)
 
     await tag_engine.reload(session)
     await request.app.state.alarm_service.load_alarm_configs(session)
@@ -562,7 +606,7 @@ async def create_demo_project(
 
     return ProjectOut(
         id=project.id, name=project.name, description=project.description, version=project.version,
-        has_snapshot=True, snapshot_saved_at=project.snapshot_saved_at,
+        is_active=True, has_snapshot=True, snapshot_saved_at=project.snapshot_saved_at,
         created_at=project.created_at, updated_at=project.updated_at,
     )
 
