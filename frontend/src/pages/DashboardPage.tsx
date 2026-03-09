@@ -33,6 +33,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
   const [newScreenResolution, setNewScreenResolution] = useState('1920x1080');
   const [newScreenCustomW, setNewScreenCustomW] = useState(1920);
   const [newScreenCustomH, setNewScreenCustomH] = useState(1080);
+  const [createScreenError, setCreateScreenError] = useState<string | null>(null);
   const absContainerRef = useRef<HTMLDivElement>(null);
   const [absScale, setAbsScale] = useState(1);
   const [absOffset, setAbsOffset] = useState({ x: 0, y: 0 });
@@ -69,7 +70,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
     refreshScreens();
   }, [refreshScreens]);
 
-  // Load active screen
+  // Load active screen; if the slug is missing/not found, redirect to first available screen
   useEffect(() => {
     const target = slug || 'dashboard';
     api.getScreenBySlug(target)
@@ -80,8 +81,15 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
       .catch(() => {
         setActiveScreen(null);
         setRuntimeWidgets([]);
+        // If we were using the default fallback slug and it doesn't exist, navigate
+        // to the first available screen so saved screens are immediately visible.
+        if (!slug) {
+          api.getScreens().then((all) => {
+            if (all.length > 0) navigate(`/screen/${all[0].slug}`, { replace: true });
+          }).catch(() => {});
+        }
       });
-  }, [slug]);
+  }, [slug, navigate]);
 
   // Enter edit mode
   const handleEnterEdit = useCallback(() => {
@@ -152,16 +160,22 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
       }
       targetRes = JSON.stringify({ width: w, height: h });
     }
-    await api.createScreen({
-      name: newScreenName.trim(),
-      slug: screenSlug,
-      layout: [],
-      layout_mode: newScreenMode,
-      target_resolution: targetRes,
-      is_default: screens.length === 0,
-      sort_order: screens.length,
-    });
+    try {
+      await api.createScreen({
+        name: newScreenName.trim(),
+        slug: screenSlug,
+        layout: [],
+        layout_mode: newScreenMode,
+        target_resolution: targetRes,
+        is_default: screens.length === 0,
+        sort_order: screens.length,
+      });
+    } catch (err) {
+      setCreateScreenError(err instanceof Error ? err.message : 'Failed to create screen');
+      return;
+    }
     setShowNewScreenDialog(false);
+    setCreateScreenError(null);
     setNewScreenName('');
     setNewScreenMode(defaultLayout);
     setNewScreenResolution(defaultResolution);
@@ -336,7 +350,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
     <div className={screenLayoutMode === 'absolute' && screenResolution ? 'flex flex-col h-full overflow-hidden' : ''}>
       {/* Screen tabs + edit button */}
       <div className="flex items-center gap-2 mb-4">
-        {screens.length > 1 && (
+        {screens.length > 0 && (
           <div className="flex gap-1 overflow-x-auto pb-1">
             {screens.map((s) => (
               <Link
@@ -357,7 +371,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
         {isDesigner && (
           <div className="flex items-center gap-1">
             <button
-              onClick={() => setShowNewScreenDialog(true)}
+              onClick={() => { setShowNewScreenDialog(true); setCreateScreenError(null); }}
               className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
               title="New screen"
             >
@@ -446,9 +460,13 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
               onChange={e => setNewScreenName(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleCreateScreen(); if (e.key === 'Escape') setShowNewScreenDialog(false); }}
               placeholder="Screen name"
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500 mb-4"
+              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500 mb-1"
               autoFocus
             />
+            {createScreenError && (
+              <p className="text-xs text-red-400 mb-3">{createScreenError}</p>
+            )}
+            {!createScreenError && <div className="mb-4" />}
 
             {/* Layout Mode */}
             <div className="mb-4">

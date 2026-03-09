@@ -84,6 +84,12 @@ async def create_screen(
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.DESIGNER)),
 ):
+    existing = await session.execute(select(Screen).where(Screen.slug == body.slug))
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"A screen with slug '{body.slug}' already exists. Choose a different name.",
+        )
     screen = Screen(
         name=body.name,
         slug=body.slug,
