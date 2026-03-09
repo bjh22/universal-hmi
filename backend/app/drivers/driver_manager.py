@@ -57,6 +57,10 @@ class DriverManager:
         try:
             await driver.connect()
             logger.info(f"Connected to {ds.name} ({ds.protocol.value})")
+            # Auto-detect OPC UA address prefix if not already configured
+            if driver.connected and hasattr(driver, "detect_address_prefix"):
+                if not config.get("address_prefix"):
+                    await driver.detect_address_prefix()
         except Exception as e:
             logger.error(f"Failed to connect to {ds.name}: {e}")
             self._schedule_reconnect(ds.id, driver)
