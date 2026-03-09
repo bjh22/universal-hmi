@@ -15,6 +15,7 @@ interface AppShellProps {
   alarms: AlarmData[];
   onLogout: () => void;
   navTitle?: string;
+  activeProjectName?: string | null;
 }
 
 const NAV_ITEMS = [
@@ -39,7 +40,7 @@ function SeverityIcon({ severity }: { severity: AlarmData['severity'] }) {
   }
 }
 
-export function AppShell({ children, user, wsConnected, alarms, onLogout, navTitle = 'HMI' }: AppShellProps) {
+export function AppShell({ children, user, wsConnected, alarms, onLogout, navTitle = 'HMI', activeProjectName }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [ackingAll, setAckingAll] = useState(false);
   const location = useLocation();
@@ -126,6 +127,17 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
             <Link to="/alarms" className="flex items-center gap-1.5 bg-red-500/20 text-red-400 px-2.5 py-1 rounded-md text-xs font-medium">
               <Bell size={14} />
               {activeAlarmCount} Active Alarm{activeAlarmCount !== 1 ? 's' : ''}
+            </Link>
+          )}
+
+          {/* Active project */}
+          {activeProjectName && (
+            <Link
+              to="/projects"
+              className="flex items-center gap-1.5 text-sm text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)] px-2 py-1 rounded border border-[var(--hmi-border-subtle)] hover:border-[var(--hmi-text-muted)] transition-colors"
+            >
+              <FolderOpen size={14} />
+              {activeProjectName}
             </Link>
           )}
 
