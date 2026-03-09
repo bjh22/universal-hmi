@@ -260,7 +260,7 @@ function JobSetpointDisplay({ setpoints, tags }: { setpoints: string | null; tag
                               {Boolean(v) ? 'ON' : 'OFF'}
                             </span>
                           ) : (
-                            <span className="text-slate-200">{String(v)}</span>
+                            <span className="text-slate-200">{typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(2) : String(v)}</span>
                           )}
                         </td>
                       </tr>

@@ -58,6 +58,8 @@ function InlineTagValue({ tag, tagValues, canEdit }: { tag: Tag; tagValues: Reco
   const tv = tagValues[tag.name];
   const value = tv?.value;
 
+  const formatNum = (v: unknown) => typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(2) : String(v);
+
   const display = (() => {
     if (value == null) return '—';
     if (tag.data_type === 'bool') return Boolean(value) ? 'ON' : 'OFF';
@@ -65,9 +67,9 @@ function InlineTagValue({ tag, tagValues, canEdit }: { tag: Tag; tagValues: Reco
       let em: Record<string, string> = {};
       try { em = typeof tag.enum_mapping === 'string' ? JSON.parse(tag.enum_mapping) : tag.enum_mapping; } catch { /* ignore */ }
       const mapped = em[String(value)];
-      if (mapped) return `${mapped} (${value})`;
+      if (mapped) return `${mapped} (${formatNum(value)})`;
     }
-    return String(value);
+    return formatNum(value);
   })();
 
   const startEdit = () => {

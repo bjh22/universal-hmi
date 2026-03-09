@@ -127,8 +127,9 @@ export function FactoryConfigPage({ user, tagValues }: Props) {
       const mapped = em[String(value)];
       if (mapped) return mapped;
     }
-    if (tag.engineering_units) return `${value} ${tag.engineering_units}`;
-    return String(value);
+    const formatted = typeof value === 'number' && !Number.isInteger(value) ? value.toFixed(2) : String(value);
+    if (tag.engineering_units) return `${formatted} ${tag.engineering_units}`;
+    return formatted;
   };
 
   return (
