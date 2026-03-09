@@ -24,7 +24,7 @@ class Alarm(Base):
     __tablename__ = "alarms"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id"), nullable=False)
+    tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id"), nullable=False, index=True)
     message: Mapped[str] = mapped_column(String(500), nullable=False)
     severity: Mapped[AlarmSeverity] = mapped_column(Enum(AlarmSeverity), nullable=False)
     state: Mapped[AlarmState] = mapped_column(

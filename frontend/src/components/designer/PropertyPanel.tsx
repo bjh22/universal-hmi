@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import type { Widget, TextStyle, Tag, LayoutMode } from '../../types';
 import { api } from '../../lib/api';
 import { WIDGET_TYPES } from './WidgetPalette';
@@ -15,7 +15,7 @@ interface Props {
   onToggleLock: () => void;
 }
 
-function TagPicker({ value, onChange }: { value: string; onChange: (tag: string) => void }) {
+const TagPicker = memo(function TagPicker({ value, onChange }: { value: string; onChange: (tag: string) => void }) {
   const [tags, setTags] = useState<Tag[]>([]);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -72,7 +72,7 @@ function TagPicker({ value, onChange }: { value: string; onChange: (tag: string)
       )}
     </div>
   );
-}
+});
 
 function LabelPicker({ value, onChange }: { value: string; onChange: (label: string) => void }) {
   const [labels, setLabels] = useState<{ id: number; name: string; color: string | null }[]>([]);

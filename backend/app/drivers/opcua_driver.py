@@ -6,6 +6,7 @@ the node ID prefix (containing the runtime name) varies between machines but
 the variable path remains the same.
 """
 
+import asyncio
 import logging
 import re
 from typing import Any
@@ -50,7 +51,8 @@ class OpcuaDriver(ProtocolDriver):
                 self._client.set_user(username)
                 self._client.set_password(password)
 
-            await self._client.connect()
+            timeout = self.config.get("connect_timeout", 10)
+            await asyncio.wait_for(self._client.connect(), timeout=timeout)
             self.connected = True
         except Exception:
             self.connected = False

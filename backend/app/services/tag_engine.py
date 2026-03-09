@@ -222,11 +222,23 @@ class TagEngine:
 
     def _notify_change(self, tag_name: str, tv: TagValue):
         msg = {"type": "tag_update", "data": {tag_name: tv.to_dict()}}
+        self._broadcast(msg)
+
+    def _broadcast(self, msg: dict):
+        dead_queues: list[asyncio.Queue] = []
         for q in self._subscribers:
             try:
                 q.put_nowait(msg)
             except asyncio.QueueFull:
-                pass
+                # Track consecutively-full queues for cleanup
+                if not hasattr(q, '_drop_count'):
+                    q._drop_count = 0  # type: ignore[attr-defined]
+                q._drop_count += 1  # type: ignore[attr-defined]
+                if q._drop_count >= 50:  # type: ignore[attr-defined]
+                    dead_queues.append(q)
+                    logger.warning("Removing unresponsive WebSocket subscriber (50 consecutive drops)")
+        for q in dead_queues:
+            self._subscribers.remove(q)
 
     def subscribe(self) -> asyncio.Queue:
         q: asyncio.Queue = asyncio.Queue(maxsize=100)
@@ -275,12 +287,7 @@ class TagEngine:
         await self.start_simulation()
         # Push full snapshot to all WebSocket subscribers
         snapshot = self.get_all_values()
-        msg = {"type": "snapshot", "data": snapshot}
-        for q in self._subscribers:
-            try:
-                q.put_nowait(msg)
-            except asyncio.QueueFull:
-                pass
+        self._broadcast({"type": "snapshot", "data": snapshot})
 
     async def start_simulation(self):
         if self._running:
@@ -319,12 +326,7 @@ class TagEngine:
 
             if changed:
                 self._invalidate_snapshot()
-                msg = {"type": "tag_update", "data": changed}
-                for q in self._subscribers:
-                    try:
-                        q.put_nowait(msg)
-                    except asyncio.QueueFull:
-                        pass
+                self._broadcast({"type": "tag_update", "data": changed})
 
             await asyncio.sleep(0.5)
 
@@ -351,6 +353,12 @@ class TagEngine:
                     if tv is None:
                         continue
                     new_val = values[addr]
+                    # Apply deadband for numeric values to reduce noise
+                    tag = self._tags.get(tag_name)
+                    if (tag and tag.deadband and isinstance(new_val, (int, float))
+                            and isinstance(tv.value, (int, float))):
+                        if abs(new_val - tv.value) < tag.deadband:
+                            continue
                     if new_val != tv.value:
                         tv.value = new_val
                         tv.timestamp = datetime.now(timezone.utc)
@@ -359,14 +367,17 @@ class TagEngine:
 
             if changed:
                 self._invalidate_snapshot()
-                msg = {"type": "tag_update", "data": changed}
-                for q in self._subscribers:
-                    try:
-                        q.put_nowait(msg)
-                    except asyncio.QueueFull:
-                        pass
+                self._broadcast({"type": "tag_update", "data": changed})
 
             await asyncio.sleep(0.5)
+
+    def unregister_tag(self, tag_name: str):
+        """Remove a tag from the in-memory store (e.g. after deletion via API)."""
+        self._tags.pop(tag_name, None)
+        self._values.pop(tag_name, None)
+        self._sim_configs.pop(tag_name, None)
+        self._poll_tags = None  # invalidate cached poll list
+        self._invalidate_snapshot()
 
     def _compute_sim_value(
         self, behavior: SimulationBehavior, config: dict, elapsed: float, current: TagValue
@@ -378,12 +389,16 @@ class TagEngine:
                 min_v = config.get("min", 0)
                 max_v = config.get("max", 100)
                 period = config.get("period", 60)
+                if not period:
+                    return min_v
                 pos = (elapsed % period) / period
                 return min_v + (max_v - min_v) * pos
             case SimulationBehavior.SINE:
                 min_v = config.get("min", 0)
                 max_v = config.get("max", 100)
                 period = config.get("period", 60)
+                if not period:
+                    return (min_v + max_v) / 2
                 mid = (min_v + max_v) / 2
                 amp = (max_v - min_v) / 2
                 return mid + amp * math.sin(2 * math.pi * elapsed / period)
@@ -393,10 +408,16 @@ class TagEngine:
                 return random.uniform(min_v, max_v)
             case SimulationBehavior.TOGGLE:
                 period = config.get("period", 10)
+                if not period:
+                    return current.value
                 return (int(elapsed / period) % 2) == 0
             case SimulationBehavior.ENUM_CYCLE:
                 values = config.get("values", [0, 1, 2])
+                if not values:
+                    return current.value
                 period = config.get("period", 10)
+                if not period:
+                    return values[0]
                 idx = int(elapsed / period) % len(values)
                 return values[idx]
             case _:

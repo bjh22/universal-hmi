@@ -1,5 +1,8 @@
+import logging
 from pydantic_settings import BaseSettings
 from pathlib import Path
+
+_logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -35,3 +38,9 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+if settings.secret_key == "change-me-in-production":
+    _logger.warning(
+        "SECURITY WARNING: Using default JWT secret key. "
+        "Set HMI_SECRET_KEY environment variable for production deployments."
+    )

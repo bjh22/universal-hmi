@@ -2,6 +2,7 @@
 Modbus TCP protocol driver using pymodbus.
 """
 
+import asyncio
 from typing import Any
 
 from app.drivers.base import ProtocolDriver
@@ -18,8 +19,9 @@ class ModbusDriver(ProtocolDriver):
 
             host = self.config.get("host", "127.0.0.1")
             port = self.config.get("port", 502)
-            self._client = AsyncModbusTcpClient(host, port=port)
-            await self._client.connect()
+            timeout = self.config.get("connect_timeout", 10)
+            self._client = AsyncModbusTcpClient(host, port=port, timeout=timeout)
+            await asyncio.wait_for(self._client.connect(), timeout=timeout)
             self.connected = self._client.connected
         except Exception:
             self.connected = False

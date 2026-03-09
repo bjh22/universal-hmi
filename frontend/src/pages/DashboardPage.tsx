@@ -44,8 +44,10 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
 
   // Parse screen layout mode and resolution
   const screenLayoutMode: LayoutMode = activeScreen?.layout_mode || 'grid';
-  const screenResolution: ScreenResolution | null = activeScreen?.target_resolution
-    ? JSON.parse(activeScreen.target_resolution) : null;
+  const screenResolution: ScreenResolution | null = (() => {
+    if (!activeScreen?.target_resolution) return null;
+    try { return JSON.parse(activeScreen.target_resolution); } catch { return null; }
+  })();
 
   const refreshScreens = useCallback(() => {
     api.getScreens().then(setScreens).catch(() => {});
@@ -73,7 +75,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
     api.getScreenBySlug(target)
       .then((s) => {
         setActiveScreen(s);
-        setRuntimeWidgets(JSON.parse(s.layout || '[]'));
+        try { setRuntimeWidgets(JSON.parse(s.layout || '[]')); } catch { setRuntimeWidgets([]); }
       })
       .catch(() => {
         setActiveScreen(null);
@@ -245,9 +247,13 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
       });
     };
     updateScale();
-    const observer = new ResizeObserver(updateScale);
+    let rafId: number;
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(updateScale);
+    });
     observer.observe(absContainerRef.current);
-    return () => observer.disconnect();
+    return () => { observer.disconnect(); cancelAnimationFrame(rafId); };
   }, [dm.editing, screenLayoutMode, screenResolution]);
 
   const selectedWidget = dm.selectedIds.size === 1

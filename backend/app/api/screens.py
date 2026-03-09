@@ -40,7 +40,10 @@ class ScreenOut(BaseModel):
 
 
 @router.get("/", response_model=list[ScreenOut])
-async def list_screens(session: AsyncSession = Depends(get_db)):
+async def list_screens(
+    session: AsyncSession = Depends(get_db),
+    _user: User | None = Depends(get_current_user),
+):
     result = await session.execute(select(Screen).order_by(Screen.sort_order, Screen.name))
     return result.scalars().all()
 

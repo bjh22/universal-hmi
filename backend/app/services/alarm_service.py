@@ -27,6 +27,7 @@ class AlarmService:
         self._alarm_configs: list[dict] = []
         self._active_alarms: dict[int, Alarm] = {}  # tag_id -> active Alarm
         self._tag_lookup: dict[int, dict] = {}  # tag_id -> {name, display_name} for O(1) lookups
+        self._last_eval_values: dict[int, object] = {}  # tag_id -> last evaluated value
 
     @property
     def active_alarms(self) -> list[Alarm]:
@@ -38,6 +39,7 @@ class AlarmService:
         self._alarm_configs = []
         self._tag_lookup = {}
         self._active_alarms = {}
+        self._last_eval_values = {}
         for tag in tags:
             if tag.alarm_config:
                 config = json.loads(tag.alarm_config)
@@ -160,6 +162,12 @@ class AlarmService:
                     tv = self._tag_engine.get_value(tag_name)
                     if tv is None:
                         continue
+
+                    # Skip evaluation if value hasn't changed since last check
+                    last_val = self._last_eval_values.get(tag_id)
+                    if last_val is not None and last_val == tv.value and tag_id not in self._active_alarms:
+                        continue
+                    self._last_eval_values[tag_id] = tv.value
 
                     is_alarm = self._check_condition(config, tv.value)
                     current = self._active_alarms.get(tag_id)

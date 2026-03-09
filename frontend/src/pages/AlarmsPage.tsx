@@ -12,6 +12,8 @@ type SortDir = 'asc' | 'desc';
 
 const SEVERITY_ORDER: Record<string, number> = { critical: 0, warning: 1, info: 2 };
 
+const PAGE_SIZE = 100;
+
 export function AlarmsPage({ realtimeAlarms }: Props) {
   const [tab, setTab] = useState<'active' | 'history'>('active');
   const [activeAlarms, setActiveAlarms] = useState<AlarmData[]>([]);
@@ -20,6 +22,7 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [sortField, setSortField] = useState<SortField>('triggered_at');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   useEffect(() => {
     if (tab === 'active') {
@@ -222,7 +225,7 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
 
       {/* Alarm list */}
       <div className="space-y-2">
-        {displayAlarms.map((alarm, i) => (
+        {displayAlarms.slice(0, visibleCount).map((alarm, i) => (
           <div
             key={alarm.id || i}
             className={`flex items-center gap-3 p-3 rounded-lg border-l-4 ${severityBg(alarm.severity)}`}
@@ -261,6 +264,14 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
             </div>
           </div>
         ))}
+        {displayAlarms.length > visibleCount && (
+          <button
+            onClick={() => setVisibleCount(c => c + PAGE_SIZE)}
+            className="w-full py-3 text-sm text-blue-400 hover:text-blue-300 bg-slate-800/50 rounded-lg"
+          >
+            Show more ({displayAlarms.length - visibleCount} remaining)
+          </button>
+        )}
         {displayAlarms.length === 0 && (
           <div className="text-center text-slate-500 py-12">
             <Bell size={32} className="mx-auto mb-2 opacity-50" />
