@@ -183,6 +183,103 @@ async def get_active_project(session: AsyncSession = Depends(get_db)):
     return {"id": project.id, "name": project.name}
 
 
+def _snapshot_comparable(snapshot: dict) -> dict:
+    """Strip volatile fields so two snapshots can be compared for equality."""
+    s = {k: v for k, v in snapshot.items() if k not in ("exported_at", "project")}
+    return s
+
+
+def _summarize_item_diff(cur_item: dict, sav_item: dict) -> list[str]:
+    """Return a list of human-readable field change descriptions."""
+    diffs = []
+    all_keys = sorted(set(list(cur_item) + list(sav_item)) - {"name"})
+    for key in all_keys:
+        old = sav_item.get(key)
+        new = cur_item.get(key)
+        if old != new:
+            # Truncate long values (e.g. layout JSON)
+            def _short(v: object) -> str:
+                if v is None:
+                    return "none"
+                s = str(v)
+                return s if len(s) <= 60 else s[:57] + "..."
+            diffs.append(f"{key}: {_short(old)} → {_short(new)}")
+    return diffs
+
+
+def _diff_named_list(
+    current: list[dict], saved: list[dict],
+) -> dict | None:
+    """Compare two lists of named items, returning detailed change info."""
+    cur_by_name = {item["name"]: item for item in current}
+    sav_by_name = {item["name"]: item for item in saved}
+    cur_names = set(cur_by_name)
+    sav_names = set(sav_by_name)
+    added = sorted(cur_names - sav_names)
+    removed = sorted(sav_names - cur_names)
+    modified = []
+    for name in sorted(cur_names & sav_names):
+        if cur_by_name[name] != sav_by_name[name]:
+            fields = _summarize_item_diff(cur_by_name[name], sav_by_name[name])
+            modified.append({"name": name, "fields": fields})
+    if not added and not removed and not modified:
+        return None
+    return {"added": added, "removed": removed, "modified": modified}
+
+
+def _build_changes(current: dict, saved: dict) -> list[dict]:
+    """Build a human-readable list of changes between current and saved snapshots."""
+    changes: list[dict] = []
+    section_labels = {
+        "tags": "Tags",
+        "screens": "Screens",
+        "data_sources": "Data Sources",
+        "jobs": "Jobs",
+        "tag_templates": "Tag Templates",
+        "screen_templates": "Screen Templates",
+        "tag_labels": "Tag Labels",
+    }
+    for key, label in section_labels.items():
+        cur_items = current.get(key, [])
+        sav_items = saved.get(key, [])
+        diff = _diff_named_list(cur_items, sav_items)
+        if diff:
+            changes.append({"section": label, **diff})
+
+    cur_branding = current.get("branding", {})
+    sav_branding = saved.get("branding", {})
+    if cur_branding != sav_branding:
+        modified = []
+        for k in sorted(set(list(cur_branding) + list(sav_branding))):
+            old, new = sav_branding.get(k), cur_branding.get(k)
+            if old != new:
+                modified.append({
+                    "name": k,
+                    "fields": [f"{old or 'none'} → {new or 'none'}"],
+                })
+        changes.append({
+            "section": "Branding",
+            "added": [], "removed": [],
+            "modified": modified,
+        })
+    return changes
+
+
+@router.get("/active/dirty")
+async def get_active_project_dirty(session: AsyncSession = Depends(get_db)):
+    """Check if the current HMI state differs from the active project's saved snapshot."""
+    result = await session.execute(select(Project).where(Project.is_active == True))  # noqa: E712
+    project = result.scalar_one_or_none()
+    if not project:
+        return {"dirty": False, "changes": []}
+    if not project.snapshot:
+        return {"dirty": True, "changes": []}
+    saved = json.loads(project.snapshot)
+    current = await _build_snapshot(session, project)
+    changes = _build_changes(current, saved)
+    return {"dirty": len(changes) > 0, "changes": changes}
+
+
 @router.post("/", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)
 async def create_project(
     body: ProjectCreate,
