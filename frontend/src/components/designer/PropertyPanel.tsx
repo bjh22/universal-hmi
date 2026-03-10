@@ -571,6 +571,27 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
           </Section>
         )}
 
+        {widget.type === 'qr_code' && (
+          <Section title="QR Code">
+            <Field label="Static Content">
+              <input type="text" value={p.staticContent || ''} onChange={e => setProp('staticContent', e.target.value)}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+                placeholder="URL or text (tag overrides)" />
+            </Field>
+            <p className="text-[10px] text-slate-500 -mt-1">If a tag is bound, its value is used instead.</p>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="FG Color">
+                <input type="color" value={p.fgColor || '#ffffff'} onChange={e => setProp('fgColor', e.target.value)}
+                  className="w-full h-7 bg-slate-700 border border-slate-600 rounded cursor-pointer" />
+              </Field>
+              <Field label="BG Color">
+                <input type="color" value={p.bgColor === 'transparent' ? '#0f172a' : (p.bgColor || '#0f172a')} onChange={e => setProp('bgColor', e.target.value)}
+                  className="w-full h-7 bg-slate-700 border border-slate-600 rounded cursor-pointer" />
+              </Field>
+            </div>
+          </Section>
+        )}
+
         {widget.type === 'auto_fill' && (
           <Section title="Auto Fill">
             <Field label="Tag Label">
