@@ -22,6 +22,7 @@ import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { Lock } from 'lucide-react';
 import type { Widget, TagValue, AlarmData, LayoutMode, ScreenResolution } from '../../types';
 import type { GridSettings } from '../../hooks/useDesignMode';
+import { CONTAINER_INNER_GRID } from '../../hooks/useDesignMode';
 import { WidgetRenderer } from '../widgets/WidgetRenderer';
 
 interface ContextMenuState {
@@ -175,13 +176,26 @@ export function DesignCanvas({
           newY = Math.max(0, Math.round(newY));
           onMoveWidget(dragging.id, newX, newY);
         } else {
-          const colW = getColWidth() + GAP;
-          const rowH = ROW_HEIGHT + GAP;
-          const dx = (e.clientX - dragging.startX) / zoom;
-          const dy = (e.clientY - dragging.startY) / zoom;
-          const newCol = Math.max(0, Math.round(dragging.origCol + dx / colW));
-          const newRow = Math.max(0, Math.round(dragging.origRow + dy / rowH));
-          onMoveWidget(dragging.id, newCol, newRow);
+          // Check if this is a container child — use pixel-based movement with fine snapping
+          const dragWidget = widgets.find(w => w.id === dragging.id);
+          if (dragWidget?.parentId) {
+            const dx = (e.clientX - dragging.startX) / zoom;
+            const dy = (e.clientY - dragging.startY) / zoom;
+            let newX = dragging.origCol + dx;
+            let newY = dragging.origRow + dy;
+            const snap = CONTAINER_INNER_GRID;
+            newX = Math.max(0, Math.round(newX / snap) * snap);
+            newY = Math.max(0, Math.round(newY / snap) * snap);
+            onMoveWidget(dragging.id, newX, newY);
+          } else {
+            const colW = getColWidth() + GAP;
+            const rowH = ROW_HEIGHT + GAP;
+            const dx = (e.clientX - dragging.startX) / zoom;
+            const dy = (e.clientY - dragging.startY) / zoom;
+            const newCol = Math.max(0, Math.round(dragging.origCol + dx / colW));
+            const newRow = Math.max(0, Math.round(dragging.origRow + dy / rowH));
+            onMoveWidget(dragging.id, newCol, newRow);
+          }
         }
       }
       if (resizing) {
@@ -199,13 +213,26 @@ export function DesignCanvas({
           newH = Math.max(40, Math.round(newH));
           onResizeWidget(resizing.id, newW, newH);
         } else {
-          const colW = getColWidth() + GAP;
-          const rowH = ROW_HEIGHT + GAP;
-          const dx = (e.clientX - resizing.startX) / zoom;
-          const dy = (e.clientY - resizing.startY) / zoom;
-          const newW = Math.max(1, Math.min(12, Math.round(resizing.origW + dx / colW)));
-          const newH = Math.max(1, Math.round(resizing.origH + dy / rowH));
-          onResizeWidget(resizing.id, newW, newH);
+          // Check if resizing a container child — use pixel-based resize
+          const resizeWidget = widgets.find(w => w.id === resizing.id);
+          if (resizeWidget?.parentId) {
+            const dx = (e.clientX - resizing.startX) / zoom;
+            const dy = (e.clientY - resizing.startY) / zoom;
+            let newW = resizing.origW + dx;
+            let newH = resizing.origH + dy;
+            const snap = CONTAINER_INNER_GRID;
+            newW = Math.max(40, Math.round(newW / snap) * snap);
+            newH = Math.max(40, Math.round(newH / snap) * snap);
+            onResizeWidget(resizing.id, newW, newH);
+          } else {
+            const colW = getColWidth() + GAP;
+            const rowH = ROW_HEIGHT + GAP;
+            const dx = (e.clientX - resizing.startX) / zoom;
+            const dy = (e.clientY - resizing.startY) / zoom;
+            const newW = Math.max(1, Math.min(12, Math.round(resizing.origW + dx / colW)));
+            const newH = Math.max(1, Math.round(resizing.origH + dy / rowH));
+            onResizeWidget(resizing.id, newW, newH);
+          }
         }
       }
       if (marquee) {
@@ -391,9 +418,11 @@ export function DesignCanvas({
                 gridAutoRows: `${ROW_HEIGHT}px`,
               }}
             >
-              {widgets.map((w) => {
+              {widgets.filter(w => !w.parentId).map((w) => {
                 const isSelected = selectedIds.has(w.id);
                 const isLocked = lockedIds.has(w.id);
+                const isContainer = w.type === 'container' || w.type === 'collapsible_container';
+                const children = isContainer ? widgets.filter(c => c.parentId === w.id) : [];
                 return (
                   <div
                     key={w.id}
@@ -418,9 +447,47 @@ export function DesignCanvas({
                       <div className="absolute bottom-0 right-0 w-4 h-4 bg-blue-500 rounded-tl-md cursor-se-resize z-20"
                         onMouseDown={e => handleResizeMouseDown(e, w)} />
                     )}
-                    <div className="h-full pointer-events-none">
+                    <div className={`h-full ${isContainer ? '' : 'pointer-events-none'}`}>
                       <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} />
                     </div>
+                    {/* Render container children with pixel-based positioning inside the container */}
+                    {children.map((child) => {
+                      const childSelected = selectedIds.has(child.id);
+                      const childLocked = lockedIds.has(child.id);
+                      return (
+                        <div
+                          key={child.id}
+                          className={`absolute group/child ${dragging?.id === child.id ? 'opacity-70' : ''}`}
+                          style={{
+                            left: child.x,
+                            top: child.y,
+                            width: child.w,
+                            height: child.h,
+                            zIndex: 15,
+                            cursor: childLocked ? 'default' : 'move',
+                          }}
+                          onMouseDown={e => handleWidgetMouseDown(e, child)}
+                          onContextMenu={e => handleContextMenu(e, child.id)}
+                        >
+                          <div className={`absolute inset-0 rounded-lg pointer-events-none border-2 transition-colors ${
+                            childSelected ? 'border-blue-500' : 'border-transparent group-hover/child:border-blue-500/30'
+                          }`} style={{ zIndex: 10 }} />
+                          {childLocked && (
+                            <div className="absolute top-1 right-1 bg-yellow-600/80 rounded p-0.5" style={{ zIndex: 20 }}>
+                              <Lock size={10} className="text-white" />
+                            </div>
+                          )}
+                          {childSelected && !childLocked && (
+                            <div className="absolute bottom-0 right-0 w-4 h-4 bg-blue-500 rounded-tl-md cursor-se-resize"
+                              style={{ zIndex: 20 }}
+                              onMouseDown={e => handleResizeMouseDown(e, child)} />
+                          )}
+                          <div className="h-full pointer-events-none">
+                            <WidgetRenderer widget={child} tagValues={tagValues} alarms={alarms} />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })}

@@ -334,7 +334,22 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
               <Field label="Container">
                 <select
                   value={widget.parentId || ''}
-                  onChange={e => onUpdateWidget(widget.id, { parentId: e.target.value || undefined })}
+                  onChange={e => {
+                    const newParentId = e.target.value || undefined;
+                    if (layoutMode === 'grid') {
+                      if (newParentId && !widget.parentId) {
+                        // Grouping: set default pixel position inside the container
+                        onUpdateWidget(widget.id, { parentId: newParentId, x: 8, y: 32, w: 160, h: 80 });
+                      } else if (!newParentId && widget.parentId) {
+                        // Ungrouping: convert back to grid units at row 0, col 0
+                        onUpdateWidget(widget.id, { parentId: undefined, x: 0, y: 0, w: 3, h: 1 });
+                      } else {
+                        onUpdateWidget(widget.id, { parentId: newParentId });
+                      }
+                    } else {
+                      onUpdateWidget(widget.id, { parentId: newParentId });
+                    }
+                  }}
                   className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white"
                 >
                   <option value="">None</option>

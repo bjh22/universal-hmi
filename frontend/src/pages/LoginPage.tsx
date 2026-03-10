@@ -9,7 +9,7 @@ interface Props {
 }
 
 export function LoginPage({ onLogin, siteTitle }: Props) {
-  const [mode, setMode] = useState<'password' | 'pin'>('password');
+  const [mode, setMode] = useState<'password' | 'pin'>('pin');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [pin, setPin] = useState('');
@@ -65,6 +65,14 @@ export function LoginPage({ onLogin, siteTitle }: Props) {
             PIN
           </button>
         </div>
+
+        {/* Skip login */}
+        <button
+          onClick={() => navigate('/')}
+          className="w-full text-xs text-slate-500 hover:text-slate-300 mb-4 transition-colors"
+        >
+          Continue without signing in
+        </button>
 
         {error && (
           <div className="bg-red-500/20 text-red-400 text-sm px-3 py-2 rounded-lg mb-4">{error}</div>
