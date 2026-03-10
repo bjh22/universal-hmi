@@ -16,11 +16,12 @@
  * All property changes are applied immediately via onUpdateProps/onUpdateWidget
  * callbacks — there is no "save" button; the designer sees changes in real time.
  */
-import { useState, useEffect, useRef, useCallback, memo } from 'react';
+import { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react';
 import type { Widget, TextStyle, Tag, LayoutMode } from '../../types';
 import { api } from '../../lib/api';
 import { WIDGET_TYPES } from './WidgetPalette';
 import { GAUGE_DEFAULTS, type GaugeDisplayMode } from '../widgets/GaugeWidget';
+import { icons } from 'lucide-react';
 
 interface Props {
   widget: Widget | null;
@@ -451,6 +452,22 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
 
         {widget.type === 'command_button' && (
           <Section title="Button">
+            <Field label="Variant">
+              <select value={p.variant as string || 'filled'} onChange={e => setProp('variant', e.target.value)}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white">
+                <option value="filled">Filled</option>
+                <option value="outline">Outline</option>
+                <option value="ghost">Ghost</option>
+              </select>
+            </Field>
+            <Field label="Shape">
+              <select value={p.shape as string || 'rectangle'} onChange={e => setProp('shape', e.target.value)}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white">
+                <option value="rectangle">Rectangle</option>
+                <option value="pill">Pill</option>
+                <option value="circle">Circle</option>
+              </select>
+            </Field>
             <Field label="Color">
               <select value={p.color || 'blue'} onChange={e => setProp('color', e.target.value)}
                 className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white">
@@ -460,6 +477,16 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
                 <option value="yellow">Yellow</option>
               </select>
             </Field>
+            <IconPicker value={p.icon as string || ''} onChange={v => setProp('icon', v)} />
+            {p.icon && (p.shape as string) !== 'circle' && (
+              <Field label="Icon Position">
+                <select value={p.iconPosition as string || 'left'} onChange={e => setProp('iconPosition', e.target.value)}
+                  className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white">
+                  <option value="left">Left</option>
+                  <option value="right">Right</option>
+                </select>
+              </Field>
+            )}
             <label className="flex items-center gap-1.5 text-xs text-slate-400">
               <input type="checkbox" checked={!!p.confirm} onChange={e => setProp('confirm', e.target.checked)}
                 className="rounded bg-slate-700 border-slate-600" />
@@ -752,6 +779,96 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
           Delete Widget
         </button>
       </div>
+    </div>
+  );
+}
+
+// Common icon names useful for industrial HMI buttons
+const POPULAR_ICONS = [
+  'Play', 'Pause', 'Square', 'Power', 'PowerOff', 'RotateCcw', 'RotateCw',
+  'ChevronUp', 'ChevronDown', 'ChevronLeft', 'ChevronRight',
+  'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+  'Plus', 'Minus', 'X', 'Check', 'RefreshCw',
+  'Zap', 'ZapOff', 'AlertTriangle', 'Bell', 'BellOff',
+  'Settings', 'Wrench', 'Home', 'Save', 'Download', 'Upload',
+  'Trash2', 'Eye', 'EyeOff', 'Lock', 'Unlock',
+];
+
+const allIconNames = Object.keys(icons);
+
+function IconPicker({ value, onChange }: { value: string; onChange: (icon: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const filtered = useMemo(() => {
+    if (!search) return POPULAR_ICONS.filter(name => name in icons);
+    const q = search.toLowerCase();
+    return allIconNames.filter(name => name.toLowerCase().includes(q)).slice(0, 40);
+  }, [search]);
+
+  const SelectedIcon = value ? (icons as Record<string, React.ComponentType<{ size?: number }>>)[value] : null;
+
+  return (
+    <div ref={ref} className="relative">
+      <label className="text-[10px] text-slate-500 mb-0.5 block">Icon</label>
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white flex items-center gap-2"
+      >
+        {SelectedIcon && <SelectedIcon size={14} />}
+        <span className="flex-1 text-left">{value || '(none)'}</span>
+        {value && (
+          <span
+            onClick={e => { e.stopPropagation(); onChange(''); }}
+            className="text-slate-400 hover:text-white"
+          >&times;</span>
+        )}
+      </button>
+      {open && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-600 rounded shadow-lg max-h-60 overflow-auto">
+          <div className="sticky top-0 bg-slate-800 p-1.5 border-b border-slate-700">
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search icons..."
+              className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+              autoFocus
+            />
+          </div>
+          <div className="grid grid-cols-5 gap-0.5 p-1.5">
+            {filtered.map(name => {
+              const Ic = (icons as Record<string, React.ComponentType<{ size?: number; className?: string }>>)[name];
+              if (!Ic) return null;
+              return (
+                <button
+                  key={name}
+                  title={name}
+                  onClick={() => { onChange(name); setOpen(false); setSearch(''); }}
+                  className={`p-1.5 rounded flex items-center justify-center hover:bg-slate-600 ${
+                    value === name ? 'bg-blue-600' : ''
+                  }`}
+                >
+                  <Ic size={16} className="text-white" />
+                </button>
+              );
+            })}
+          </div>
+          {filtered.length === 0 && (
+            <div className="px-3 py-2 text-xs text-slate-400">No icons found</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
