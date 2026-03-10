@@ -28,9 +28,11 @@ import { DropdownSelectWidget } from './DropdownSelectWidget';
 import { OeeWidget } from './OeeWidget';
 import { ControlGroupWidget, type ControlItem } from './ControlGroupWidget';
 import { ContainerWidget } from './ContainerWidget';
+import { CollapsibleContainerWidget } from './CollapsibleContainerWidget';
 import { LightIndicator } from './LightIndicator';
 import { AutoFillWidget } from './AutoFillWidget';
 import { CognexViewerWidget } from './CognexViewerWidget';
+import { QRCodeWidget } from './QRCodeWidget';
 
 // TypeScript interface defining the data this component receives from its parent.
 // `Record<string, TagValue>` is a dictionary type — keys are tag name strings,
@@ -39,6 +41,8 @@ interface Props {
   widget: Widget;
   tagValues: Record<string, TagValue>;
   alarms?: AlarmData[];
+  collapsed?: boolean;
+  onToggleCollapsed?: (collapsed: boolean) => void;
 }
 
 /**
@@ -78,7 +82,7 @@ function getWidgetTagNames(widget: Widget): string[] {
 // memo() is a React optimization that wraps this component to skip re-rendering
 // if its props haven't changed. The second argument (after the component function)
 // is a custom comparison function that decides whether to skip — see bottom of file.
-export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, alarms = [] }: Props) {
+export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, alarms = [], collapsed, onToggleCollapsed }: Props) {
   const p = widget.props as Record<string, unknown>;
   const chrome = widget.chrome;
 
@@ -126,6 +130,10 @@ export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, 
       return <CognexViewerWidget title={p.title as string} tagPrefix={p.tagPrefix as string || 'dataman'} showImage={p.showImage as boolean} showTrigger={p.showTrigger as boolean} tagValues={tagValues} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
     case 'container':
       return <ContainerWidget title={p.title as string} description={p.description as string} titleStyle={p.titleStyle as undefined} chrome={chrome} />;
+    case 'collapsible_container':
+      return <CollapsibleContainerWidget title={p.title as string} description={p.description as string} titleStyle={p.titleStyle as undefined} chrome={chrome} defaultCollapsed={p.defaultCollapsed as boolean} collapsed={collapsed} onToggleCollapsed={onToggleCollapsed} />;
+    case 'qr_code':
+      return <QRCodeWidget title={p.title as string} tag={p.tag as string} tagValues={tagValues} staticContent={p.staticContent as string} fgColor={p.fgColor as string} bgColor={p.bgColor as string} titleStyle={p.titleStyle as undefined} chrome={chrome} />;
     default:
       return (
         <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 text-slate-400 text-sm">
@@ -149,6 +157,7 @@ export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, 
   // If the widget config itself changed (e.g. designer edited it), always re-render
   if (prev.widget !== next.widget) return false;
   if (prev.alarms !== next.alarms) return false;
+  if (prev.collapsed !== next.collapsed) return false;
   // Only compare tag values this widget actually uses — ignore changes to unrelated tags
   const tagNames = getWidgetTagNames(prev.widget);
   if (tagNames.length === 0) return prev.tagValues === next.tagValues;

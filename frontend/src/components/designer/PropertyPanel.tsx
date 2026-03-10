@@ -295,7 +295,7 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
         </Section>
 
         {/* Container Description (for info button) */}
-        {widget.type === 'container' && (
+        {(widget.type === 'container' || widget.type === 'collapsible_container') && (
           <Section title="Info Button">
             <Field label="Description">
               <textarea
@@ -309,9 +309,25 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
           </Section>
         )}
 
+        {/* Collapsible Container: Default Collapsed */}
+        {widget.type === 'collapsible_container' && (
+          <Section title="Collapse">
+            <Field label="Default Collapsed">
+              <button
+                onClick={() => setProp('defaultCollapsed', !p.defaultCollapsed)}
+                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                  p.defaultCollapsed ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {p.defaultCollapsed ? 'Yes' : 'No'}
+              </button>
+            </Field>
+          </Section>
+        )}
+
         {/* Group Assignment */}
-        {widget.type !== 'container' && (() => {
-          const containers = widgets.filter(w => w.type === 'container' && w.id !== widget.id);
+        {widget.type !== 'container' && widget.type !== 'collapsible_container' && (() => {
+          const containers = widgets.filter(w => (w.type === 'container' || w.type === 'collapsible_container') && w.id !== widget.id);
           if (containers.length === 0) return null;
           return (
             <Section title="Group">
@@ -353,7 +369,7 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
         </Section>
 
         {/* Tag Binding */}
-        {widget.type !== 'text_label' && widget.type !== 'alarm_summary' && widget.type !== 'multi_value' && widget.type !== 'control_group' && widget.type !== 'auto_fill' && widget.type !== 'container' && widget.type !== 'cognex_viewer' && (
+        {widget.type !== 'text_label' && widget.type !== 'alarm_summary' && widget.type !== 'multi_value' && widget.type !== 'control_group' && widget.type !== 'auto_fill' && widget.type !== 'container' && widget.type !== 'collapsible_container' && widget.type !== 'cognex_viewer' && (
           <Section title="Tag Binding">
             <Field label="Tag Name">
               <TagPicker value={p.tag || ''} onChange={v => setProp('tag', v)} />
@@ -552,6 +568,27 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
                 <span className="text-xs text-slate-300">Manual trigger button</span>
               </label>
             </Field>
+          </Section>
+        )}
+
+        {widget.type === 'qr_code' && (
+          <Section title="QR Code">
+            <Field label="Static Content">
+              <input type="text" value={p.staticContent || ''} onChange={e => setProp('staticContent', e.target.value)}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+                placeholder="URL or text (tag overrides)" />
+            </Field>
+            <p className="text-[10px] text-slate-500 -mt-1">If a tag is bound, its value is used instead.</p>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="FG Color">
+                <input type="color" value={p.fgColor || '#ffffff'} onChange={e => setProp('fgColor', e.target.value)}
+                  className="w-full h-7 bg-slate-700 border border-slate-600 rounded cursor-pointer" />
+              </Field>
+              <Field label="BG Color">
+                <input type="color" value={p.bgColor === 'transparent' ? '#0f172a' : (p.bgColor || '#0f172a')} onChange={e => setProp('bgColor', e.target.value)}
+                  className="w-full h-7 bg-slate-700 border border-slate-600 rounded cursor-pointer" />
+              </Field>
+            </div>
           </Section>
         )}
 
