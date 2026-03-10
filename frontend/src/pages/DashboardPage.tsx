@@ -70,26 +70,34 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
     refreshScreens();
   }, [refreshScreens]);
 
-  // Load active screen; if the slug is missing/not found, redirect to first available screen
+  // Load active screen; if no slug provided, pick the default or first available screen
   useEffect(() => {
-    const target = slug || 'dashboard';
-    api.getScreenBySlug(target)
-      .then((s) => {
-        setActiveScreen(s);
-        try { setRuntimeWidgets(JSON.parse(s.layout || '[]')); } catch { setRuntimeWidgets([]); }
-      })
-      .catch(() => {
+    if (slug) {
+      api.getScreenBySlug(slug)
+        .then((s) => {
+          setActiveScreen(s);
+          try { setRuntimeWidgets(JSON.parse(s.layout || '[]')); } catch { setRuntimeWidgets([]); }
+        })
+        .catch(() => {
+          setActiveScreen(null);
+          setRuntimeWidgets([]);
+        });
+    } else {
+      // No slug — find the default or first screen and redirect
+      api.getScreens().then((all) => {
+        if (all.length > 0) {
+          const def = all.find(s => s.is_default) || all[0];
+          navigate(`/screen/${def.slug}`, { replace: true });
+        } else {
+          setActiveScreen(null);
+          setRuntimeWidgets([]);
+        }
+      }).catch(() => {
         setActiveScreen(null);
         setRuntimeWidgets([]);
-        // If we were using the default fallback slug and it doesn't exist, navigate
-        // to the first available screen so saved screens are immediately visible.
-        if (!slug) {
-          api.getScreens().then((all) => {
-            if (all.length > 0) navigate(`/screen/${all[0].slug}`, { replace: true });
-          }).catch(() => {});
-        }
       });
-  }, [slug, navigate]);
+    }
+  }, [slug, navigate, screens]);
 
   // Enter edit mode
   const handleEnterEdit = useCallback(() => {
