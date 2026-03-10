@@ -33,6 +33,8 @@ class OpcuaDriver(ProtocolDriver):
         # Browse cache: maps node_id -> (timestamp, result_list)
         self._browse_cache: dict[str, tuple[float, list[dict]]] = {}
         self._browse_cache_ttl: float = config.get("browse_cache_ttl", 30.0)
+        # Cache for variant types keyed by resolved address, avoids a round-trip on every write
+        self._variant_type_cache: dict[str, Any] = {}
 
     @property
     def address_prefix(self) -> str | None:
@@ -64,6 +66,7 @@ class OpcuaDriver(ProtocolDriver):
             await asyncio.wait_for(self._client.connect(), timeout=timeout)
             self.connected = True
             self._browse_cache.clear()
+            self._variant_type_cache.clear()
         except Exception:
             self.connected = False
             raise
@@ -76,6 +79,7 @@ class OpcuaDriver(ProtocolDriver):
                 pass
         self.connected = False
         self._browse_cache.clear()
+        self._variant_type_cache.clear()
 
     def _resolve_address(self, address: str) -> str:
         """Prepend address_prefix to relative addresses."""
@@ -94,22 +98,34 @@ class OpcuaDriver(ProtocolDriver):
             return False
         from asyncua import ua
 
-        node = self._client.get_node(self._resolve_address(address))
-        # Read the node's data type so we write with the correct VariantType
-        variant_type = await node.read_data_type_as_variant_type()
+        resolved = self._resolve_address(address)
+        node = self._client.get_node(resolved)
+        # Use cached variant type to avoid an extra round-trip on every write
+        variant_type = self._variant_type_cache.get(resolved)
+        if variant_type is None:
+            variant_type = await node.read_data_type_as_variant_type()
+            self._variant_type_cache[resolved] = variant_type
         await node.write_value(ua.DataValue(ua.Variant(value, variant_type)))
         return True
 
     async def read_tags(self, addresses: list[str]) -> dict[str, Any]:
         result = {}
-        if not self._client:
+        if not self._client or not addresses:
             return result
-        for addr in addresses:
-            try:
-                node = self._client.get_node(self._resolve_address(addr))
-                result[addr] = await node.read_value()
-            except Exception:
-                result[addr] = None
+        # Build node list and use bulk read (single OPC UA ReadRequest)
+        nodes = [self._client.get_node(self._resolve_address(addr)) for addr in addresses]
+        try:
+            values = await self._client.read_values(nodes)
+            for addr, val in zip(addresses, values):
+                result[addr] = val
+        except Exception:
+            # Fallback: if bulk read fails (e.g. one bad node aborts the batch),
+            # read individually so good nodes still return values
+            for addr, node in zip(addresses, nodes):
+                try:
+                    result[addr] = await node.read_value()
+                except Exception:
+                    result[addr] = None
         return result
 
     async def detect_address_prefix(self) -> str | None:
