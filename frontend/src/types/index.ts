@@ -62,6 +62,7 @@ export interface Tag {
   simulation_config: Record<string, unknown> | null;
   enum_mapping: Record<string, string> | null;      // maps numeric values to display strings
   labels: TagLabel[];
+  is_system?: boolean;
 }
 
 export interface ImportPreviewTag {

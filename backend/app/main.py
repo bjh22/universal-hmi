@@ -50,6 +50,11 @@ async def lifespan(app: FastAPI):
     await init_db()
 
     async with async_session() as session:
+        # 1.5. Ensure system tags exist in DB (before loading into engine)
+        await tag_engine.ensure_system_tags(session)
+        await session.commit()
+
+    async with async_session() as session:
         # 2. Tags first — they're the central data model everything else references
         await tag_engine.load_tags(session)
         # 3. Alarms and trends depend on tags being loaded

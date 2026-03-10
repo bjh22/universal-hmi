@@ -120,6 +120,9 @@ class Tag(Base):
         ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
     )
 
+    # System tags are built-in (e.g. $CURRENT_TIME) — cannot be modified or deleted
+    is_system: Mapped[bool] = mapped_column(Boolean, default=False)
+
     # relationship() defines how tables connect in the ORM layer.
     # lazy="selectin" means labels are loaded in a single efficient query
     # when the tag is fetched, avoiding the "N+1 query" problem (one extra

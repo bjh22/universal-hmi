@@ -82,7 +82,10 @@ const TagPicker = memo(function TagPicker({ value, onChange }: { value: string; 
               className={`w-full text-left px-2 py-1.5 text-xs hover:bg-slate-700 ${t.name === value ? 'bg-slate-700 text-blue-400' : 'text-slate-300'}`}
               onMouseDown={e => { e.preventDefault(); onChange(t.name); setOpen(false); }}
             >
-              <div className="font-medium">{t.display_name || t.name}</div>
+              <div className="font-medium flex items-center gap-1">
+                {t.is_system && <span className="text-amber-400 text-[10px]" title="System tag">SYS</span>}
+                {t.display_name || t.name}
+              </div>
               {t.display_name && <div className="text-[10px] text-slate-500 font-mono truncate">{t.name}</div>}
             </button>
           ))}
