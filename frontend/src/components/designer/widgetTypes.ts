@@ -1,6 +1,6 @@
 import {
   Activity, Gauge, Hash, ToggleLeft, MousePointerClick,
-  SlidersHorizontal, Type, FileText, Bell, ChevronDown, BarChart3, LayoutGrid, Square, Circle, Sparkles, ScanBarcode,
+  SlidersHorizontal, Type, FileText, Bell, ChevronDown, BarChart3, LayoutGrid, Square, Circle, Sparkles, ScanBarcode, PanelTopClose,
 } from 'lucide-react';
 
 export interface WidgetTypeInfo {
@@ -95,5 +95,10 @@ export const WIDGET_TYPES: WidgetTypeInfo[] = [
     type: 'container', label: 'Container', icon: Square, category: 'layout',
     defaultW: 6, defaultH: 4, defaultAbsW: 400, defaultAbsH: 300,
     defaultProps: { title: 'Group', description: '' },
+  },
+  {
+    type: 'collapsible_container', label: 'Collapsible Container', icon: PanelTopClose, category: 'layout',
+    defaultW: 6, defaultH: 4, defaultAbsW: 400, defaultAbsH: 300,
+    defaultProps: { title: 'Group', description: '', defaultCollapsed: false },
   },
 ];

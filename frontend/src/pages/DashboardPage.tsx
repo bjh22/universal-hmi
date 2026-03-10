@@ -37,6 +37,15 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
   const absContainerRef = useRef<HTMLDivElement>(null);
   const [absScale, setAbsScale] = useState(1);
   const [absOffset, setAbsOffset] = useState({ x: 0, y: 0 });
+  const [collapsedContainerIds, setCollapsedContainerIds] = useState<Set<string>>(new Set());
+
+  const toggleContainerCollapsed = useCallback((id: string, collapsed: boolean) => {
+    setCollapsedContainerIds(prev => {
+      const next = new Set(prev);
+      if (collapsed) next.add(id); else next.delete(id);
+      return next;
+    });
+  }, []);
 
   const [absPlacementOffset, setAbsPlacementOffset] = useState(0);
 
@@ -76,7 +85,18 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
       api.getScreenBySlug(slug)
         .then((s) => {
           setActiveScreen(s);
-          try { setRuntimeWidgets(JSON.parse(s.layout || '[]')); } catch { setRuntimeWidgets([]); }
+          try {
+            const widgets: Widget[] = JSON.parse(s.layout || '[]');
+            setRuntimeWidgets(widgets);
+            // Initialize collapsed state from defaultCollapsed props
+            const collapsed = new Set<string>();
+            for (const w of widgets) {
+              if (w.type === 'collapsible_container' && (w.props as Record<string, unknown>).defaultCollapsed) {
+                collapsed.add(w.id);
+              }
+            }
+            setCollapsedContainerIds(collapsed);
+          } catch { setRuntimeWidgets([]); }
         })
         .catch(() => {
           setActiveScreen(null);
@@ -423,7 +443,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
             }}
           >
             {runtimeWidgets.map((w, index) => (
-              <RuntimeWidget key={w.id} widget={w} index={index} isAbsolute tagValues={tagValues} alarms={alarms} userRole={userRole} allWidgets={runtimeWidgets} />
+              <RuntimeWidget key={w.id} widget={w} index={index} isAbsolute tagValues={tagValues} alarms={alarms} userRole={userRole} allWidgets={runtimeWidgets} collapsedContainerIds={collapsedContainerIds} onToggleContainerCollapsed={toggleContainerCollapsed} />
             ))}
           </div>
         </div>
@@ -434,7 +454,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
           style={{ gridTemplateColumns: 'repeat(12, 1fr)', gridAutoRows: '80px' }}
         >
           {runtimeWidgets.map((w, index) => (
-            <RuntimeWidget key={w.id} widget={w} index={index} isAbsolute={false} tagValues={tagValues} alarms={alarms} userRole={userRole} allWidgets={runtimeWidgets} />
+            <RuntimeWidget key={w.id} widget={w} index={index} isAbsolute={false} tagValues={tagValues} alarms={alarms} userRole={userRole} allWidgets={runtimeWidgets} collapsedContainerIds={collapsedContainerIds} onToggleContainerCollapsed={toggleContainerCollapsed} />
           ))}
         </div>
       )}
@@ -563,17 +583,21 @@ interface RuntimeWidgetProps {
   alarms: AlarmData[];
   userRole?: string;
   allWidgets: Widget[];
+  collapsedContainerIds: Set<string>;
+  onToggleContainerCollapsed: (id: string, collapsed: boolean) => void;
 }
 
-const RuntimeWidget = memo(function RuntimeWidget({ widget: w, index, isAbsolute, tagValues, alarms, userRole, allWidgets }: RuntimeWidgetProps) {
-  // Cascade container visibility to children
+const RuntimeWidget = memo(function RuntimeWidget({ widget: w, index, isAbsolute, tagValues, alarms, userRole, allWidgets, collapsedContainerIds, onToggleContainerCollapsed }: RuntimeWidgetProps) {
+  // Cascade container visibility to children (and collapse state for collapsible containers)
   if (w.parentId) {
     const parent = allWidgets.find(p => p.id === w.parentId);
-    if (parent && parent.type === 'container') {
+    if (parent && (parent.type === 'container' || parent.type === 'collapsible_container')) {
       const parentVis = (parent.visible !== false)
         && (!parent.visibleTag || !!tagValues[parent.visibleTag]?.value)
         && (!parent.visibleRoles?.length || (userRole && parent.visibleRoles.includes(userRole)));
       if (!parentVis) return null;
+      // Hide children of collapsed collapsible containers
+      if (parent.type === 'collapsible_container' && collapsedContainerIds.has(parent.id)) return null;
     }
   }
 
@@ -589,9 +613,16 @@ const RuntimeWidget = memo(function RuntimeWidget({ widget: w, index, isAbsolute
 
   const tagName = (w.props as Record<string, unknown>).tag as string | undefined;
   const longDesc = tagName ? tagValues[tagName]?.description : undefined;
-  const containerDesc = w.type === 'container' ? (w.props as Record<string, unknown>).description as string : undefined;
+  const containerDesc = (w.type === 'container' || w.type === 'collapsible_container') ? (w.props as Record<string, unknown>).description as string : undefined;
   const infoDesc = longDesc || containerDesc;
   const showInfoBtn = w.showInfo !== false && !!infoDesc;
+
+  // Collapsible container props
+  const isCollapsible = w.type === 'collapsible_container';
+  const collapsibleProps = isCollapsible ? {
+    collapsed: collapsedContainerIds.has(w.id),
+    onToggleCollapsed: (c: boolean) => onToggleContainerCollapsed(w.id, c),
+  } : {};
 
   if (isAbsolute) {
     return (
@@ -600,7 +631,7 @@ const RuntimeWidget = memo(function RuntimeWidget({ widget: w, index, isAbsolute
         style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: index }}
       >
         {showInfoBtn && <InfoButton description={infoDesc!} title={(w.props as Record<string, unknown>).title as string} />}
-        <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} />
+        <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} {...collapsibleProps} />
       </div>
     );
   }
@@ -611,7 +642,7 @@ const RuntimeWidget = memo(function RuntimeWidget({ widget: w, index, isAbsolute
       className={`relative ${isEnabled ? '' : 'opacity-50 pointer-events-none'}`}
     >
       {showInfoBtn && <InfoButton description={infoDesc!} title={(w.props as Record<string, unknown>).title as string} />}
-      <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} />
+      <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} {...collapsibleProps} />
     </div>
   );
 }, (prev, next) => {
@@ -620,6 +651,7 @@ const RuntimeWidget = memo(function RuntimeWidget({ widget: w, index, isAbsolute
   if (prev.isAbsolute !== next.isAbsolute) return false;
   if (prev.alarms !== next.alarms) return false;
   if (prev.userRole !== next.userRole) return false;
+  if (prev.collapsedContainerIds !== next.collapsedContainerIds) return false;
 
   // Only diff the tag values this widget actually reads
   const w = prev.widget;

@@ -295,7 +295,7 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
         </Section>
 
         {/* Container Description (for info button) */}
-        {widget.type === 'container' && (
+        {(widget.type === 'container' || widget.type === 'collapsible_container') && (
           <Section title="Info Button">
             <Field label="Description">
               <textarea
@@ -309,9 +309,25 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
           </Section>
         )}
 
+        {/* Collapsible Container: Default Collapsed */}
+        {widget.type === 'collapsible_container' && (
+          <Section title="Collapse">
+            <Field label="Default Collapsed">
+              <button
+                onClick={() => setProp('defaultCollapsed', !p.defaultCollapsed)}
+                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                  p.defaultCollapsed ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {p.defaultCollapsed ? 'Yes' : 'No'}
+              </button>
+            </Field>
+          </Section>
+        )}
+
         {/* Group Assignment */}
-        {widget.type !== 'container' && (() => {
-          const containers = widgets.filter(w => w.type === 'container' && w.id !== widget.id);
+        {widget.type !== 'container' && widget.type !== 'collapsible_container' && (() => {
+          const containers = widgets.filter(w => (w.type === 'container' || w.type === 'collapsible_container') && w.id !== widget.id);
           if (containers.length === 0) return null;
           return (
             <Section title="Group">
@@ -353,7 +369,7 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
         </Section>
 
         {/* Tag Binding */}
-        {widget.type !== 'text_label' && widget.type !== 'alarm_summary' && widget.type !== 'multi_value' && widget.type !== 'control_group' && widget.type !== 'auto_fill' && widget.type !== 'container' && widget.type !== 'cognex_viewer' && (
+        {widget.type !== 'text_label' && widget.type !== 'alarm_summary' && widget.type !== 'multi_value' && widget.type !== 'control_group' && widget.type !== 'auto_fill' && widget.type !== 'container' && widget.type !== 'collapsible_container' && widget.type !== 'cognex_viewer' && (
           <Section title="Tag Binding">
             <Field label="Tag Name">
               <TagPicker value={p.tag || ''} onChange={v => setProp('tag', v)} />
