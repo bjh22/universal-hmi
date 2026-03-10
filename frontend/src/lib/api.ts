@@ -190,6 +190,8 @@ export const api = {
     request('/screens/', { method: 'POST', body: JSON.stringify(data) }),
   deleteScreen: (id: number) =>
     request(`/screens/${id}`, { method: 'DELETE' }),
+  reorderScreens: (items: Array<{ id: number; sort_order: number }>) =>
+    request<ScreenData[]>('/screens/reorder', { method: 'PUT', body: JSON.stringify(items) }),
 
   // Jobs
   getJobs: () => request<JobData[]>('/jobs/'),

@@ -972,7 +972,7 @@ function ControlGroupEditor({ controls, onChange }: {
   const addControl = (type: string) => {
     const base: Record<string, unknown> = { type, tag: '', label: '' };
     if (type === 'button') { base.value = null; base.color = 'blue'; }
-    if (type === 'input') { base.min = 0; base.max = 100; base.step = 1; }
+    if (type === 'input') { base.min = 0; base.max = 100; base.step = 1; base.decimalPlaces = 1; }
     if (type === 'value') { base.decimalPlaces = 1; }
     if (type === 'dropdown') { base.options = []; }
     onChange([...controls, base as { type: string; tag: string; label: string; [k: string]: unknown }]);
@@ -1041,6 +1041,8 @@ function ControlGroupEditor({ controls, onChange }: {
                 placeholder="Step" className="w-14 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
               <input type="text" value={(ctrl.units as string) || ''} onChange={e => updateControl(i, { units: e.target.value })}
                 placeholder="Units" className="w-14 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+              <input type="number" value={ctrl.decimalPlaces as number ?? 1} onChange={e => updateControl(i, { decimalPlaces: Number(e.target.value) })}
+                min={0} max={6} placeholder="DP" title="Decimal places" className="w-12 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
             </div>
           )}
 

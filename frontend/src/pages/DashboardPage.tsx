@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef, memo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Trash2, GripVertical } from 'lucide-react';
 import { api } from '../lib/api';
 import { WidgetRenderer } from '../components/widgets/WidgetRenderer';
 import { InfoButton } from '../components/widgets/InfoButton';
@@ -38,6 +38,8 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
   const [absScale, setAbsScale] = useState(1);
   const [absOffset, setAbsOffset] = useState({ x: 0, y: 0 });
   const [collapsedContainerIds, setCollapsedContainerIds] = useState<Set<string>>(new Set());
+  const [dragTabId, setDragTabId] = useState<number | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<number | null>(null);
 
   const toggleContainerCollapsed = useCallback((id: string, collapsed: boolean) => {
     setCollapsedContainerIds(prev => {
@@ -220,6 +222,26 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
     navigate('/');
   }, [activeScreen, refreshScreens]);
 
+  // Reorder screens via drag-and-drop
+  const handleTabDrop = useCallback(async (dragId: number, dropId: number) => {
+    if (dragId === dropId) return;
+    const oldIndex = screens.findIndex(s => s.id === dragId);
+    const newIndex = screens.findIndex(s => s.id === dropId);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const reordered = [...screens];
+    const [moved] = reordered.splice(oldIndex, 1);
+    reordered.splice(newIndex, 0, moved);
+    // Optimistic update
+    setScreens(reordered);
+    const items = reordered.map((s, i) => ({ id: s.id, sort_order: i }));
+    try {
+      await api.reorderScreens(items);
+      refreshScreens();
+    } catch {
+      refreshScreens();
+    }
+  }, [screens, refreshScreens]);
+
   // Keyboard shortcuts
   useEffect(() => {
     if (!dm.editing) {
@@ -384,12 +406,32 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
               <Link
                 key={s.id}
                 to={`/screen/${s.slug}`}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
+                draggable={isDesigner}
+                onDragStart={e => {
+                  setDragTabId(s.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                }}
+                onDragOver={e => {
+                  if (dragTabId == null || dragTabId === s.id) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  setDropTargetId(s.id);
+                }}
+                onDragLeave={() => { if (dropTargetId === s.id) setDropTargetId(null); }}
+                onDrop={e => {
+                  e.preventDefault();
+                  if (dragTabId != null) handleTabDrop(dragTabId, s.id);
+                  setDragTabId(null);
+                  setDropTargetId(null);
+                }}
+                onDragEnd={() => { setDragTabId(null); setDropTargetId(null); }}
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
                   activeScreen?.id === s.id
                     ? 'bg-[var(--hmi-accent)] text-white'
                     : 'bg-slate-800 text-slate-400 hover:text-slate-200'
-                }`}
+                } ${dragTabId === s.id ? 'opacity-40' : ''} ${dropTargetId === s.id ? 'ring-2 ring-blue-400' : ''}`}
               >
+                {isDesigner && <GripVertical size={12} className="text-slate-600 flex-shrink-0 cursor-grab" />}
                 {s.name}
               </Link>
             ))}

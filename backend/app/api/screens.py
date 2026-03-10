@@ -60,6 +60,26 @@ async def list_screens(
     return result.scalars().all()
 
 
+class ScreenOrderItem(BaseModel):
+    id: int
+    sort_order: int
+
+
+@router.put("/reorder")
+async def reorder_screens(
+    items: list[ScreenOrderItem],
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.DESIGNER)),
+):
+    for item in items:
+        screen = await session.get(Screen, item.id)
+        if screen:
+            screen.sort_order = item.sort_order
+    await session.flush()
+    result = await session.execute(select(Screen).order_by(Screen.sort_order, Screen.name))
+    return result.scalars().all()
+
+
 @router.get("/{screen_id}")
 async def get_screen(screen_id: int, session: AsyncSession = Depends(get_db)):
     screen = await session.get(Screen, screen_id)
