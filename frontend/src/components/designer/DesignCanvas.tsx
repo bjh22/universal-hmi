@@ -162,15 +162,17 @@ export function DesignCanvas({
 
       if (dragging) {
         if (isAbsolute) {
-          let dx = (e.clientX - dragging.startX) / zoom;
-          let dy = (e.clientY - dragging.startY) / zoom;
+          const dx = (e.clientX - dragging.startX) / zoom;
+          const dy = (e.clientY - dragging.startY) / zoom;
+          let newX = dragging.origCol + dx;
+          let newY = dragging.origRow + dy;
           if (gridSettings.snap) {
             const snapSize = gridSettings.cellSize;
-            dx = Math.round(dx / snapSize) * snapSize;
-            dy = Math.round(dy / snapSize) * snapSize;
+            newX = Math.round(newX / snapSize) * snapSize;
+            newY = Math.round(newY / snapSize) * snapSize;
           }
-          let newX = Math.max(0, Math.round(dragging.origCol + dx));
-          let newY = Math.max(0, Math.round(dragging.origRow + dy));
+          newX = Math.max(0, Math.round(newX));
+          newY = Math.max(0, Math.round(newY));
           onMoveWidget(dragging.id, newX, newY);
         } else {
           const colW = getColWidth() + GAP;
@@ -184,15 +186,17 @@ export function DesignCanvas({
       }
       if (resizing) {
         if (isAbsolute) {
-          let dx = (e.clientX - resizing.startX) / zoom;
-          let dy = (e.clientY - resizing.startY) / zoom;
+          const dx = (e.clientX - resizing.startX) / zoom;
+          const dy = (e.clientY - resizing.startY) / zoom;
+          let newW = resizing.origW + dx;
+          let newH = resizing.origH + dy;
           if (gridSettings.snap) {
             const snapSize = gridSettings.cellSize;
-            dx = Math.round(dx / snapSize) * snapSize;
-            dy = Math.round(dy / snapSize) * snapSize;
+            newW = Math.round(newW / snapSize) * snapSize;
+            newH = Math.round(newH / snapSize) * snapSize;
           }
-          let newW = Math.max(40, Math.round(resizing.origW + dx));
-          let newH = Math.max(40, Math.round(resizing.origH + dy));
+          newW = Math.max(40, Math.round(newW));
+          newH = Math.max(40, Math.round(newH));
           onResizeWidget(resizing.id, newW, newH);
         } else {
           const colW = getColWidth() + GAP;
