@@ -76,6 +76,7 @@ class TagOut(BaseModel):
     simulation_config: str | None
     enum_mapping: str | None
     labels: list[TagLabelOut] = []
+    is_system: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -107,6 +108,8 @@ async def create_tag(
     session: AsyncSession = Depends(get_db),
     _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
 ):
+    if body.name.startswith("$"):
+        raise HTTPException(status_code=400, detail="Tag names starting with '$' are reserved for system tags")
     tag = Tag(**body.model_dump())
     session.add(tag)
     await session.flush()
@@ -133,6 +136,8 @@ async def update_tag(
     tag = await session.get(Tag, tag_id)
     if not tag:
         raise HTTPException(status_code=404, detail="Tag not found")
+    if tag.is_system:
+        raise HTTPException(status_code=403, detail="System tags cannot be modified")
     alarm_changed = (tag.alarm_enabled != body.alarm_enabled or
                      tag.alarm_config != body.alarm_config)
     trending_changed = (tag.trending_enabled != body.trending_enabled or
@@ -162,6 +167,8 @@ async def delete_tag(
     tag = await session.get(Tag, tag_id)
     if not tag:
         raise HTTPException(status_code=404, detail="Tag not found")
+    if tag.is_system:
+        raise HTTPException(status_code=403, detail="System tags cannot be deleted")
     had_alarm = tag.alarm_enabled
     had_trending = tag.trending_enabled
     tag_name = tag.name
@@ -220,6 +227,8 @@ async def write_tag_value(
         UserRole.ENGINEER, UserRole.DESIGNER,
     )),
 ):
+    if tag_name.startswith("$"):
+        raise HTTPException(status_code=403, detail="System tag values cannot be written")
     value = body.get("value")
     if value is None:
         raise HTTPException(status_code=400, detail="Missing 'value' in body")
@@ -1055,7 +1064,7 @@ async def bulk_delete_tags(
     if not body.tag_ids:
         return {"deleted": 0}
     result = await session.execute(select(Tag).where(Tag.id.in_(body.tag_ids)))
-    tags_to_delete = result.scalars().all()
+    tags_to_delete = [t for t in result.scalars().all() if not t.is_system]
     for tag in tags_to_delete:
         await session.delete(tag)
         tag_engine.unregister_tag(tag.name)
@@ -1129,7 +1138,7 @@ async def bulk_update_tags(
     if not fields:
         return {"updated": 0}
     result = await session.execute(select(Tag).where(Tag.id.in_(body.tag_ids)))
-    tags = result.scalars().all()
+    tags = [t for t in result.scalars().all() if not t.is_system]
     for tag in tags:
         for key, val in fields.items():
             setattr(tag, key, val)

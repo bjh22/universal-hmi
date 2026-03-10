@@ -26,9 +26,24 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.tag import SimulationBehavior, Tag
+from app.models.tag import SimulationBehavior, Tag, TagAccessMode, TagDataType
 
 logger = logging.getLogger(__name__)
+
+# System tag definitions — seeded into the database so they appear in TagPicker
+# autocomplete. Values are computed dynamically by _get_system_tag().
+SYSTEM_TAG_DEFS = [
+    {"name": "$CURRENT_TIME", "display_name": "Current Time", "description": "Current time of day (HH:MM:SS)", "data_type": "string"},
+    {"name": "$CURRENT_DATE", "display_name": "Current Date", "description": "Current date (YYYY-MM-DD)", "data_type": "string"},
+    {"name": "$CURRENT_DATETIME", "display_name": "Current Date/Time", "description": "Current date and time in ISO 8601 format", "data_type": "string"},
+    {"name": "$CURRENT_TIMESTAMP", "display_name": "Unix Timestamp", "description": "Current time as Unix timestamp (seconds since epoch)", "data_type": "int"},
+    {"name": "$APP_VERSION", "display_name": "App Version", "description": "Current application version", "data_type": "string"},
+    {"name": "$APP_UPTIME", "display_name": "App Uptime", "description": "Seconds since the application started", "data_type": "int"},
+    {"name": "$ACTIVE_ALARM_COUNT", "display_name": "Active Alarms", "description": "Number of currently active alarms", "data_type": "int"},
+    {"name": "$CRITICAL_ALARM_COUNT", "display_name": "Critical Alarms", "description": "Number of currently active critical alarms", "data_type": "int"},
+    {"name": "$UNACKED_ALARM_COUNT", "display_name": "Unacked Alarms", "description": "Number of unacknowledged alarms", "data_type": "int"},
+    {"name": "$ACTIVE_JOB", "display_name": "Active Job", "description": "Name of the currently loaded job", "data_type": "string"},
+]
 
 
 class TagValue:
@@ -91,11 +106,45 @@ class TagEngine:
     def values(self) -> dict[str, TagValue]:
         return self._values
 
+    async def ensure_system_tags(self, session: AsyncSession):
+        """Create or update system tags in the database.
+
+        System tags exist in the DB so they appear in TagPicker autocomplete.
+        Their runtime values are computed dynamically by _get_system_tag().
+        """
+        type_map = {"string": TagDataType.STRING, "int": TagDataType.INT, "float": TagDataType.FLOAT, "bool": TagDataType.BOOL}
+
+        for sdef in SYSTEM_TAG_DEFS:
+            result = await session.execute(select(Tag).where(Tag.name == sdef["name"]))
+            existing = result.scalar_one_or_none()
+            if existing:
+                existing.is_system = True
+                existing.display_name = sdef["display_name"]
+                existing.description = sdef["description"]
+                existing.data_type = type_map[sdef["data_type"]]
+                existing.access_mode = TagAccessMode.READ
+                existing.group_name = "System"
+            else:
+                tag = Tag(
+                    name=sdef["name"],
+                    display_name=sdef["display_name"],
+                    description=sdef["description"],
+                    data_type=type_map[sdef["data_type"]],
+                    access_mode=TagAccessMode.READ,
+                    group_name="System",
+                    is_system=True,
+                )
+                session.add(tag)
+        await session.flush()
+
     async def load_tags(self, session: AsyncSession):
         result = await session.execute(select(Tag))
         tags = result.scalars().all()
         for tag in tags:
             self._tags[tag.name] = tag
+            # System tags compute values dynamically — don't add to _values
+            if tag.is_system:
+                continue
             # Cache parsed simulation config to avoid JSON parsing every cycle
             if tag.simulation_enabled and tag.simulation_config:
                 self._sim_configs[tag.name] = json.loads(tag.simulation_config)
@@ -316,6 +365,8 @@ class TagEngine:
                 value = 0
             case "$UNACKED_ALARM_COUNT":
                 value = 0
+            case "$ACTIVE_JOB":
+                value = self._system_values.get(name, "None")
             case _:
                 value = self._system_values.get(name)
         return TagValue(tag_id=0, name=name, value=value, data_type="string")

@@ -2563,9 +2563,13 @@ export function SettingsPage({ user, tagValues }: Props) {
                   >
                     {canManage && (
                       <td className="w-10 px-3 py-2">
-                        <button onClick={() => toggleTagSelection(tag.id)} className="text-[var(--hmi-text-muted)] hover:text-[var(--hmi-text-secondary)]">
-                          {selectedTagIds.has(tag.id) ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
-                        </button>
+                        {tag.is_system ? (
+                          <span className="text-[var(--hmi-text-muted)]/30"><Square size={16} /></span>
+                        ) : (
+                          <button onClick={() => toggleTagSelection(tag.id)} className="text-[var(--hmi-text-muted)] hover:text-[var(--hmi-text-secondary)]">
+                            {selectedTagIds.has(tag.id) ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+                          </button>
+                        )}
                       </td>
                     )}
                     <td className="px-4 py-2">
@@ -2599,12 +2603,18 @@ export function SettingsPage({ user, tagValues }: Props) {
                     {canManage && (
                       <td className="px-4 py-2">
                         <div className="flex gap-1 justify-end">
-                          <button onClick={() => setEditTag(tag)} className="p-1 text-[var(--hmi-text-muted)] hover:text-blue-400" title="Edit">
-                            <Pencil size={14} />
-                          </button>
-                          <button onClick={() => setDeleteTagTarget(tag)} className="p-1 text-[var(--hmi-text-muted)] hover:text-red-400" title="Delete">
-                            <Trash2 size={14} />
-                          </button>
+                          {tag.is_system ? (
+                            <span className="text-[10px] text-amber-400/60 px-1">System</span>
+                          ) : (
+                            <>
+                              <button onClick={() => setEditTag(tag)} className="p-1 text-[var(--hmi-text-muted)] hover:text-blue-400" title="Edit">
+                                <Pencil size={14} />
+                              </button>
+                              <button onClick={() => setDeleteTagTarget(tag)} className="p-1 text-[var(--hmi-text-muted)] hover:text-red-400" title="Delete">
+                                <Trash2 size={14} />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     )}

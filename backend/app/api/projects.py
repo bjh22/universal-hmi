@@ -394,7 +394,7 @@ async def _build_snapshot(session: AsyncSession, project: Project) -> dict:
             "description": lbl.description,
         })
 
-    tag_result = await session.execute(select(Tag).order_by(Tag.name))
+    tag_result = await session.execute(select(Tag).where(Tag.is_system != True).order_by(Tag.name))
     tags = []
     for tag in tag_result.scalars().all():
         tags.append({
@@ -494,7 +494,9 @@ async def _wipe_all_resources(session: AsyncSession):
     await session.execute(delete(AlarmHistory))
     await session.execute(delete(Alarm))
     await session.execute(delete(tag_label_assignments))
-    for model in [Tag, Screen, Job, TagTemplate, ScreenTemplate, TagLabel, DataSource]:
+    # Preserve system tags during wipe
+    await session.execute(delete(Tag).where(Tag.is_system != True))
+    for model in [Screen, Job, TagTemplate, ScreenTemplate, TagLabel, DataSource]:
         await session.execute(delete(model))
     await session.flush()
 
@@ -890,6 +892,10 @@ async def _import_tags(
 
     for tag_data in items:
         tag_name = tag_data["name"]
+        # Skip system tags — they are managed by the engine
+        if tag_name.startswith("$"):
+            result_obj.skipped += 1
+            continue
         ds_id = all_ds.get(tag_data.get("data_source_name")) if tag_data.get("data_source_name") else None
 
         if tag_name in existing:
@@ -1145,25 +1151,31 @@ async def preview_import(
     import_tag_names = {t["name"] for t in data.get("tags", [])}
 
     # Batch-query existing names for each section
-    existing_ds = await _get_existing_names_simple(session, DataSource, import_ds_names)
-    existing_labels = await _get_existing_names_simple(session, TagLabel, import_label_names)
-    existing_tags = await _get_existing_names_simple(session, Tag, import_tag_names)
-    existing_tt = await _get_existing_names_simple(
-        session, TagTemplate,
-        {t["name"] for t in data.get("tag_templates", [])},
-    )
-    existing_screens = await _get_existing_screen_slugs(
-        session, {s["slug"] for s in data.get("screens", [])},
-    )
-    existing_st = await _get_existing_names_simple(
-        session, ScreenTemplate,
-        {s["name"] for s in data.get("screen_templates", [])},
-    )
-    existing_jobs = await _get_existing_job_names(
-        session,
-        {j["name"] for j in data.get("jobs", [])},
-        target_pid,
-    )
+    # When creating a new project (target_pid is None), skip conflict detection —
+    # Loading a new project wipes all resources first, so existing items aren't conflicts.
+    if target_pid is not None:
+        existing_ds = await _get_existing_names_simple(session, DataSource, import_ds_names)
+        existing_labels = await _get_existing_names_simple(session, TagLabel, import_label_names)
+        existing_tags = await _get_existing_names_simple(session, Tag, import_tag_names)
+        existing_tt = await _get_existing_names_simple(
+            session, TagTemplate,
+            {t["name"] for t in data.get("tag_templates", [])},
+        )
+        existing_screens = await _get_existing_screen_slugs(
+            session, {s["slug"] for s in data.get("screens", [])},
+        )
+        existing_st = await _get_existing_names_simple(
+            session, ScreenTemplate,
+            {s["name"] for s in data.get("screen_templates", [])},
+        )
+        existing_jobs = await _get_existing_job_names(
+            session,
+            {j["name"] for j in data.get("jobs", [])},
+            target_pid,
+        )
+    else:
+        existing_ds = existing_labels = existing_tags = existing_tt = {}
+        existing_screens = existing_st = existing_jobs = {}
 
     # Also query all existing tag/ds names in the database for dependency checking
     all_db_tag_names = set((await session.execute(select(Tag.name))).scalars().all())
@@ -1321,84 +1333,102 @@ async def import_project(
         await session.flush()
         pid = project.id
 
-    # Batch-query existing names for conflict detection
-    ds_items = data.get("data_sources", []) if "data_sources" in sections_to_import else []
-    label_items = data.get("tag_labels", []) if "tag_labels" in sections_to_import else []
-    tag_items = data.get("tags", []) if "tags" in sections_to_import else []
-    tt_items = data.get("tag_templates", []) if "tag_templates" in sections_to_import else []
-    scr_items = data.get("screens", []) if "screens" in sections_to_import else []
-    st_items = data.get("screen_templates", []) if "screen_templates" in sections_to_import else []
-    job_items = data.get("jobs", []) if "jobs" in sections_to_import else []
+    # When creating a new project, skip live DB inserts — just save the snapshot.
+    # Resources go live when the user clicks "Load" (which wipes + restores).
+    # This avoids false conflicts with the currently-loaded project's resources.
+    if target_pid is None:
+        for key in SECTION_KEYS:
+            items = data.get(key, [])
+            if key in sections_to_import and items:
+                results.append(ImportSectionResult(
+                    section=key, created=len(items),
+                ))
+    else:
+        # Importing into an existing project — insert into live DB with conflict handling
+        ds_items = data.get("data_sources", []) if "data_sources" in sections_to_import else []
+        label_items = data.get("tag_labels", []) if "tag_labels" in sections_to_import else []
+        tag_items = data.get("tags", []) if "tags" in sections_to_import else []
+        tt_items = data.get("tag_templates", []) if "tag_templates" in sections_to_import else []
+        scr_items = data.get("screens", []) if "screens" in sections_to_import else []
+        st_items = data.get("screen_templates", []) if "screen_templates" in sections_to_import else []
+        job_items = data.get("jobs", []) if "jobs" in sections_to_import else []
 
-    # Query existing for each section
-    existing_ds = await _get_existing_names_simple(session, DataSource, {d["name"] for d in ds_items}) if ds_items else {}
-    existing_labels = await _get_existing_names_simple(session, TagLabel, {l["name"] for l in label_items}) if label_items else {}
-    existing_tags = await _get_existing_names_simple(session, Tag, {t["name"] for t in tag_items}) if tag_items else {}
-    existing_tt = await _get_existing_names_simple(session, TagTemplate, {t["name"] for t in tt_items}) if tt_items else {}
-    existing_screens = await _get_existing_screen_slugs(session, {s["slug"] for s in scr_items}) if scr_items else {}
-    existing_st = await _get_existing_names_simple(session, ScreenTemplate, {s["name"] for s in st_items}) if st_items else {}
-    existing_jobs = await _get_existing_job_names(session, {j["name"] for j in job_items}, pid) if job_items else {}
+        # Query existing for each section
+        existing_ds = await _get_existing_names_simple(session, DataSource, {d["name"] for d in ds_items}) if ds_items else {}
+        existing_labels = await _get_existing_names_simple(session, TagLabel, {l["name"] for l in label_items}) if label_items else {}
+        existing_tags = await _get_existing_names_simple(session, Tag, {t["name"] for t in tag_items}) if tag_items else {}
+        existing_tt = await _get_existing_names_simple(session, TagTemplate, {t["name"] for t in tt_items}) if tt_items else {}
+        existing_screens = await _get_existing_screen_slugs(session, {s["slug"] for s in scr_items}) if scr_items else {}
+        existing_st = await _get_existing_names_simple(session, ScreenTemplate, {s["name"] for s in st_items}) if st_items else {}
+        existing_jobs = await _get_existing_job_names(session, {j["name"] for j in job_items}, pid) if job_items else {}
 
-    # Import in dependency order
-    ds_name_map: dict[str, int] = {}
-    label_name_map: dict[str, int] = {}
+        # Import in dependency order
+        ds_name_map: dict[str, int] = {}
+        label_name_map: dict[str, int] = {}
 
-    if ds_items:
-        ds_name_map, ds_result = await _import_data_sources(
-            ds_items, pid, session, get_conflict_mode("data_sources"), existing_ds,
-        )
-        results.append(ds_result)
+        if ds_items:
+            ds_name_map, ds_result = await _import_data_sources(
+                ds_items, pid, session, get_conflict_mode("data_sources"), existing_ds,
+            )
+            results.append(ds_result)
 
-    if label_items:
-        label_name_map, label_result = await _import_tag_labels(
-            label_items, pid, session, get_conflict_mode("tag_labels"), existing_labels,
-        )
-        results.append(label_result)
+        if label_items:
+            label_name_map, label_result = await _import_tag_labels(
+                label_items, pid, session, get_conflict_mode("tag_labels"), existing_labels,
+            )
+            results.append(label_result)
 
-    if tag_items:
-        tag_result = await _import_tags(
-            tag_items, pid, session, get_conflict_mode("tags"), existing_tags,
-            ds_name_map, label_name_map,
-        )
-        results.append(tag_result)
+        if tag_items:
+            tag_result = await _import_tags(
+                tag_items, pid, session, get_conflict_mode("tags"), existing_tags,
+                ds_name_map, label_name_map,
+            )
+            results.append(tag_result)
 
-    if tt_items:
-        tt_result = await _import_tag_templates(
-            tt_items, pid, session, get_conflict_mode("tag_templates"), existing_tt,
-        )
-        results.append(tt_result)
+        if tt_items:
+            tt_result = await _import_tag_templates(
+                tt_items, pid, session, get_conflict_mode("tag_templates"), existing_tt,
+            )
+            results.append(tt_result)
 
-    if scr_items:
-        scr_result = await _import_screens(
-            scr_items, pid, session, get_conflict_mode("screens"), existing_screens,
-        )
-        results.append(scr_result)
+        if scr_items:
+            scr_result = await _import_screens(
+                scr_items, pid, session, get_conflict_mode("screens"), existing_screens,
+            )
+            results.append(scr_result)
 
-    if st_items:
-        st_result = await _import_screen_templates(
-            st_items, pid, session, get_conflict_mode("screen_templates"), existing_st,
-        )
-        results.append(st_result)
+        if st_items:
+            st_result = await _import_screen_templates(
+                st_items, pid, session, get_conflict_mode("screen_templates"), existing_st,
+            )
+            results.append(st_result)
 
-    if job_items:
-        job_result = await _import_jobs(
-            job_items, pid, session, get_conflict_mode("jobs"), existing_jobs,
-        )
-        results.append(job_result)
+        if job_items:
+            job_result = await _import_jobs(
+                job_items, pid, session, get_conflict_mode("jobs"), existing_jobs,
+            )
+            results.append(job_result)
 
-    # Restore branding settings if present
-    branding = data.get("branding", {})
-    if branding:
-        branding_keys = ["site_title", "nav_title", "favicon"]
-        await session.execute(delete(AppSetting).where(AppSetting.key.in_(branding_keys)))
-        await session.flush()
-        for key in branding_keys:
-            val = branding.get(key)
-            if val:
-                session.add(AppSetting(key=key, value=val))
+        # Restore branding settings if present
+        branding = data.get("branding", {})
+        if branding:
+            branding_keys = ["site_title", "nav_title", "favicon"]
+            await session.execute(delete(AppSetting).where(AppSetting.key.in_(branding_keys)))
+            await session.flush()
+            for key in branding_keys:
+                val = branding.get(key)
+                if val:
+                    session.add(AppSetting(key=key, value=val))
 
     await session.flush()
     await session.refresh(project)
+
+    # Save the import file data as the snapshot (not _build_snapshot which
+    # queries ALL resources in the DB and would include other projects' data)
+    project.snapshot = json.dumps(data)
+    project.snapshot_saved_at = datetime.now(timezone.utc)
+    await session.flush()
+    _save_snapshot_to_disk(project.name, data)
 
     return ImportResultResponse(
         project_id=project.id,
