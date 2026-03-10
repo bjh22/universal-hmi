@@ -15,7 +15,14 @@ from app.core.config import settings
 # create_async_engine sets up the database connection pool. The engine manages
 # a pool of connections so each request doesn't open/close its own connection.
 # aiosqlite is the async driver that lets SQLite work with Python's asyncio.
-engine = create_async_engine(settings.database_url, echo=settings.debug)
+# pool_size=3 keeps resource usage low on embedded/lower-end hardware while
+# still supporting concurrent requests. max_overflow=5 allows burst capacity.
+engine = create_async_engine(
+    settings.database_url,
+    echo=settings.debug,
+    pool_size=3,
+    max_overflow=5,
+)
 
 # A session factory — calling async_session() creates a new database session.
 # A session is like a "workspace": you read/write data within it, then commit
@@ -36,6 +43,11 @@ async def _enable_wal_mode():
     async with engine.begin() as conn:
         await conn.execute(text("PRAGMA journal_mode=WAL"))
         await conn.execute(text("PRAGMA synchronous=NORMAL"))
+        # Increase page cache to 4MB (default ~2MB) — reduces disk I/O on
+        # lower-end hardware with slow storage (SD cards, USB drives, eMMC)
+        await conn.execute(text("PRAGMA cache_size=-4000"))
+        # Temp store in memory avoids temp file I/O for sorting/grouping
+        await conn.execute(text("PRAGMA temp_store=MEMORY"))
 
 
 # DeclarativeBase is the parent class for all database models (User, Tag, etc.).

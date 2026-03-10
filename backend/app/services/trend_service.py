@@ -27,6 +27,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import async_session
+from app.models.alarm import AlarmHistory, AlarmState, Alarm
+from app.models.audit import AuditLog
 from app.models.tag import Tag
 from app.models.trend import TrendData
 from app.services.tag_engine import TagEngine
@@ -142,19 +144,50 @@ class TrendService:
             await asyncio.sleep(1.0)
 
     async def _cleanup_loop(self):
-        """Periodically delete trend data older than the retention period (default 90 days).
-        Runs once per hour to prevent the database from growing indefinitely.
+        """Periodically delete old data to prevent the database from growing indefinitely.
+        Runs once per hour. Cleans up trends, audit logs, and resolved alarm history
+        based on their configured retention periods.
         """
         while self._running:
             await asyncio.sleep(CLEANUP_INTERVAL_S)
             try:
-                cutoff = datetime.now(timezone.utc) - timedelta(days=settings.trend_retention_days)
+                now = datetime.now(timezone.utc)
                 async with async_session() as session:
+                    # Trend data cleanup
+                    trend_cutoff = now - timedelta(days=settings.trend_retention_days)
                     result = await session.execute(
-                        delete(TrendData).where(TrendData.timestamp < cutoff)
+                        delete(TrendData).where(TrendData.timestamp < trend_cutoff)
                     )
-                    await session.commit()
                     if result.rowcount:
                         logger.info("Cleaned up %d trend records older than %d days", result.rowcount, settings.trend_retention_days)
+
+                    # Audit log cleanup
+                    audit_cutoff = now - timedelta(days=settings.audit_retention_days)
+                    result = await session.execute(
+                        delete(AuditLog).where(AuditLog.timestamp < audit_cutoff)
+                    )
+                    if result.rowcount:
+                        logger.info("Cleaned up %d audit log records older than %d days", result.rowcount, settings.audit_retention_days)
+
+                    # Alarm history cleanup
+                    alarm_cutoff = now - timedelta(days=settings.alarm_retention_days)
+                    result = await session.execute(
+                        delete(AlarmHistory).where(AlarmHistory.triggered_at < alarm_cutoff)
+                    )
+                    if result.rowcount:
+                        logger.info("Cleaned up %d alarm history records older than %d days", result.rowcount, settings.alarm_retention_days)
+
+                    # Clean up fully resolved alarms (INACTIVE) older than 7 days
+                    inactive_cutoff = now - timedelta(days=7)
+                    result = await session.execute(
+                        delete(Alarm).where(
+                            Alarm.state == AlarmState.INACTIVE,
+                            Alarm.cleared_at < inactive_cutoff,
+                        )
+                    )
+                    if result.rowcount:
+                        logger.info("Cleaned up %d resolved alarm records", result.rowcount)
+
+                    await session.commit()
             except Exception:
-                logger.exception("Failed to clean up old trend data")
+                logger.exception("Failed to clean up old data")

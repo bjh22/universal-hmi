@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, memo } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo, memo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { api } from '../lib/api';
@@ -302,6 +302,13 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
     ? dm.widgets.find(w => dm.selectedIds.has(w.id)) || null
     : null;
 
+  // Build a lookup map for parent widgets (O(1) instead of O(n) per widget in memo comparator)
+  const widgetMap = useMemo(() => {
+    const map = new Map<string, Widget>();
+    for (const w of runtimeWidgets) map.set(w.id, w);
+    return map;
+  }, [runtimeWidgets]);
+
   // ─── DESIGN MODE ───
   if (dm.editing) {
     return (
@@ -443,7 +450,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
             }}
           >
             {runtimeWidgets.map((w, index) => (
-              <RuntimeWidget key={w.id} widget={w} index={index} isAbsolute tagValues={tagValues} alarms={alarms} userRole={userRole} allWidgets={runtimeWidgets} collapsedContainerIds={collapsedContainerIds} onToggleContainerCollapsed={toggleContainerCollapsed} />
+              <RuntimeWidget key={w.id} widget={w} index={index} isAbsolute tagValues={tagValues} alarms={alarms} userRole={userRole} widgetMap={widgetMap} collapsedContainerIds={collapsedContainerIds} onToggleContainerCollapsed={toggleContainerCollapsed} />
             ))}
           </div>
         </div>
@@ -454,7 +461,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
           style={{ gridTemplateColumns: 'repeat(12, 1fr)', gridAutoRows: '80px' }}
         >
           {runtimeWidgets.map((w, index) => (
-            <RuntimeWidget key={w.id} widget={w} index={index} isAbsolute={false} tagValues={tagValues} alarms={alarms} userRole={userRole} allWidgets={runtimeWidgets} collapsedContainerIds={collapsedContainerIds} onToggleContainerCollapsed={toggleContainerCollapsed} />
+            <RuntimeWidget key={w.id} widget={w} index={index} isAbsolute={false} tagValues={tagValues} alarms={alarms} userRole={userRole} widgetMap={widgetMap} collapsedContainerIds={collapsedContainerIds} onToggleContainerCollapsed={toggleContainerCollapsed} />
           ))}
         </div>
       )}
@@ -582,15 +589,15 @@ interface RuntimeWidgetProps {
   tagValues: Record<string, TagValue>;
   alarms: AlarmData[];
   userRole?: string;
-  allWidgets: Widget[];
+  widgetMap: Map<string, Widget>;
   collapsedContainerIds: Set<string>;
   onToggleContainerCollapsed: (id: string, collapsed: boolean) => void;
 }
 
-const RuntimeWidget = memo(function RuntimeWidget({ widget: w, index, isAbsolute, tagValues, alarms, userRole, allWidgets, collapsedContainerIds, onToggleContainerCollapsed }: RuntimeWidgetProps) {
+const RuntimeWidget = memo(function RuntimeWidget({ widget: w, index, isAbsolute, tagValues, alarms, userRole, widgetMap, collapsedContainerIds, onToggleContainerCollapsed }: RuntimeWidgetProps) {
   // Cascade container visibility to children (and collapse state for collapsible containers)
   if (w.parentId) {
-    const parent = allWidgets.find(p => p.id === w.parentId);
+    const parent = widgetMap.get(w.parentId);
     if (parent && (parent.type === 'container' || parent.type === 'collapsible_container')) {
       const parentVis = (parent.visible !== false)
         && (!parent.visibleTag || !!tagValues[parent.visibleTag]?.value)
@@ -667,9 +674,9 @@ const RuntimeWidget = memo(function RuntimeWidget({ widget: w, index, isAbsolute
   // Also check visibility/enabled tags
   if (w.visibleTag) tagNames.push(w.visibleTag);
   if (w.enabledTag) tagNames.push(w.enabledTag);
-  // Check parent visibility tag
+  // Check parent visibility tag (O(1) lookup via Map instead of O(n) find)
   if (w.parentId) {
-    const parent = prev.allWidgets.find(pw => pw.id === w.parentId);
+    const parent = prev.widgetMap.get(w.parentId);
     if (parent?.visibleTag) tagNames.push(parent.visibleTag);
   }
 
