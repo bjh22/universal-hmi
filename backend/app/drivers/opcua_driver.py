@@ -40,6 +40,9 @@ class OpcuaDriver(ProtocolDriver):
         self._variant_type_cache: dict[str, Any] = {}
         # Max nodes per ReadRequest — lower this if the server raises BadTooManyOperations
         self._read_batch_size: int = int(config.get("read_batch_size", _READ_BATCH_SIZE))
+        # Consecutive read failure counter — used to detect dead sessions
+        self._consecutive_failures: int = 0
+        self._max_consecutive_failures: int = int(config.get("max_consecutive_failures", 3))
 
     @property
     def address_prefix(self) -> str | None:
@@ -51,6 +54,12 @@ class OpcuaDriver(ProtocolDriver):
 
             url = self.config.get("endpoint", "opc.tcp://localhost:4840")
             self._client = Client(url=url)
+            # Request a 30-minute session timeout from the server (milliseconds).
+            # The asyncua library sends periodic keepalive requests to renew the
+            # session, but if polling stops or the network blips, a longer timeout
+            # gives the session more time to survive.
+            session_timeout = self.config.get("session_timeout", 30 * 60 * 1000)
+            self._client.session_timeout = session_timeout
 
             security_policy = self.config.get("security_policy")
             if security_policy:
@@ -70,6 +79,7 @@ class OpcuaDriver(ProtocolDriver):
             timeout = self.config.get("connect_timeout", 10)
             await asyncio.wait_for(self._client.connect(), timeout=timeout)
             self.connected = True
+            self._consecutive_failures = 0
             self._browse_cache.clear()
             self._variant_type_cache.clear()
         except Exception:
@@ -117,6 +127,7 @@ class OpcuaDriver(ProtocolDriver):
         result = {}
         if not self._client or not addresses:
             return result
+        batch_failed = False
         # Split into batches to avoid BadTooManyOperations from the server
         for i in range(0, len(addresses), self._read_batch_size):
             batch_addrs = addresses[i : i + self._read_batch_size]
@@ -126,13 +137,32 @@ class OpcuaDriver(ProtocolDriver):
                 for addr, val in zip(batch_addrs, values):
                     result[addr] = val
             except Exception:
+                batch_failed = True
                 # Fallback: if bulk read fails (e.g. one bad node aborts the batch),
                 # read individually so good nodes still return values
+                individual_ok = 0
                 for addr, node in zip(batch_addrs, nodes):
                     try:
                         result[addr] = await node.read_value()
+                        individual_ok += 1
                     except Exception:
                         result[addr] = None
+                # If zero individual reads succeeded, the session is likely dead
+                if individual_ok == 0:
+                    batch_failed = True
+
+        # Track consecutive total failures to detect dead sessions
+        if batch_failed and not any(v is not None for v in result.values()):
+            self._consecutive_failures += 1
+            if self._consecutive_failures >= self._max_consecutive_failures:
+                logger.warning(
+                    f"OPC UA driver {self.name}: {self._consecutive_failures} consecutive "
+                    f"poll failures — marking connection as lost"
+                )
+                self.connected = False
+        else:
+            self._consecutive_failures = 0
+
         return result
 
     async def detect_address_prefix(self) -> str | None:
