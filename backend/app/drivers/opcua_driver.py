@@ -24,6 +24,9 @@ _CODESYS_APP_RE = re.compile(r"^(ns=\d+;s=\|var\|.+?\.Application\.)")
 # Concurrency limit for parallel node attribute reads
 _MAX_CONCURRENT_READS = 20
 
+# Maximum nodes per OPC UA ReadRequest — servers reject larger batches with BadTooManyOperations
+_READ_BATCH_SIZE = 100
+
 
 class OpcuaDriver(ProtocolDriver):
     def __init__(self, name: str, config: dict):
@@ -35,6 +38,8 @@ class OpcuaDriver(ProtocolDriver):
         self._browse_cache_ttl: float = config.get("browse_cache_ttl", 30.0)
         # Cache for variant types keyed by resolved address, avoids a round-trip on every write
         self._variant_type_cache: dict[str, Any] = {}
+        # Max nodes per ReadRequest — lower this if the server raises BadTooManyOperations
+        self._read_batch_size: int = int(config.get("read_batch_size", _READ_BATCH_SIZE))
 
     @property
     def address_prefix(self) -> str | None:
@@ -112,20 +117,22 @@ class OpcuaDriver(ProtocolDriver):
         result = {}
         if not self._client or not addresses:
             return result
-        # Build node list and use bulk read (single OPC UA ReadRequest)
-        nodes = [self._client.get_node(self._resolve_address(addr)) for addr in addresses]
-        try:
-            values = await self._client.read_values(nodes)
-            for addr, val in zip(addresses, values):
-                result[addr] = val
-        except Exception:
-            # Fallback: if bulk read fails (e.g. one bad node aborts the batch),
-            # read individually so good nodes still return values
-            for addr, node in zip(addresses, nodes):
-                try:
-                    result[addr] = await node.read_value()
-                except Exception:
-                    result[addr] = None
+        # Split into batches to avoid BadTooManyOperations from the server
+        for i in range(0, len(addresses), self._read_batch_size):
+            batch_addrs = addresses[i : i + self._read_batch_size]
+            nodes = [self._client.get_node(self._resolve_address(addr)) for addr in batch_addrs]
+            try:
+                values = await self._client.read_values(nodes)
+                for addr, val in zip(batch_addrs, values):
+                    result[addr] = val
+            except Exception:
+                # Fallback: if bulk read fails (e.g. one bad node aborts the batch),
+                # read individually so good nodes still return values
+                for addr, node in zip(batch_addrs, nodes):
+                    try:
+                        result[addr] = await node.read_value()
+                    except Exception:
+                        result[addr] = None
         return result
 
     async def detect_address_prefix(self) -> str | None:
