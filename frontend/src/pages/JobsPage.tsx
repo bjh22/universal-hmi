@@ -20,6 +20,20 @@ function parseTypedValue(val: string): unknown {
   return val;
 }
 
+// ─── Helper: format a tag value for read-only display (enum labels, decimals, units) ───
+function formatTagValue(tag: Tag | undefined, value: unknown): string {
+  if (value == null || value === '') return '—';
+  if (tag?.enum_mapping) {
+    let em: Record<string, string> = {};
+    try { em = typeof tag.enum_mapping === 'string' ? JSON.parse(tag.enum_mapping) : tag.enum_mapping; } catch { /* ignore */ }
+    const mapped = em[String(value)];
+    if (mapped) return mapped;
+  }
+  const formatted = typeof value === 'number' && !Number.isInteger(value) ? value.toFixed(2) : String(value);
+  if (tag?.engineering_units) return `${formatted} ${tag.engineering_units}`;
+  return formatted;
+}
+
 // ─── Helper: group setpoint entries by tag label (excluding "Job Setpoint") ───
 function groupEntries(entries: [string, unknown][], tags: Tag[]): { group: string; items: [string, unknown, number][] }[] {
   const tagMap = new Map(tags.map(t => [t.name, t]));
@@ -260,7 +274,7 @@ function JobSetpointDisplay({ setpoints, tags }: { setpoints: string | null; tag
                               {Boolean(v) ? 'ON' : 'OFF'}
                             </span>
                           ) : (
-                            <span className="text-slate-200">{typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(2) : String(v)}</span>
+                            <span className="text-slate-200">{formatTagValue(tag, v)}</span>
                           )}
                         </td>
                       </tr>
@@ -601,11 +615,12 @@ export function JobsPage({ user }: Props) {
     if (!job) return;
     const setpoints = JSON.parse(job.setpoints || '{}');
     const displayMap = buildTagDisplayNameMap(tags);
-    const params = Object.entries(setpoints).map(([k, v]) => `  ${displayMap[k] || k}: ${v}`).join('\n');
+    const tagMap = new Map(tags.map(t => [t.name, t]));
+    const params = Object.entries(setpoints).map(([k, v]) => `  ${displayMap[k] || k}: ${formatTagValue(tagMap.get(k), v)}`).join('\n');
     const conditions = job.download_conditions ? JSON.parse(job.download_conditions) : null;
     let msg = `Download job "${job.name}" to machine?\n\nSetpoints:\n${params || '(none)'}`;
     if (conditions?.guards?.length) {
-      msg += `\n\nPre-conditions:\n${conditions.guards.map((g: { tag: string; value: unknown }) => `  ${displayMap[g.tag] || g.tag} = ${g.value}`).join('\n')}`;
+      msg += `\n\nPre-conditions:\n${conditions.guards.map((g: { tag: string; value: unknown }) => `  ${displayMap[g.tag] || g.tag} = ${formatTagValue(tagMap.get(g.tag), g.value)}`).join('\n')}`;
     }
     if (!window.confirm(msg)) return;
     try {
@@ -925,13 +940,16 @@ export function JobsPage({ user }: Props) {
                       <div className="bg-slate-900 rounded-lg border border-slate-700 mb-3 overflow-hidden">
                         <table className="w-full text-sm">
                           <tbody>
-                            {guards.map((g: { tag: string; value: unknown }, i: number) => (
-                              <tr key={i} className="border-b border-slate-700/50">
-                                <td className="px-4 py-3 text-slate-300 text-sm">{getTagDisplayName(g.tag, tags)}</td>
-                                <td className="px-4 py-3 text-sm text-slate-500">=</td>
-                                <td className="px-4 py-3 text-slate-200 text-sm">{String(g.value)}</td>
-                              </tr>
-                            ))}
+                            {guards.map((g: { tag: string; value: unknown }, i: number) => {
+                              const guardTag = tags.find(t => t.name === g.tag);
+                              return (
+                                <tr key={i} className="border-b border-slate-700/50">
+                                  <td className="px-4 py-3 text-slate-300 text-sm">{getTagDisplayName(g.tag, tags)}</td>
+                                  <td className="px-4 py-3 text-sm text-slate-500">=</td>
+                                  <td className="px-4 py-3 text-slate-200 text-sm">{formatTagValue(guardTag, g.value)}</td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
