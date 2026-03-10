@@ -1032,31 +1032,35 @@ function ControlGroupEditor({ controls, onChange }: {
           )}
 
           {ctrl.type === 'input' && (
-            <div className="flex gap-1">
-              <div className="w-14">
-                <label className="text-[9px] text-slate-500 block">Min</label>
-                <input type="number" value={ctrl.min as number ?? 0} onChange={e => updateControl(i, { min: Number(e.target.value) })}
-                  className="w-full bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+            <div className="space-y-1">
+              <div className="flex gap-1">
+                <div className="flex-1">
+                  <label className="text-[9px] text-slate-500 block">Min</label>
+                  <input type="number" value={ctrl.min as number ?? 0} onChange={e => updateControl(i, { min: Number(e.target.value) })}
+                    className="w-full bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[9px] text-slate-500 block">Max</label>
+                  <input type="number" value={ctrl.max as number ?? 100} onChange={e => updateControl(i, { max: Number(e.target.value) })}
+                    className="w-full bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[9px] text-slate-500 block">Step</label>
+                  <input type="number" value={ctrl.step as number ?? 1} onChange={e => updateControl(i, { step: Number(e.target.value) })}
+                    className="w-full bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+                </div>
               </div>
-              <div className="w-14">
-                <label className="text-[9px] text-slate-500 block">Max</label>
-                <input type="number" value={ctrl.max as number ?? 100} onChange={e => updateControl(i, { max: Number(e.target.value) })}
-                  className="w-full bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
-              </div>
-              <div className="w-14">
-                <label className="text-[9px] text-slate-500 block">Step</label>
-                <input type="number" value={ctrl.step as number ?? 1} onChange={e => updateControl(i, { step: Number(e.target.value) })}
-                  className="w-full bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
-              </div>
-              <div className="w-14">
-                <label className="text-[9px] text-slate-500 block">Units</label>
-                <input type="text" value={(ctrl.units as string) || ''} onChange={e => updateControl(i, { units: e.target.value })}
-                  placeholder="—" className="w-full bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
-              </div>
-              <div className="w-12">
-                <label className="text-[9px] text-slate-500 block">Decimals</label>
-                <input type="number" value={ctrl.decimalPlaces as number ?? 1} onChange={e => updateControl(i, { decimalPlaces: Number(e.target.value) })}
-                  min={0} max={6} className="w-full bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+              <div className="flex gap-1">
+                <div className="flex-1">
+                  <label className="text-[9px] text-slate-500 block">Units</label>
+                  <input type="text" value={(ctrl.units as string) || ''} onChange={e => updateControl(i, { units: e.target.value })}
+                    placeholder="—" className="w-full bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[9px] text-slate-500 block">Decimals</label>
+                  <input type="number" value={ctrl.decimalPlaces as number ?? 1} onChange={e => updateControl(i, { decimalPlaces: Number(e.target.value) })}
+                    min={0} max={6} className="w-full bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+                </div>
               </div>
             </div>
           )}
