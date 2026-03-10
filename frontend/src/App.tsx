@@ -7,7 +7,7 @@
  *   - Authentication state (who is logged in, what role they have)
  *   - The application shell (sidebar, header) that wraps every page
  */
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { useWebSocket } from './hooks/useWebSocket';
@@ -40,6 +40,19 @@ function PageLoader() {
   );
 }
 
+// StartupScreen is shown while waiting for the backend to become available.
+// It polls /api/health and auto-dismisses once the server responds.
+function StartupScreen() {
+  return (
+    <div className="fixed inset-0 flex flex-col items-center justify-center bg-[var(--hmi-bg-base,#0f172a)]">
+      <div className="flex flex-col items-center gap-6">
+        <div className="w-10 h-10 border-3 border-[var(--hmi-text-muted,#475569)] border-t-[var(--hmi-accent,#3b82f6)] rounded-full animate-spin" />
+        <p className="text-[var(--hmi-text-secondary,#94a3b8)] text-sm">Connecting to server...</p>
+      </div>
+    </div>
+  );
+}
+
 // applyBranding modifies the actual HTML document directly (outside of React's control).
 // document.title sets the browser tab title, and querySelector finds the <link rel="icon">
 // element to swap the favicon. This is one of the few places where we reach outside React
@@ -63,22 +76,36 @@ export default function App() {
   // useAuthState manages login/logout and stores the current user (role, username, etc.)
   const auth = useAuthState();
 
+  const [backendReady, setBackendReady] = useState(false);
   const [siteTitle, setSiteTitle] = useState('Industrial HMI');
   const [navTitle, setNavTitle] = useState('HMI');
   const [activeProjectName, setActiveProjectName] = useState<string | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>();
 
-  // useEffect with an empty dependency array [] runs exactly once when the component
-  // first mounts (appears on screen). This is the standard pattern for "do something
-  // once on startup" — here we fetch branding and the active project from the backend.
-  // The .catch(() => {}) silently ignores errors (e.g., if the server is unreachable).
-  useEffect(() => {
-    api.getBranding().then((b) => {
-      setSiteTitle(b.site_title);
-      setNavTitle(b.nav_title);
-      applyBranding(b);
-    }).catch(() => {});
-    api.getActiveProject().then(p => setActiveProjectName(p.name)).catch(() => {});
+  // Poll /api/health until the backend responds, then load branding + active project.
+  const checkHealth = useCallback(async () => {
+    try {
+      const res = await fetch('/api/health');
+      if (!res.ok) throw new Error();
+      setBackendReady(true);
+      api.getBranding().then((b) => {
+        setSiteTitle(b.site_title);
+        setNavTitle(b.nav_title);
+        applyBranding(b);
+      }).catch(() => {});
+      api.getActiveProject().then(p => setActiveProjectName(p.name)).catch(() => {});
+    } catch {
+      timerRef.current = setTimeout(checkHealth, 1500);
+    }
   }, []);
+
+  useEffect(() => {
+    checkHealth();
+    return () => clearTimeout(timerRef.current);
+  }, [checkHealth]);
+
+  // Show loading screen until backend is reachable.
+  if (!backendReady) return <StartupScreen />;
 
   // BrowserRouter enables client-side routing: clicking links changes the URL and
   // renders different page components WITHOUT a full page reload from the server.
