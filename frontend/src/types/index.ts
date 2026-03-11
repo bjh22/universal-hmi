@@ -351,3 +351,10 @@ export interface ImportResultResponse {
   results: ImportSectionResult[];
   warnings: string[];
 }
+
+export interface LogEntry {
+  timestamp: string;
+  level: string;
+  logger_name: string;
+  message: string;
+}

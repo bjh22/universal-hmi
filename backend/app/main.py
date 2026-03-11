@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import alarms, audit, auth, branding, datasources, integrations, jobs, machine_profiles, preferences, production, projects, screens, scripts, system_update, tags, trends, users
+from app.api import alarms, audit, auth, branding, datasources, integrations, jobs, logs, machine_profiles, preferences, production, projects, screens, scripts, system_update, tags, trends, users
 from app.api.websocket import router as ws_router
 from app.core.config import settings
 from app.core.database import async_session, init_db
@@ -31,6 +31,12 @@ from app.services.tag_engine import tag_engine
 from app.services.trend_service import TrendService
 
 logging.basicConfig(level=logging.INFO if not settings.debug else logging.DEBUG)
+
+# Attach in-memory log handler for the Support > Logs page
+from app.services.log_service import log_handler as _log_handler
+_log_handler.setFormatter(logging.Formatter('%(message)s'))
+logging.getLogger().addHandler(_log_handler)
+
 logger = logging.getLogger(__name__)
 
 alarm_service = AlarmService(tag_engine, async_session)
@@ -133,6 +139,7 @@ app.include_router(projects.router)
 app.include_router(machine_profiles.router)
 app.include_router(integrations.router)
 app.include_router(system_update.router)
+app.include_router(logs.router)
 app.include_router(ws_router)
 
 

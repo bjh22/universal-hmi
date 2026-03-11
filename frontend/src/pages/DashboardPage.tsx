@@ -409,7 +409,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
       <div className="flex items-center gap-2 mb-4">
         {screens.length > 0 && (
           <div className="flex gap-1 overflow-x-auto pb-1">
-            {screens.map((s) => (
+            {screens.filter(s => s.slug !== 'support').map((s) => (
               <Link
                 key={s.id}
                 to={`/screen/${s.slug}`}

@@ -146,7 +146,7 @@ def _validate_package(release_root: Path, archive_size: int) -> UpdateValidation
 
 @router.get("/info", response_model=SystemInfoResponse)
 async def get_system_info(
-    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+    _user: User = Depends(require_role(UserRole.SUPERVISOR, UserRole.ENGINEER, UserRole.DESIGNER)),
 ):
     """Get current system information."""
     now = datetime.now(timezone.utc)
@@ -165,7 +165,7 @@ async def get_system_info(
 @router.post("/update/validate")
 async def validate_update_package(
     file: UploadFile,
-    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+    _user: User = Depends(require_role(UserRole.SUPERVISOR, UserRole.ENGINEER, UserRole.DESIGNER)),
 ) -> UpdateValidation:
     """
     Upload and validate an update package without applying it.
@@ -219,7 +219,7 @@ async def apply_update_package(
     file: UploadFile,
     request: Request,
     session: AsyncSession = Depends(get_db),
-    user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+    user: User = Depends(require_role(UserRole.SUPERVISOR, UserRole.ENGINEER, UserRole.DESIGNER)),
 ) -> UpdateResult:
     """
     Upload and apply an update package.
