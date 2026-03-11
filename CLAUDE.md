@@ -12,7 +12,8 @@ backend/               Python FastAPI application
     api/               Route handlers (alarms, auth, screens, tags, websocket, etc.)
     core/              Config (pydantic-settings), database (async SQLAlchemy), security (JWT)
     drivers/           Protocol drivers (opcua, modbus, ethernet_ip, mqtt) + base.py + driver_manager.py
-    models/            SQLAlchemy 2.0 models (user, tag, alarm, screen, job, trend, audit, production, datasource)
+    integrations/      Plugin system for external equipment (base.py, manager.py, zebra_printer/, cognex_dataman/, ftp_hot_folder/)
+    models/            SQLAlchemy 2.0 models (user, tag, alarm, screen, job, trend, audit, production, datasource, integration)
     services/          Business logic (tag_engine, alarm_service, trend_service, script_engine, audit_service)
     main.py            FastAPI app with lifespan, CORS, static file serving
     seed.py            Database seeder with default users and demo tags
@@ -178,6 +179,16 @@ Environment variables prefixed with `HMI_` (or `.env` file):
 3. Register in `WidgetPalette.tsx` `WIDGET_TYPES` array with icon, category, default size/props
 4. Add property panel sections in `PropertyPanel.tsx` (if type-specific props needed)
 
+## Adding a Plugin Integration
+
+1. Create package `backend/app/integrations/your_integration/` with `__init__.py` exporting `integration_class`
+2. Subclass `IntegrationBase` — set `type_name`, `display_name`, `description`, `default_config`
+3. Implement `start()` and `stop()` (required). Optionally implement `get_tag_definitions()` and `get_router()`
+4. Use `self._set_tag(name, value)` to push values into TagEngine for WebSocket broadcast
+5. No registration step — the `IntegrationManager` auto-discovers all subpackages at startup
+
+See `DEVELOPER.md` → "Creating a Plugin Integration" for a full walkthrough with examples.
+
 ## Code Conventions
 
 - **Frontend:** Functional components + hooks only. Tailwind dark theme (slate-800/900). `useCallback` for all prop handlers. No Redux — hooks + localStorage. Relative imports (no `@/` alias).
@@ -199,10 +210,12 @@ Environment variables prefixed with `HMI_` (or `.env` file):
 - `backend/app/services/tag_engine.py` — Tag polling, simulation, value store
 - `backend/app/core/config.py` — Settings (env vars with `HMI_` prefix)
 - `backend/app/api/deps.py` — Auth dependencies (`require_role`)
+- `backend/app/integrations/base.py` — Integration plugin base class
+- `backend/app/integrations/manager.py` — Plugin discovery and lifecycle management
 
 ## Database Tables
 
-users, tags, tag_templates, data_sources, alarms, alarm_history, trends, screens, screen_versions, screen_templates, jobs, production_runs, audit_logs
+users, tags, tag_templates, data_sources, alarms, alarm_history, trends, screens, screen_versions, screen_templates, jobs, production_runs, audit_logs, integrations
 
 ## Keyboard Shortcuts (Design Mode)
 

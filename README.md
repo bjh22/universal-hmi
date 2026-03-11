@@ -157,18 +157,21 @@ After login, the header shows your name, role, and a **Logout** button. Sessions
 
 ### Navigating the Application
 
-The sidebar provides access to all pages:
+The sidebar provides access to all pages. Pages are filtered by role — operators see a streamlined sidebar, while engineers and designers see configuration tools.
 
 | Page | Purpose | Minimum Role |
 |------|---------|--------------|
 | **Dashboard** | Live process screens with real-time widgets | Operator |
-| **Trends** | Historical data charting | Operator |
-| **Alarms** | Active alarms and alarm history | Operator |
-| **Jobs** | Recipe/job management and download | Supervisor |
-| **Reports** | OEE and production reports | Operator |
-| **Settings** | Tags, data sources, users, audit trail | Engineer |
+| **Trends** | Historical data charting with saved views | Operator |
+| **Alarms** | Active alarms, acknowledgment, and history | Operator |
+| **Jobs** | Recipe/job management and download | Operator (view) / Supervisor (manage) |
+| **Reports** | OEE and production reports with charts | Operator |
+| **Projects** | Configuration bundles — export, import, switch | Engineer |
+| **Settings** | Tags, data sources, integrations, users, branding, audit trail | Engineer |
+| **Factory Config** | Touch-friendly parameter editing for commissioning | Operator (view) / Engineer (edit) |
+| **Support** | System info, application logs, software updates | Operator |
 
-The **Connected** indicator in the header shows real-time WebSocket status. Green means live data is flowing.
+The **Connected** indicator in the header shows real-time WebSocket status. Green means live data is flowing. The alarm banner at the top scrolls active alarms with color-coded severity and an "Acknowledge All" button.
 
 ---
 
@@ -465,6 +468,142 @@ Jobs define sets of machine setpoints that can be downloaded to a PLC in one ope
 2. View production run summaries in **Table** or **Charts** mode.
 3. Reports include OEE metrics (Availability, Performance, Quality) and production counts.
 4. Click **Export CSV** to download report data for external analysis.
+
+---
+
+### Managing Projects
+
+Projects bundle your HMI configuration (screens, tags, data sources) into a portable package that can be exported, imported, and version-tracked. This is useful for backing up configurations, deploying to multiple machines, or maintaining separate configs for different production lines. Requires **Engineer** role or higher.
+
+#### Creating a Project
+
+1. Navigate to the **Projects** page.
+2. Click **+ New Project**.
+3. Enter a **name**, **description**, and optional **version** string.
+4. Choose a starting template:
+   - **Empty** — Blank project with no screens or tags.
+   - **Demo** — Pre-configured with sample widgets and simulated tags for testing.
+5. Click **Create**.
+
+#### Exporting a Project
+
+1. Click the **Export** button on a project row.
+2. The system packages all screens, tags, data sources, and settings into a `.hmi.json` file.
+3. Save the file for backup, transfer to another HMI instance, or version control.
+
+#### Importing a Project
+
+1. Click **Import** in the page header.
+2. Upload a `.hmi.json` file previously exported from any HMI instance.
+3. Review the import preview showing what will be created.
+4. Click **Import** to apply.
+
+#### Switching Between Projects
+
+- Click **Load** on a project to make it the active configuration. The current state is replaced with the project's saved state.
+- Click **Save Current State** to snapshot the running configuration back to the active project.
+- Click **Save & Load** to save the current state, then switch to a different project in one operation.
+
+---
+
+### Factory Configuration
+
+The Factory Config page provides a simplified, touch-friendly interface for viewing and editing machine parameters. It is designed for commissioning, setup, and maintenance tasks where operators need to adjust parameters without navigating the full tag editor in Settings.
+
+#### How It Works
+
+1. Navigate to **Factory Config** in the sidebar.
+2. Parameters are displayed grouped by their tag labels (categories), with collapsible sections.
+3. Each parameter shows its display name, current value, and engineering units.
+
+#### Editing Parameters
+
+1. Click **Edit** in the header bar (requires Engineer role or higher).
+2. The page enters edit mode — input controls appear next to each parameter:
+   - **Boolean** tags show a toggle switch.
+   - **Numeric** tags open a touch-friendly numeric keypad.
+   - **Enum** tags show a dropdown with the mapped values (e.g., "Off", "On", "Auto").
+   - **Text** tags open an alpha keyboard.
+3. Modify the values you need to change.
+4. Click **Save** to write all changes to the PLC in one batch, or **Cancel** to discard.
+
+> **Note:** Only tags that have been assigned the "Factory Config" label in Settings > Tags appear on this page. To add parameters, go to Settings > Tags and apply the "Factory Config" label to the relevant tags.
+
+---
+
+### Support and Diagnostics
+
+The Support page provides system monitoring, log viewing, and software update management.
+
+#### Support Dashboard
+
+The first tab shows a customizable support dashboard screen. Designers can add widgets (status indicators, gauges, alarm summaries) to display system health metrics. This screen works like any other HMI screen — enter design mode with Ctrl+E to add and configure widgets.
+
+#### Application Logs
+
+1. Switch to the **Application Logs** tab.
+2. View real-time application log entries from the backend.
+3. Filter by log level: **DEBUG**, **INFO**, **WARNING**, **ERROR**, **CRITICAL**.
+4. Search logs by keyword.
+5. Enable **Auto-refresh** to stream new log entries as they arrive.
+
+#### Software Update
+
+1. Switch to the **Software Update** tab.
+2. The page displays current system information: version, platform, uptime, and install path.
+3. To apply an update:
+   - Click **Select Update Package** and browse to a deployment archive (`.tar.gz` or `.zip`).
+   - The package is validated — the UI shows what's included (backend, frontend, wheels).
+   - Click **Apply Update** and confirm.
+   - The system applies the update and restarts automatically.
+4. The update is recorded in the audit trail.
+
+> See the [Updating an Existing Installation](#updating-an-existing-installation) section for full details on the update process and what is preserved.
+
+---
+
+### Configuring Integrations
+
+Integrations connect the HMI to third-party equipment like label printers, barcode readers, and file systems. Each integration runs as a background service that provides virtual tags visible throughout the HMI — on dashboards, in alarms, and in trends.
+
+#### Adding an Integration
+
+1. Go to **Settings** > **Integrations** tab.
+2. Click **+ Add Integration**.
+3. Choose an integration type from the available list (e.g., Zebra Printer, Cognex DataMan, FTP Hot Folder).
+4. Enter a **name** and configure the type-specific settings (IP address, port, poll interval, tag prefix).
+5. Click **Save**.
+
+#### Enabling and Disabling
+
+- Toggle the **Enabled** switch on an integration row to start or stop it.
+- Enabled integrations connect automatically on HMI startup.
+- The status column shows **Running**, **Stopped**, or **Error** with a message.
+
+#### Using Integration Tags
+
+Once an integration is running, its virtual tags appear in the tag list alongside PLC tags. You can:
+- Bind them to dashboard widgets (e.g., show printer status on a status indicator).
+- Enable trending to record historical data.
+- Configure alarms on integration tags (e.g., alert when a printer reports "Paper Out").
+
+For example, a Zebra Printer integration with prefix `zebra` provides tags like `zebra.status`, `zebra.paper_out`, `zebra.labels_in_queue` — all updated in real time.
+
+---
+
+### Settings Page Overview
+
+The Settings page is the central configuration hub, organized into tabs:
+
+| Tab | Purpose |
+|-----|---------|
+| **Branding** | Customize the application title, navigation title, favicon, and accent color theme |
+| **Preferences** | User display preferences (theme, accent color) |
+| **Tags** | Create, edit, delete, and bulk-manage data points. Configure data types, addresses, alarms, trending, simulation, and enum mappings |
+| **Data Sources** | Add and configure PLC connections (OPC-UA, Modbus, EtherNet/IP, MQTT, Simulation) with test and browse capabilities |
+| **Integrations** | Manage third-party equipment connections (printers, scanners, file watchers) |
+| **Users** | Create and manage user accounts, set roles and credentials |
+| **Audit Trail** | Browse all configuration changes with timestamps, usernames, actions, and source IPs. Filter and export to CSV |
 
 ---
 
