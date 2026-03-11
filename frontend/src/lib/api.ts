@@ -32,6 +32,7 @@ import type {
   ImportResultResponse,
   IntegrationType,
   IntegrationData,
+  LogEntry,
 } from '../types/index';
 
 // Using a relative URL (no "http://...") means requests go to the same host that
@@ -428,6 +429,33 @@ export const api = {
     const res = await fetch(`${BASE}/system/update/apply`, { method: 'POST', headers, body: form });
     if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.detail || `HTTP ${res.status}`); }
     return res.json();
+  },
+
+  // Application Logs
+  getLogs: (params?: { level?: string; search?: string; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.level) qs.set('level', params.level);
+    if (params?.search) qs.set('search', params.search);
+    if (params?.limit) qs.set('limit', String(params.limit));
+    const q = qs.toString();
+    return request<{ entries: LogEntry[]; total: number }>(`/logs/${q ? `?${q}` : ''}`);
+  },
+  exportLogsCsv: async (params?: { level?: string; search?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.level) qs.set('level', params.level);
+    if (params?.search) qs.set('search', params.search);
+    const q = qs.toString();
+    const res = await fetch(`${BASE}/logs/export/csv${q ? `?${q}` : ''}`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Export failed');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `hmi_logs_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   },
 
   // Health

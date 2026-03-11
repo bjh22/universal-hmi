@@ -29,6 +29,7 @@ const ReportsPage = lazy(() => import('./pages/ReportsPage').then(m => ({ defaul
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage').then(m => ({ default: m.ProjectsPage })));
 const FactoryConfigPage = lazy(() => import('./pages/FactoryConfigPage').then(m => ({ default: m.FactoryConfigPage })));
+const SupportPage = lazy(() => import('./pages/SupportPage').then(m => ({ default: m.SupportPage })));
 
 // PageLoader is the "fallback" UI shown while a lazy-loaded page is being downloaded.
 // React's <Suspense> component renders this automatically until the lazy component is ready.
@@ -144,6 +145,7 @@ export default function App() {
                   <Route path="/projects" element={<ProjectsPage user={auth.user} />} />
                   <Route path="/settings" element={<SettingsPage user={auth.user} tagValues={tagValues} />} />
                   <Route path="/factory-config" element={<FactoryConfigPage user={auth.user} tagValues={tagValues} />} />
+                  <Route path="/support" element={<SupportPage user={auth.user} tagValues={tagValues} alarms={alarms} userRole={auth.user?.role} />} />
                 </Routes>
               </Suspense>
             </AppShell>

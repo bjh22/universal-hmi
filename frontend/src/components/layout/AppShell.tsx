@@ -19,7 +19,7 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, TrendingUp, Bell, ClipboardList, BarChart3,
   Settings, User, Menu, X, Wifi, WifiOff, FolderOpen, CheckCheck,
-  AlertTriangle, AlertCircle, Info, Cog,
+  AlertTriangle, AlertCircle, Info, Cog, LifeBuoy,
 } from 'lucide-react';
 import type { UserData, AlarmData } from '../../types';
 import { api } from '../../lib/api';
@@ -48,6 +48,7 @@ const NAV_ITEMS = [
   { to: '/projects', icon: FolderOpen, label: 'Projects', roles: ['engineer', 'designer'] as string[] },
   { to: '/settings', icon: Settings, label: 'Settings', roles: ['engineer', 'designer'] as string[] },
   { to: '/factory-config', icon: Cog, label: 'Factory Config', roles: ['engineer', 'designer'] as string[] },
+  { to: '/support', icon: LifeBuoy, label: 'Support', roles: null },
 ];
 
 function SeverityIcon({ severity }: { severity: AlarmData['severity'] }) {
