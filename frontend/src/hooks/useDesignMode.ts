@@ -95,6 +95,9 @@ const DEFAULT_GRID: GridSettings = {
   canvasHeight: 1080,
 };
 
+// Fine-grained snap grid (in pixels) for widgets placed inside containers in grid mode
+export const CONTAINER_INNER_GRID = 8;
+
 // MAX_HISTORY caps the undo stack to prevent unbounded memory growth.
 // Each entry stores a full copy of the widget array, so 50 entries is a
 // reasonable balance between undo depth and memory usage.
@@ -224,7 +227,7 @@ export function useDesignMode(): DesignModeState {
       return prev.map(w => {
         if (w.id === id) return { ...w, x, y };
         // Move children along with container
-        if (target.type === 'container' && w.parentId === id) {
+        if ((target.type === 'container' || target.type === 'collapsible_container') && w.parentId === id) {
           return { ...w, x: w.x + dx, y: w.y + dy };
         }
         return w;
@@ -234,8 +237,13 @@ export function useDesignMode(): DesignModeState {
 
   const resizeWidget = useCallback((id: string, w: number, h: number) => {
     if (lockedIds.has(id)) return;
-    const minSize = layoutMode === 'absolute' ? 40 : 1;
-    commitWidgets(prev => prev.map(wi => wi.id === id ? { ...wi, w: Math.max(minSize, w), h: Math.max(minSize, h) } : wi), 'Resize widget');
+    commitWidgets(prev => {
+      const target = prev.find(wi => wi.id === id);
+      // Container children in grid mode use pixel sizes (min 40px)
+      const isChildInGrid = layoutMode === 'grid' && target?.parentId;
+      const minSize = (layoutMode === 'absolute' || isChildInGrid) ? 40 : 1;
+      return prev.map(wi => wi.id === id ? { ...wi, w: Math.max(minSize, w), h: Math.max(minSize, h) } : wi);
+    }, 'Resize widget');
   }, [commitWidgets, lockedIds, layoutMode]);
 
   // Clipboard
@@ -251,26 +259,21 @@ export function useDesignMode(): DesignModeState {
 
   const paste = useCallback(() => {
     if (clipboard.length === 0) return;
-    const offset = layoutMode === 'absolute' ? 20 : 1;
-    const pasted = clipboard.map(w => ({
-      ...w,
-      id: generateWidgetId(),
-      x: w.x + offset,
-      y: w.y + offset,
-    }));
+    const pasted = clipboard.map(w => {
+      // Container children in grid mode use pixel offsets
+      const offset = (layoutMode === 'absolute' || (layoutMode === 'grid' && w.parentId)) ? 20 : 1;
+      return { ...w, id: generateWidgetId(), x: w.x + offset, y: w.y + offset };
+    });
     commitWidgets(prev => [...prev, ...pasted], 'Paste widgets');
     setSelectedIds(new Set(pasted.map(w => w.id)));
   }, [clipboard, commitWidgets, layoutMode]);
 
   const duplicateSelected = useCallback(() => {
     const selected = widgets.filter(w => selectedIds.has(w.id));
-    const offset = layoutMode === 'absolute' ? 20 : 1;
-    const duped = selected.map(w => ({
-      ...w,
-      id: generateWidgetId(),
-      x: w.x + offset,
-      y: w.y + offset,
-    }));
+    const duped = selected.map(w => {
+      const offset = (layoutMode === 'absolute' || (layoutMode === 'grid' && w.parentId)) ? 20 : 1;
+      return { ...w, id: generateWidgetId(), x: w.x + offset, y: w.y + offset };
+    });
     commitWidgets(prev => [...prev, ...duped], 'Duplicate widgets');
     setSelectedIds(new Set(duped.map(w => w.id)));
   }, [widgets, selectedIds, commitWidgets, layoutMode]);

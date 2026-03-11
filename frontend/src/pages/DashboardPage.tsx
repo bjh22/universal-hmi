@@ -490,12 +490,12 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
           </div>
         </div>
       ) : (
-        /* Grid mode: CSS grid layout */
+        /* Grid mode: CSS grid layout — top-level widgets in grid, children inside containers */
         <div
           className="grid gap-4"
           style={{ gridTemplateColumns: 'repeat(12, 1fr)', gridAutoRows: '80px' }}
         >
-          {runtimeWidgets.map((w, index) => (
+          {runtimeWidgets.filter(w => !w.parentId).map((w, index) => (
             <RuntimeWidget key={w.id} widget={w} index={index} isAbsolute={false} tagValues={tagValues} alarms={alarms} userRole={userRole} allWidgets={runtimeWidgets} collapsedContainerIds={collapsedContainerIds} onToggleContainerCollapsed={toggleContainerCollapsed} />
           ))}
         </div>
@@ -678,6 +678,11 @@ const RuntimeWidget = memo(function RuntimeWidget({ widget: w, index, isAbsolute
     );
   }
 
+  const isContainer = w.type === 'container' || w.type === 'collapsible_container';
+  const children = isContainer && !isAbsolute
+    ? allWidgets.filter(c => c.parentId === w.id)
+    : [];
+
   return (
     <div
       style={{ gridColumn: `${w.x + 1} / span ${w.w}`, gridRow: `${w.y + 1} / span ${w.h}` }}
@@ -685,6 +690,10 @@ const RuntimeWidget = memo(function RuntimeWidget({ widget: w, index, isAbsolute
     >
       {showInfoBtn && <InfoButton description={infoDesc!} title={(w.props as Record<string, unknown>).title as string} />}
       <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} {...collapsibleProps} />
+      {/* Render container children with pixel-based positioning */}
+      {children.map((child, ci) => (
+        <RuntimeWidget key={child.id} widget={child} index={ci} isAbsolute tagValues={tagValues} alarms={alarms} userRole={userRole} allWidgets={allWidgets} collapsedContainerIds={collapsedContainerIds} onToggleContainerCollapsed={onToggleContainerCollapsed} />
+      ))}
     </div>
   );
 }, (prev, next) => {
