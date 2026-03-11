@@ -106,5 +106,21 @@ class DriverManager:
     def get_driver(self, datasource_id: int) -> ProtocolDriver | None:
         return self._drivers.get(datasource_id)
 
+    def trigger_reconnect(self, datasource_id: int):
+        """Trigger reconnection for a driver that has lost its connection at runtime.
+
+        Called by the polling loop when it detects that a previously-connected
+        driver is no longer responding (driver.connected flipped to False).
+        """
+        driver = self._drivers.get(datasource_id)
+        if not driver:
+            return
+        # Don't schedule a second reconnect if one is already running
+        existing = self._reconnect_tasks.get(datasource_id)
+        if existing and not existing.done():
+            return
+        logger.info(f"Scheduling reconnect for {driver.name} (data source {datasource_id})")
+        self._schedule_reconnect(datasource_id, driver)
+
 
 driver_manager = DriverManager()

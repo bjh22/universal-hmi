@@ -80,7 +80,7 @@ export default function App() {
   const [siteTitle, setSiteTitle] = useState('Industrial HMI');
   const [navTitle, setNavTitle] = useState('HMI');
   const [activeProjectName, setActiveProjectName] = useState<string | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Poll /api/health until the backend responds, then load branding + active project.
   const checkHealth = useCallback(async () => {

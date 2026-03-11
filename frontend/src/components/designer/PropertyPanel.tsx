@@ -334,7 +334,22 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
               <Field label="Container">
                 <select
                   value={widget.parentId || ''}
-                  onChange={e => onUpdateWidget(widget.id, { parentId: e.target.value || undefined })}
+                  onChange={e => {
+                    const newParentId = e.target.value || undefined;
+                    if (layoutMode === 'grid') {
+                      if (newParentId && !widget.parentId) {
+                        // Grouping: set default pixel position inside the container
+                        onUpdateWidget(widget.id, { parentId: newParentId, x: 8, y: 32, w: 160, h: 80 });
+                      } else if (!newParentId && widget.parentId) {
+                        // Ungrouping: convert back to grid units at row 0, col 0
+                        onUpdateWidget(widget.id, { parentId: undefined, x: 0, y: 0, w: 3, h: 1 });
+                      } else {
+                        onUpdateWidget(widget.id, { parentId: newParentId });
+                      }
+                    } else {
+                      onUpdateWidget(widget.id, { parentId: newParentId });
+                    }
+                  }}
                   className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white"
                 >
                   <option value="">None</option>
@@ -972,7 +987,7 @@ function ControlGroupEditor({ controls, onChange }: {
   const addControl = (type: string) => {
     const base: Record<string, unknown> = { type, tag: '', label: '' };
     if (type === 'button') { base.value = null; base.color = 'blue'; }
-    if (type === 'input') { base.min = 0; base.max = 100; base.step = 1; }
+    if (type === 'input') { base.min = 0; base.max = 100; base.step = 1; base.decimalPlaces = 1; }
     if (type === 'value') { base.decimalPlaces = 1; }
     if (type === 'dropdown') { base.options = []; }
     onChange([...controls, base as { type: string; tag: string; label: string; [k: string]: unknown }]);
@@ -1032,24 +1047,51 @@ function ControlGroupEditor({ controls, onChange }: {
           )}
 
           {ctrl.type === 'input' && (
-            <div className="flex gap-1">
-              <input type="number" value={ctrl.min as number ?? 0} onChange={e => updateControl(i, { min: Number(e.target.value) })}
-                placeholder="Min" className="w-14 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
-              <input type="number" value={ctrl.max as number ?? 100} onChange={e => updateControl(i, { max: Number(e.target.value) })}
-                placeholder="Max" className="w-14 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
-              <input type="number" value={ctrl.step as number ?? 1} onChange={e => updateControl(i, { step: Number(e.target.value) })}
-                placeholder="Step" className="w-14 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
-              <input type="text" value={(ctrl.units as string) || ''} onChange={e => updateControl(i, { units: e.target.value })}
-                placeholder="Units" className="w-14 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+            <div className="space-y-1">
+              <div className="flex gap-1">
+                <div className="flex-1">
+                  <label className="text-[9px] text-slate-500 block">Min</label>
+                  <input type="number" value={ctrl.min as number ?? 0} onChange={e => updateControl(i, { min: Number(e.target.value) })}
+                    className="w-full bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[9px] text-slate-500 block">Max</label>
+                  <input type="number" value={ctrl.max as number ?? 100} onChange={e => updateControl(i, { max: Number(e.target.value) })}
+                    className="w-full bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[9px] text-slate-500 block">Step</label>
+                  <input type="number" value={ctrl.step as number ?? 1} onChange={e => updateControl(i, { step: Number(e.target.value) })}
+                    className="w-full bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+                </div>
+              </div>
+              <div className="flex gap-1">
+                <div className="flex-1">
+                  <label className="text-[9px] text-slate-500 block">Units</label>
+                  <input type="text" value={(ctrl.units as string) || ''} onChange={e => updateControl(i, { units: e.target.value })}
+                    placeholder="—" className="w-full bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[9px] text-slate-500 block">Decimals</label>
+                  <input type="number" value={ctrl.decimalPlaces as number ?? 1} onChange={e => updateControl(i, { decimalPlaces: Number(e.target.value) })}
+                    min={0} max={6} className="w-full bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+                </div>
+              </div>
             </div>
           )}
 
           {ctrl.type === 'value' && (
             <div className="flex gap-1">
-              <input type="text" value={(ctrl.units as string) || ''} onChange={e => updateControl(i, { units: e.target.value })}
-                placeholder="Units" className="flex-1 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
-              <input type="number" value={ctrl.decimalPlaces as number ?? 1} onChange={e => updateControl(i, { decimalPlaces: Number(e.target.value) })}
-                min={0} max={6} placeholder="DP" className="w-12 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+              <div className="flex-1">
+                <label className="text-[9px] text-slate-500 block">Units</label>
+                <input type="text" value={(ctrl.units as string) || ''} onChange={e => updateControl(i, { units: e.target.value })}
+                  placeholder="—" className="w-full bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+              </div>
+              <div className="w-12">
+                <label className="text-[9px] text-slate-500 block">Decimals</label>
+                <input type="number" value={ctrl.decimalPlaces as number ?? 1} onChange={e => updateControl(i, { decimalPlaces: Number(e.target.value) })}
+                  min={0} max={6} className="w-full bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-white" />
+              </div>
             </div>
           )}
 

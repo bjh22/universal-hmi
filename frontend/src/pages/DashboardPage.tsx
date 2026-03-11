@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo, memo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Trash2, GripVertical } from 'lucide-react';
 import { api } from '../lib/api';
 import { WidgetRenderer } from '../components/widgets/WidgetRenderer';
 import { InfoButton } from '../components/widgets/InfoButton';
@@ -38,6 +38,8 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
   const [absScale, setAbsScale] = useState(1);
   const [absOffset, setAbsOffset] = useState({ x: 0, y: 0 });
   const [collapsedContainerIds, setCollapsedContainerIds] = useState<Set<string>>(new Set());
+  const [dragTabId, setDragTabId] = useState<number | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<number | null>(null);
 
   const toggleContainerCollapsed = useCallback((id: string, collapsed: boolean) => {
     setCollapsedContainerIds(prev => {
@@ -220,6 +222,26 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
     navigate('/');
   }, [activeScreen, refreshScreens]);
 
+  // Reorder screens via drag-and-drop
+  const handleTabDrop = useCallback(async (dragId: number, dropId: number) => {
+    if (dragId === dropId) return;
+    const oldIndex = screens.findIndex(s => s.id === dragId);
+    const newIndex = screens.findIndex(s => s.id === dropId);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const reordered = [...screens];
+    const [moved] = reordered.splice(oldIndex, 1);
+    reordered.splice(newIndex, 0, moved);
+    // Optimistic update
+    setScreens(reordered);
+    const items = reordered.map((s, i) => ({ id: s.id, sort_order: i }));
+    try {
+      await api.reorderScreens(items);
+      refreshScreens();
+    } catch {
+      refreshScreens();
+    }
+  }, [screens, refreshScreens]);
+
   // Keyboard shortcuts
   useEffect(() => {
     if (!dm.editing) {
@@ -391,12 +413,32 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
               <Link
                 key={s.id}
                 to={`/screen/${s.slug}`}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
+                draggable={isDesigner}
+                onDragStart={e => {
+                  setDragTabId(s.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                }}
+                onDragOver={e => {
+                  if (dragTabId == null || dragTabId === s.id) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  setDropTargetId(s.id);
+                }}
+                onDragLeave={() => { if (dropTargetId === s.id) setDropTargetId(null); }}
+                onDrop={e => {
+                  e.preventDefault();
+                  if (dragTabId != null) handleTabDrop(dragTabId, s.id);
+                  setDragTabId(null);
+                  setDropTargetId(null);
+                }}
+                onDragEnd={() => { setDragTabId(null); setDropTargetId(null); }}
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
                   activeScreen?.id === s.id
                     ? 'bg-[var(--hmi-accent)] text-white'
                     : 'bg-slate-800 text-slate-400 hover:text-slate-200'
-                }`}
+                } ${dragTabId === s.id ? 'opacity-40' : ''} ${dropTargetId === s.id ? 'ring-2 ring-blue-400' : ''}`}
               >
+                {isDesigner && <GripVertical size={12} className="text-slate-600 flex-shrink-0 cursor-grab" />}
                 {s.name}
               </Link>
             ))}
@@ -455,13 +497,13 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
           </div>
         </div>
       ) : (
-        /* Grid mode: CSS grid layout */
+        /* Grid mode: CSS grid layout — top-level widgets in grid, children inside containers */
         <div
           className="grid gap-4"
           style={{ gridTemplateColumns: 'repeat(12, 1fr)', gridAutoRows: '80px' }}
         >
-          {runtimeWidgets.map((w, index) => (
-            <RuntimeWidget key={w.id} widget={w} index={index} isAbsolute={false} tagValues={tagValues} alarms={alarms} userRole={userRole} widgetMap={widgetMap} collapsedContainerIds={collapsedContainerIds} onToggleContainerCollapsed={toggleContainerCollapsed} />
+          {runtimeWidgets.filter(w => !w.parentId).map((w, index) => (
+            <RuntimeWidget key={w.id} widget={w} index={index} isAbsolute={false} tagValues={tagValues} alarms={alarms} userRole={userRole} allWidgets={runtimeWidgets} collapsedContainerIds={collapsedContainerIds} onToggleContainerCollapsed={toggleContainerCollapsed} />
           ))}
         </div>
       )}
@@ -643,6 +685,11 @@ const RuntimeWidget = memo(function RuntimeWidget({ widget: w, index, isAbsolute
     );
   }
 
+  const isContainer = w.type === 'container' || w.type === 'collapsible_container';
+  const children = isContainer && !isAbsolute
+    ? allWidgets.filter(c => c.parentId === w.id)
+    : [];
+
   return (
     <div
       style={{ gridColumn: `${w.x + 1} / span ${w.w}`, gridRow: `${w.y + 1} / span ${w.h}` }}
@@ -650,6 +697,10 @@ const RuntimeWidget = memo(function RuntimeWidget({ widget: w, index, isAbsolute
     >
       {showInfoBtn && <InfoButton description={infoDesc!} title={(w.props as Record<string, unknown>).title as string} />}
       <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} {...collapsibleProps} />
+      {/* Render container children with pixel-based positioning */}
+      {children.map((child, ci) => (
+        <RuntimeWidget key={child.id} widget={child} index={ci} isAbsolute tagValues={tagValues} alarms={alarms} userRole={userRole} allWidgets={allWidgets} collapsedContainerIds={collapsedContainerIds} onToggleContainerCollapsed={onToggleContainerCollapsed} />
+      ))}
     </div>
   );
 }, (prev, next) => {

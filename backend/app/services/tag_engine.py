@@ -449,13 +449,29 @@ class TagEngine:
             changed = {}
             for ds_id, tag_list in ds_tags.items():
                 driver = self._driver_manager.get_driver(ds_id)
-                if not driver or not driver.connected:
+                if not driver:
+                    continue
+                if not driver.connected:
+                    # Driver lost connection — trigger reconnection if not already running
+                    self._driver_manager.trigger_reconnect(ds_id)
+                    # Mark affected tags as bad quality so the UI shows stale data
+                    for tag_name, _ in tag_list:
+                        tv = self._values.get(tag_name)
+                        if tv and tv.quality != "bad":
+                            tv.quality = "bad"
+                            changed[tag_name] = tv.to_dict()
                     continue
                 addresses = [addr for _, addr in tag_list]
                 try:
                     values = await driver.read_tags(addresses)
                 except Exception as e:
-                    logger.debug(f"Failed to poll data source {ds_id}: {e}")
+                    logger.warning(f"Failed to poll data source {ds_id}: {e}")
+                    # Mark driver disconnected so next cycle triggers reconnect
+                    driver.connected = False
+                    continue
+                # If the driver marked itself disconnected during read_tags
+                # (e.g. consecutive failures), trigger reconnect on next cycle
+                if not driver.connected:
                     continue
                 for tag_name, addr in tag_list:
                     if addr not in values or values[addr] is None:
