@@ -37,7 +37,7 @@ class AuditLog(Base):
     timestamp: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, index=True, default=lambda: datetime.now(timezone.utc)
     )
-    user: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    action: Mapped[AuditAction] = mapped_column(Enum(AuditAction), nullable=False)
+    user: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    action: Mapped[AuditAction] = mapped_column(Enum(AuditAction), nullable=False, index=True)
     details: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_ip: Mapped[str | None] = mapped_column(String(50), nullable=True)

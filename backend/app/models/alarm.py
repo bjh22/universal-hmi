@@ -41,7 +41,7 @@ class Alarm(Base):
     message: Mapped[str] = mapped_column(String(500), nullable=False)
     severity: Mapped[AlarmSeverity] = mapped_column(Enum(AlarmSeverity), nullable=False)
     state: Mapped[AlarmState] = mapped_column(
-        Enum(AlarmState), default=AlarmState.ACTIVE_UNACKED
+        Enum(AlarmState), default=AlarmState.ACTIVE_UNACKED, index=True
     )
     triggered_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)

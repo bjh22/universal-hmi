@@ -78,8 +78,20 @@ export function useWebSocket() {
       //   - keepalive: periodic ping to prevent the connection from timing out
       if (msg.type === 'snapshot' || msg.type === 'tag_update') {
         const data = msg.data as Record<string, TagValue>;
-        // Spread into previous state so we merge new values with existing ones
-        setTagValues((prev) => ({ ...prev, ...data }));
+        // Merge new values into previous state, but only create a new object
+        // if something actually changed. On low-end hardware, avoiding unnecessary
+        // object spreads reduces GC pressure significantly when most tags are stable.
+        setTagValues((prev) => {
+          // Snapshots replace the entire state
+          if (msg.type === 'snapshot') return { ...prev, ...data };
+          // For deltas, check if any value actually differs
+          let changed = false;
+          for (const key in data) {
+            if (prev[key] !== data[key]) { changed = true; break; }
+          }
+          if (!changed) return prev;
+          return { ...prev, ...data };
+        });
       } else if (msg.type === 'alarms_snapshot') {
         setAlarms(msg.data as AlarmData[]);
       } else if (msg.type === 'alarm') {

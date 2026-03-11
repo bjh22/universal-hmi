@@ -322,9 +322,9 @@ class TagEngine:
                 if not hasattr(q, '_drop_count'):
                     q._drop_count = 0  # type: ignore[attr-defined]
                 q._drop_count += 1  # type: ignore[attr-defined]
-                if q._drop_count >= 50:  # type: ignore[attr-defined]
+                if q._drop_count >= 10:  # type: ignore[attr-defined]
                     dead_queues.append(q)
-                    logger.warning("Removing unresponsive WebSocket subscriber (50 consecutive drops)")
+                    logger.warning("Removing unresponsive WebSocket subscriber (10 consecutive drops)")
         for q in dead_queues:
             self._subscribers.remove(q)
 
@@ -334,7 +334,7 @@ class TagEngine:
         and each client reads from its own queue. This is more efficient than
         polling — clients get updates instantly without repeatedly asking "anything new?"
         """
-        q: asyncio.Queue = asyncio.Queue(maxsize=100)
+        q: asyncio.Queue = asyncio.Queue(maxsize=50)
         self._subscribers.append(q)
         return q
 
