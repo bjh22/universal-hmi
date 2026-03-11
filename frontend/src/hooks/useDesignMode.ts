@@ -209,10 +209,8 @@ export function useDesignMode(): DesignModeState {
   const deleteSelected = useCallback(() => {
     const deletingIds = new Set([...selectedIds].filter(id => !lockedIds.has(id)));
     commitWidgets(prev => prev
-      // Remove selected (non-locked) widgets
-      .filter(w => !deletingIds.has(w.id))
-      // Ungroup children of deleted containers
-      .map(w => w.parentId && deletingIds.has(w.parentId) ? { ...w, parentId: undefined } : w),
+      // Remove selected (non-locked) widgets AND their children
+      .filter(w => !deletingIds.has(w.id) && !(w.parentId && deletingIds.has(w.parentId))),
     'Delete widgets');
     setSelectedIds(new Set());
   }, [commitWidgets, selectedIds, lockedIds]);
