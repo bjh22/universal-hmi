@@ -8,6 +8,7 @@ This guide covers the common development tasks you'll encounter when extending t
 - [Creating a New Widget](#creating-a-new-widget)
 - [Adding a Backend API Endpoint](#adding-a-backend-api-endpoint)
 - [Adding a Database Model](#adding-a-database-model)
+- [Creating a Plugin Integration](#creating-a-plugin-integration)
 - [Frontend Patterns](#frontend-patterns)
 - [Backend Patterns](#backend-patterns)
 
@@ -383,6 +384,322 @@ createDiagnostic: (data: CreateDiagnosticPayload) =>
 ```
 
 The `request<T>()` helper automatically adds the JWT Authorization header and handles error responses.
+
+---
+
+## Creating a Plugin Integration
+
+The plugin integration system lets you add support for external equipment (printers, barcode readers, file watchers, etc.) without modifying core application code. Each integration is a self-contained Python package that is automatically discovered at startup.
+
+### Architecture Overview
+
+```
+backend/app/integrations/
+├── __init__.py
+├── base.py                  # IntegrationBase abstract class
+├── manager.py               # IntegrationManager (discovery, lifecycle)
+├── zebra_printer/           # Example: Zebra label printer
+│   ├── __init__.py          # Exports integration_class
+│   ├── integration.py       # ZebraPrinterIntegration(IntegrationBase)
+│   └── router.py            # Custom API endpoints
+├── cognex_dataman/          # Example: Cognex barcode reader
+│   ├── __init__.py
+│   ├── integration.py
+│   └── router.py
+└── ftp_hot_folder/          # Example: FTP file watcher
+    ├── __init__.py
+    └── integration.py
+```
+
+**How it works:**
+
+1. **Discovery** — On startup, `IntegrationManager.discover()` scans all subpackages under `app/integrations/` using `pkgutil.iter_modules()`. Each package must export an `integration_class` attribute pointing to its `IntegrationBase` subclass.
+2. **Configuration** — Integration instances and their configs are stored in the `integrations` database table. Admins can add, enable/disable, and configure instances via the Settings page.
+3. **Virtual tags** — Each integration declares tags via `get_tag_definitions()`. These are registered into the `TagEngine` at startup and broadcast via WebSocket like any other tag.
+4. **Custom API routes** — Integrations can optionally expose API endpoints via `get_router()`. These are mounted into FastAPI dynamically.
+5. **Lifecycle** — The manager handles start, stop, enable/disable, and status tracking. Integrations manage their own reconnection logic.
+
+### Step 1: Create the integration package
+
+Create a new directory under `backend/app/integrations/`. For this example, we'll build a "Scale Reader" integration that reads weight from an industrial scale over TCP.
+
+Create `backend/app/integrations/scale_reader/__init__.py`:
+
+```python
+from app.integrations.scale_reader.integration import ScaleReaderIntegration
+
+integration_class = ScaleReaderIntegration
+```
+
+The `integration_class` attribute is required — the manager looks for this to discover your integration.
+
+### Step 2: Implement the integration class
+
+Create `backend/app/integrations/scale_reader/integration.py`:
+
+```python
+import asyncio
+import logging
+
+from app.integrations.base import IntegrationBase
+from app.services.tag_engine import TagEngine
+
+logger = logging.getLogger(__name__)
+
+
+class ScaleReaderIntegration(IntegrationBase):
+    # --- Class-level metadata (required) ---
+    type_name = "scale_reader"           # Unique identifier stored in DB
+    display_name = "Scale Reader"        # Shown in the UI
+    description = "TCP integration for industrial scales. Reads weight values."
+    default_config = {                   # Initial config when a user adds this type
+        "host": "192.168.1.50",
+        "port": 4001,
+        "poll_interval_seconds": 1,
+        "tag_prefix": "scale",
+    }
+
+    # Define the virtual tags this integration provides
+    TAG_DEFINITIONS = [
+        {"suffix": "status", "data_type": "string", "description": "Connection status"},
+        {"suffix": "weight", "data_type": "float", "description": "Current weight (kg)"},
+        {"suffix": "stable", "data_type": "bool", "description": "Weight is stable"},
+    ]
+
+    def __init__(self, name: str, config: dict, tag_engine: TagEngine):
+        super().__init__(name, config, tag_engine)
+        self._poll_task: asyncio.Task | None = None
+        self._reader: asyncio.StreamReader | None = None
+        self._writer: asyncio.StreamWriter | None = None
+
+    @property
+    def _prefix(self) -> str:
+        return self.config.get("tag_prefix", "scale")
+
+    def get_tag_definitions(self) -> list[dict]:
+        """Return virtual tag definitions with the configured prefix."""
+        prefix = self._prefix
+        return [
+            {
+                "name": f"{prefix}.{td['suffix']}",
+                "data_type": td["data_type"],
+                "description": td["description"],
+                "access_mode": "read",
+            }
+            for td in self.TAG_DEFINITIONS
+        ]
+
+    async def start(self):
+        """Connect to the scale and begin polling."""
+        host = self.config.get("host", "192.168.1.50")
+        port = self.config.get("port", 4001)
+        try:
+            self._reader, self._writer = await asyncio.wait_for(
+                asyncio.open_connection(host, port), timeout=5.0
+            )
+            self.connected = True
+            self.status_message = None
+            self._set_tag(f"{self._prefix}.status", "Connected")
+            self._poll_task = asyncio.create_task(self._poll_loop())
+        except Exception as e:
+            self.connected = False
+            self.status_message = str(e)
+            self._set_tag(f"{self._prefix}.status", f"Error: {e}")
+            # Start reconnect loop
+            self._poll_task = asyncio.create_task(self._reconnect_loop())
+
+    async def stop(self):
+        """Disconnect and cancel background tasks."""
+        if self._poll_task:
+            self._poll_task.cancel()
+            try:
+                await self._poll_task
+            except asyncio.CancelledError:
+                pass
+            self._poll_task = None
+        if self._writer:
+            self._writer.close()
+            self._writer = None
+            self._reader = None
+        self.connected = False
+        self._set_tag(f"{self._prefix}.status", "Stopped")
+
+    async def _poll_loop(self):
+        interval = self.config.get("poll_interval_seconds", 1)
+        while True:
+            try:
+                await self._read_weight()
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.warning(f"Scale poll error: {e}")
+                self.connected = False
+                self._set_tag(f"{self._prefix}.status", f"Error: {e}")
+                # Switch to reconnect
+                self._poll_task = asyncio.create_task(self._reconnect_loop())
+                return
+            await asyncio.sleep(interval)
+
+    async def _reconnect_loop(self):
+        delay = 2
+        host = self.config.get("host", "192.168.1.50")
+        port = self.config.get("port", 4001)
+        while True:
+            await asyncio.sleep(delay)
+            try:
+                self._reader, self._writer = await asyncio.wait_for(
+                    asyncio.open_connection(host, port), timeout=5.0
+                )
+                self.connected = True
+                self._set_tag(f"{self._prefix}.status", "Connected")
+                self._poll_task = asyncio.create_task(self._poll_loop())
+                return
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                delay = min(delay * 2, 60)
+
+    async def _read_weight(self):
+        """Read weight from the scale (protocol-specific)."""
+        # Example: send query command and parse response
+        prefix = self._prefix
+        self._writer.write(b"W\r\n")
+        await self._writer.drain()
+        data = await asyncio.wait_for(self._reader.readline(), timeout=5.0)
+        response = data.decode(errors="replace").strip()
+        # Parse: "ST,GS,  12.345,kg" -> weight=12.345, stable=True
+        parts = response.split(",")
+        stable = parts[0].strip() == "ST" if len(parts) > 0 else False
+        weight = float(parts[2].strip()) if len(parts) > 2 else 0.0
+        self._set_tag(f"{prefix}.weight", weight)
+        self._set_tag(f"{prefix}.stable", stable)
+```
+
+**Key patterns:**
+
+- Inherit from `IntegrationBase` and set the four class attributes: `type_name`, `display_name`, `description`, `default_config`
+- Implement `start()` and `stop()` (both abstract and required)
+- Use `self._set_tag(name, value)` to push values into the TagEngine — they are immediately available via WebSocket
+- Handle reconnection with exponential backoff in a separate async task
+- `self.connected` and `self.status_message` are tracked by the manager for UI display
+
+### Step 3: Add custom API endpoints (optional)
+
+If your integration needs endpoints beyond tag reads (e.g., sending commands, querying device info), create a router.
+
+Create `backend/app/integrations/scale_reader/router.py`:
+
+```python
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+
+from app.api.deps import require_role
+from app.models.user import User, UserRole
+
+if TYPE_CHECKING:
+    from app.integrations.scale_reader.integration import ScaleReaderIntegration
+
+
+class TareBody(BaseModel):
+    value: float = 0.0
+
+
+def create_router(integration: "ScaleReaderIntegration") -> APIRouter:
+    """Factory: create a router bound to a specific integration instance."""
+    router = APIRouter(
+        prefix="/api/integrations/scale",
+        tags=["integrations-scale"],
+    )
+
+    @router.get("/status")
+    async def get_status():
+        return {
+            "connected": integration.connected,
+            "status_message": integration.status_message,
+        }
+
+    @router.post("/tare")
+    async def tare(
+        body: TareBody,
+        _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+    ):
+        if not integration.connected:
+            raise HTTPException(503, "Scale not connected")
+        # Send tare command (device-specific)
+        await integration.send_tare(body.value)
+        return {"ok": True}
+
+    return router
+```
+
+Then wire it up in the integration class:
+
+```python
+from app.integrations.scale_reader.router import create_router
+
+class ScaleReaderIntegration(IntegrationBase):
+    # ...
+
+    def get_router(self):
+        return create_router(self)
+```
+
+The router uses a factory pattern: `create_router()` receives the live integration instance, so route handlers can call methods directly on it. The manager mounts the router into FastAPI when the integration starts.
+
+### Step 4: That's it — no registration needed
+
+The integration is automatically discovered because `IntegrationManager.discover()` iterates all subpackages of `app/integrations/`. There is no central registry to update. Just restart the application and the new integration type appears in the available types list.
+
+**The lifecycle at startup:**
+
+1. `IntegrationManager.discover()` finds all packages under `app/integrations/`
+2. For each package, it imports the module and reads `integration_class`
+3. The class is registered in an in-memory `_registry` dict keyed by `type_name`
+4. `load_and_start()` queries the `integrations` table for enabled instances
+5. For each enabled instance, it instantiates the class, registers virtual tags, mounts the router, and calls `start()`
+
+### IntegrationBase reference
+
+| Method / Attribute | Required | Description |
+|---|---|---|
+| `type_name` | Yes | Unique string identifier (e.g., `"zebra_printer"`) |
+| `display_name` | Yes | Human-readable name for the UI |
+| `description` | Yes | One-line description shown in the integration picker |
+| `default_config` | Yes | Default config dict for new instances |
+| `start()` | Yes | Connect to the device, begin polling |
+| `stop()` | Yes | Disconnect, cancel tasks, release resources |
+| `configure(config)` | No | Runtime reconfiguration (default: stop + update config + start) |
+| `get_router()` | No | Return a FastAPI `APIRouter` or `None` |
+| `get_tag_definitions()` | No | Return list of virtual tag dicts |
+| `_set_tag(name, value)` | — | Helper: push a value into TagEngine for broadcast |
+
+### Database model
+
+Integration configurations are stored in the `integrations` table (`backend/app/models/integration.py`):
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | int | Primary key |
+| `type_name` | string(100) | Matches `IntegrationBase.type_name` |
+| `name` | string(200) | User-given instance name (unique) |
+| `enabled` | bool | Whether to start on boot |
+| `config` | text (JSON) | Instance configuration |
+| `status` | string(20) | `stopped`, `running`, or `error` |
+| `status_message` | text | Error message or null |
+| `created_at` | datetime | Creation timestamp (UTC) |
+| `updated_at` | datetime | Last modification timestamp (UTC) |
+
+### Existing integrations
+
+| Integration | Type Name | Protocol | Tags Provided |
+|-------------|-----------|----------|---------------|
+| **Zebra Printer** | `zebra_printer` | TCP/9100, ZPL | status, labels_in_queue, print_speed, darkness, head_open, paper_out, ribbon_out, paused |
+| **Cognex DataMan** | `cognex_dataman` | TCP, DMCC | status, last_result, last_result_time, total_reads, device_type, firmware |
+| **FTP Hot Folder** | `ftp_hot_folder` | FTP/filesystem | (file monitoring) |
 
 ---
 
