@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { ClipboardList, Download, Plus, Trash2, Edit, Copy, Upload, Save, X, Search, History, Shield, ChevronDown, ChevronRight, Tag as TagIcon } from 'lucide-react';
+import { ClipboardList, Download, Plus, Trash2, Edit, Copy, Upload, Save, X, Search, History, Shield, ChevronDown, ChevronRight, Tag as TagIcon, ArrowLeft } from 'lucide-react';
 import { api } from '../lib/api';
 import { getTagDisplayName, buildTagDisplayNameMap } from '../lib/tagDisplayName';
 import { NumericKeypad, AlphaKeyboard } from '../components/widgets/TouchInput';
@@ -9,7 +9,72 @@ interface Props {
   user: UserData | null;
 }
 
-const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-3 text-sm text-white outline-none focus:border-blue-500 min-h-[44px]';
+const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-3 text-sm text-white outline-none focus:border-blue-500 min-h-[48px]';
+
+// ─── Custom Confirm Dialog ───
+function ConfirmDialog({ title, message, confirmLabel, cancelLabel, variant, onConfirm, onCancel }: {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  variant?: 'danger' | 'success' | 'default';
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const confirmColors = variant === 'danger'
+    ? 'bg-red-600 hover:bg-red-700 text-white'
+    : variant === 'success'
+      ? 'bg-green-600 hover:bg-green-700 text-white'
+      : 'bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-dark)] text-white';
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50" onClick={onCancel}>
+      <div className="bg-slate-800 rounded-t-2xl sm:rounded-xl border border-slate-700 w-full sm:max-w-md p-6" onClick={e => e.stopPropagation()}>
+        <h2 className="text-lg font-bold text-slate-100 mb-3">{title}</h2>
+        <div className="text-base text-slate-300 whitespace-pre-wrap mb-6 max-h-[50vh] overflow-y-auto">{message}</div>
+        <div className="flex flex-col gap-3">
+          <button
+            onClick={onConfirm}
+            className={`w-full py-4 min-h-[56px] rounded-lg text-base font-medium active:scale-95 transition-transform ${confirmColors}`}
+          >
+            {confirmLabel || 'Confirm'}
+          </button>
+          <button
+            onClick={onCancel}
+            className="w-full py-4 min-h-[56px] bg-slate-700 hover:bg-slate-600 rounded-lg text-base text-slate-300 active:scale-95 transition-transform"
+          >
+            {cancelLabel || 'Cancel'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Custom Alert Dialog (single button) ───
+function AlertDialog({ title, message, variant, onClose }: {
+  title: string;
+  message: string;
+  variant?: 'success' | 'error';
+  onClose: () => void;
+}) {
+  const iconColor = variant === 'success' ? 'text-green-400' : variant === 'error' ? 'text-red-400' : 'text-slate-300';
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-slate-800 rounded-t-2xl sm:rounded-xl border border-slate-700 w-full sm:max-w-md p-6" onClick={e => e.stopPropagation()}>
+        <h2 className={`text-lg font-bold mb-3 ${iconColor}`}>{title}</h2>
+        <p className="text-base text-slate-300 mb-6">{message}</p>
+        <button
+          onClick={onClose}
+          className="w-full py-4 min-h-[56px] bg-slate-700 hover:bg-slate-600 rounded-lg text-base text-slate-300 active:scale-95 transition-transform"
+        >
+          OK
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // ─── Helper: parse a string into a typed value ───
 function parseTypedValue(val: string): unknown {
@@ -120,7 +185,7 @@ function SetpointEditor({ value, onChange, tags }: {
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <label className="text-xs text-slate-400 font-medium">Setpoints</label>
-        <button type="button" onClick={addRow} className="text-sm text-blue-400 hover:text-blue-300 min-h-[44px] px-2 active:scale-95 transition-transform">+ Add setpoint</button>
+        <button type="button" onClick={addRow} className="text-sm text-blue-400 hover:text-blue-300 min-h-[48px] px-2 active:scale-95 transition-transform">+ Add setpoint</button>
       </div>
       {entries.length === 0 && <p className="text-xs text-slate-500 italic">No setpoints defined</p>}
       {grouped.map(({ group, items }) => (
@@ -129,9 +194,9 @@ function SetpointEditor({ value, onChange, tags }: {
             <button
               type="button"
               onClick={() => toggleGroup(group)}
-              className="flex items-center gap-1.5 w-full py-2 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors"
+              className="flex items-center gap-2 w-full py-3 px-4 min-h-[48px] text-sm font-medium text-slate-400 hover:text-slate-200 active:bg-slate-700 rounded-lg cursor-pointer transition-colors"
             >
-              {collapsed.has(group) ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+              {collapsed.has(group) ? <ChevronRight size={20} /> : <ChevronDown size={20} />}
               {group}
               <span className="text-slate-600 ml-1">({items.length})</span>
             </button>
@@ -165,7 +230,7 @@ function SetpointEditor({ value, onChange, tags }: {
                 <button
                   type="button"
                   onClick={() => onChange({ ...value, [key]: !Boolean(val) })}
-                  className="w-32 min-h-[44px] flex items-center gap-2 px-3 py-2"
+                  className="w-32 min-h-[48px] flex items-center gap-2 px-3 py-2"
                 >
                   <div className={`w-10 h-5 rounded-full transition-colors relative flex-shrink-0 ${Boolean(val) ? 'bg-green-500' : 'bg-slate-600'}`}>
                     <span className="absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow-sm"
@@ -179,7 +244,7 @@ function SetpointEditor({ value, onChange, tags }: {
                 <select
                   value={String(val ?? '')}
                   onChange={e => updateValue(key, e.target.value)}
-                  className="w-32 min-h-[44px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white hover:border-blue-500 transition-all"
+                  className="w-32 min-h-[48px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white hover:border-blue-500 transition-all"
                 >
                   <option value="">Select…</option>
                   {Object.entries(enumMap!).map(([k, label]) => (
@@ -190,7 +255,7 @@ function SetpointEditor({ value, onChange, tags }: {
                 <button
                   type="button"
                   onClick={() => openKeypad(key)}
-                  className="w-32 min-h-[44px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white text-left hover:border-blue-500 active:scale-95 transition-all"
+                  className="w-32 min-h-[48px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white text-left hover:border-blue-500 active:scale-95 transition-all"
                 >
                   {val !== '' && val != null ? (
                     <span>{String(val)}</span>
@@ -199,7 +264,7 @@ function SetpointEditor({ value, onChange, tags }: {
                   )}
                 </button>
               )}
-              <button type="button" onClick={() => removeRow(key)} className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:text-red-400 active:scale-95 transition-transform">
+              <button type="button" onClick={() => removeRow(key)} className="p-2 min-h-[48px] min-w-[48px] flex items-center justify-center text-slate-500 hover:text-red-400 active:scale-95 transition-transform">
                 <X size={18} />
               </button>
             </div>
@@ -251,24 +316,24 @@ function JobSetpointDisplay({ setpoints, tags }: { setpoints: string | null; tag
           {grouped.length > 1 && (
             <button
               onClick={() => toggleGroup(group)}
-              className="flex items-center gap-1.5 w-full py-1.5 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors"
+              className="flex items-center gap-2 w-full py-3 px-4 min-h-[48px] text-sm font-medium text-slate-400 hover:text-slate-200 active:bg-slate-700 rounded-lg cursor-pointer transition-colors"
             >
-              {collapsed.has(group) ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+              {collapsed.has(group) ? <ChevronRight size={20} /> : <ChevronDown size={20} />}
               {group}
               <span className="text-slate-600 ml-1">({items.length})</span>
             </button>
           )}
           {!collapsed.has(group) && (
             <div className="bg-slate-900 rounded-lg border border-slate-700 overflow-hidden">
-              <table className="w-full text-sm">
+              <table className="w-full text-base">
                 <tbody>
                   {items.map(([k, v]) => {
                     const tag = tags.find(t => t.name === k);
                     const isBool = tag?.data_type === 'bool';
                     return (
                       <tr key={k} className="border-b border-slate-700/50">
-                        <td className="px-4 py-3 text-slate-300 text-sm">{getTagDisplayName(k, tags)}</td>
-                        <td className="px-4 py-3 text-right text-sm">
+                        <td className="px-4 py-3 text-slate-300 text-base">{getTagDisplayName(k, tags)}</td>
+                        <td className="px-4 py-3 text-right text-base">
                           {isBool ? (
                             <span className={`font-medium ${Boolean(v) ? 'text-green-400' : 'text-slate-500'}`}>
                               {Boolean(v) ? 'ON' : 'OFF'}
@@ -331,7 +396,7 @@ function ConditionsEditor({ value, onChange, tags }: {
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <label className="text-xs text-slate-400 font-medium">Download Conditions</label>
-        <button type="button" onClick={addGuard} className="text-sm text-blue-400 hover:text-blue-300 min-h-[44px] px-2 active:scale-95 transition-transform">+ Add guard</button>
+        <button type="button" onClick={addGuard} className="text-sm text-blue-400 hover:text-blue-300 min-h-[48px] px-2 active:scale-95 transition-transform">+ Add guard</button>
       </div>
       <p className="text-[10px] text-slate-500">Tag must equal value before download is allowed</p>
       {guards.length === 0 && <p className="text-xs text-slate-500 italic">No conditions (always allowed)</p>}
@@ -353,7 +418,7 @@ function ConditionsEditor({ value, onChange, tags }: {
           <button
             type="button"
             onClick={() => openKeypad(idx)}
-            className="w-28 min-h-[44px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white text-left hover:border-blue-500 active:scale-95 transition-all"
+            className="w-28 min-h-[48px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white text-left hover:border-blue-500 active:scale-95 transition-all"
           >
             {g.value !== '' && g.value != null ? (
               <span>{String(g.value)}</span>
@@ -361,7 +426,7 @@ function ConditionsEditor({ value, onChange, tags }: {
               <span className="text-slate-500">Tap to set</span>
             )}
           </button>
-          <button type="button" onClick={() => removeGuard(idx)} className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:text-red-400 active:scale-95 transition-transform">
+          <button type="button" onClick={() => removeGuard(idx)} className="p-2 min-h-[48px] min-w-[48px] flex items-center justify-center text-slate-500 hover:text-red-400 active:scale-95 transition-transform">
             <X size={18} />
           </button>
         </div>
@@ -408,7 +473,7 @@ function HistoryDialog({ jobId, jobName, onRestore, onClose }: {
       <div className="bg-slate-800 rounded-t-2xl sm:rounded-xl border border-slate-700 w-full sm:max-w-2xl max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-slate-100">Version History: {jobName}</h2>
-          <button onClick={onClose} className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-white active:scale-95 transition-transform"><X size={22} /></button>
+          <button onClick={onClose} className="p-2 min-h-[48px] min-w-[48px] flex items-center justify-center text-slate-400 hover:text-white active:scale-95 transition-transform"><X size={22} /></button>
         </div>
         {loading && <p className="text-slate-400 text-sm py-4 text-center">Loading...</p>}
         {!loading && history.length === 0 && (
@@ -433,7 +498,7 @@ function HistoryDialog({ jobId, jobName, onRestore, onClose }: {
                   </pre>
                   <button
                     onClick={() => { onRestore(h.setpoints); onClose(); }}
-                    className="px-4 py-3 min-h-[44px] bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-dark)] text-white rounded-lg text-sm active:scale-95 transition-transform"
+                    className="px-4 py-3 min-h-[48px] bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-dark)] text-white rounded-lg text-sm active:scale-95 transition-transform"
                   >
                     Restore this version
                   </button>
@@ -443,7 +508,7 @@ function HistoryDialog({ jobId, jobName, onRestore, onClose }: {
           ))}
         </div>
         <div className="flex justify-end mt-4">
-          <button onClick={onClose} className="px-5 py-3 min-h-[44px] bg-slate-700 rounded-lg text-sm text-slate-300 active:scale-95 transition-transform">Close</button>
+          <button onClick={onClose} className="px-5 py-3 min-h-[48px] bg-slate-700 rounded-lg text-sm text-slate-300 active:scale-95 transition-transform">Close</button>
         </div>
       </div>
     </div>
@@ -460,6 +525,7 @@ function UploadDialog({ tags, onClose, onUploaded }: {
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [tagSearch, setTagSearch] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const writableTags = useMemo(() =>
     tags.filter(t => t.access_mode !== 'read' && !t.name.startsWith('$')),
@@ -495,12 +561,13 @@ function UploadDialog({ tags, onClose, onUploaded }: {
   const handleUpload = async () => {
     if (!name.trim() || selectedTags.size === 0) return;
     setUploading(true);
+    setUploadError(null);
     try {
       await api.uploadJobFromMachine(name, Array.from(selectedTags));
       onUploaded();
       onClose();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : String(err));
+      setUploadError(err instanceof Error ? err.message : String(err));
     } finally {
       setUploading(false);
     }
@@ -511,7 +578,7 @@ function UploadDialog({ tags, onClose, onUploaded }: {
       <div className="bg-slate-800 rounded-t-2xl sm:rounded-xl border border-slate-700 w-full sm:max-w-lg max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-slate-100">Capture from Machine</h2>
-          <button onClick={onClose} className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-white active:scale-95 transition-transform"><X size={22} /></button>
+          <button onClick={onClose} className="p-2 min-h-[48px] min-w-[48px] flex items-center justify-center text-slate-400 hover:text-white active:scale-95 transition-transform"><X size={22} /></button>
         </div>
         <div className="space-y-3">
           <div>
@@ -521,7 +588,7 @@ function UploadDialog({ tags, onClose, onUploaded }: {
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="text-sm text-slate-400">Select tags to capture ({selectedTags.size} selected)</label>
-              <button type="button" onClick={toggleAll} className="text-sm text-blue-400 hover:text-blue-300 min-h-[44px] px-2 active:scale-95 transition-transform">
+              <button type="button" onClick={toggleAll} className="text-sm text-blue-400 hover:text-blue-300 min-h-[48px] px-2 active:scale-95 transition-transform">
                 {selectedTags.size === filteredTags.length ? 'Deselect all' : 'Select all'}
               </button>
             </div>
@@ -531,12 +598,12 @@ function UploadDialog({ tags, onClose, onUploaded }: {
                 value={tagSearch}
                 onChange={e => setTagSearch(e.target.value)}
                 placeholder="Filter tags..."
-                className="w-full bg-slate-700 border border-slate-600 rounded-md pl-8 pr-3 py-3 text-sm text-white outline-none min-h-[44px]"
+                className="w-full bg-slate-700 border border-slate-600 rounded-md pl-8 pr-3 py-3 text-sm text-white outline-none min-h-[48px]"
               />
             </div>
             <div className="max-h-60 overflow-auto bg-slate-900 rounded-lg border border-slate-700 p-2 space-y-0.5">
               {filteredTags.map(t => (
-                <label key={t.id} className="flex items-center gap-3 px-3 py-2.5 rounded hover:bg-slate-800 cursor-pointer text-sm min-h-[44px] active:bg-slate-700 transition-colors select-none">
+                <label key={t.id} className="flex items-center gap-3 px-3 py-2.5 rounded hover:bg-slate-800 cursor-pointer text-sm min-h-[48px] active:bg-slate-700 transition-colors select-none">
                   <input
                     type="checkbox"
                     checked={selectedTags.has(t.name)}
@@ -557,12 +624,15 @@ function UploadDialog({ tags, onClose, onUploaded }: {
               {filteredTags.length === 0 && <p className="text-slate-600 text-center py-2">No writable tags found</p>}
             </div>
           </div>
+          {uploadError && (
+            <div className="bg-red-600/20 border border-red-600/30 rounded-lg px-4 py-3 text-sm text-red-400">{uploadError}</div>
+          )}
           <div className="flex justify-end gap-3 pt-2">
-            <button onClick={onClose} className="px-5 py-3 min-h-[44px] bg-slate-700 rounded-lg text-sm text-slate-300 active:scale-95 transition-transform">Cancel</button>
+            <button onClick={onClose} className="px-5 py-3 min-h-[48px] bg-slate-700 rounded-lg text-sm text-slate-300 active:scale-95 transition-transform">Cancel</button>
             <button
               onClick={handleUpload}
               disabled={uploading || !name.trim() || selectedTags.size === 0}
-              className="px-5 py-3 min-h-[44px] bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg text-sm text-white active:scale-95 transition-transform"
+              className="px-5 py-3 min-h-[48px] bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg text-sm text-white active:scale-95 transition-transform"
             >
               {uploading ? 'Capturing...' : 'Capture'}
             </button>
@@ -589,6 +659,8 @@ export function JobsPage({ user }: Props) {
   const [editDescription, setEditDescription] = useState('');
   const [editConditions, setEditConditions] = useState<{ guards: { tag: string; value: unknown }[] }>({ guards: [] });
   const [jobSearch, setJobSearch] = useState('');
+  const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; confirmLabel?: string; variant?: 'danger' | 'success'; onConfirm: () => void } | null>(null);
+  const [alertDialog, setAlertDialog] = useState<{ title: string; message: string; variant?: 'success' | 'error' } | null>(null);
 
   const userRole = user?.role || '';
   const canEdit = ['supervisor', 'engineer', 'designer'].includes(userRole);
@@ -610,7 +682,7 @@ export function JobsPage({ user }: Props) {
     );
   }, [jobs, jobSearch]);
 
-  const handleDownload = async (id: number) => {
+  const handleDownload = useCallback((id: number) => {
     const job = jobs.find(j => j.id === id);
     if (!job) return;
     const setpoints = JSON.parse(job.setpoints || '{}');
@@ -618,25 +690,42 @@ export function JobsPage({ user }: Props) {
     const tagMap = new Map(tags.map(t => [t.name, t]));
     const params = Object.entries(setpoints).map(([k, v]) => `  ${displayMap[k] || k}: ${formatTagValue(tagMap.get(k), v)}`).join('\n');
     const conditions = job.download_conditions ? JSON.parse(job.download_conditions) : null;
-    let msg = `Download job "${job.name}" to machine?\n\nSetpoints:\n${params || '(none)'}`;
+    let msg = `Setpoints:\n${params || '(none)'}`;
     if (conditions?.guards?.length) {
       msg += `\n\nPre-conditions:\n${conditions.guards.map((g: { tag: string; value: unknown }) => `  ${displayMap[g.tag] || g.tag} = ${formatTagValue(tagMap.get(g.tag), g.value)}`).join('\n')}`;
     }
-    if (!window.confirm(msg)) return;
-    try {
-      await api.downloadJob(id);
-      alert('Job downloaded successfully');
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : String(err));
-    }
-  };
+    setConfirmDialog({
+      title: `Download "${job.name}" to machine?`,
+      message: msg,
+      confirmLabel: 'Download',
+      variant: 'success',
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          await api.downloadJob(id);
+          setAlertDialog({ title: 'Success', message: 'Job downloaded successfully', variant: 'success' });
+        } catch (err: unknown) {
+          setAlertDialog({ title: 'Error', message: err instanceof Error ? err.message : String(err), variant: 'error' });
+        }
+      },
+    });
+  }, [jobs, tags]);
 
-  const handleDelete = async (id: number) => {
-    if (!window.confirm('Delete this job?')) return;
-    await api.deleteJob(id);
-    loadJobs();
-    if (selectedJob?.id === id) setSelectedJob(null);
-  };
+  const handleDelete = useCallback((id: number) => {
+    const job = jobs.find(j => j.id === id);
+    setConfirmDialog({
+      title: 'Delete Job',
+      message: `Are you sure you want to delete "${job?.name || 'this job'}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        await api.deleteJob(id);
+        loadJobs();
+        if (selectedJob?.id === id) setSelectedJob(null);
+      },
+    });
+  }, [jobs, selectedJob, loadJobs]);
 
   // Get default setpoints from tags labeled "Job Setpoint"
   const jobSetpointTags = useMemo(() =>
@@ -728,18 +817,18 @@ export function JobsPage({ user }: Props) {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold text-slate-100">Jobs</h1>
+        <h1 className="text-2xl font-bold text-slate-100">Jobs</h1>
         {canEdit && (
           <div className="flex gap-2">
             <button
               onClick={() => setShowUpload(true)}
-              className="flex items-center gap-2 px-4 py-3 min-h-[44px] bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium active:scale-95 transition-transform"
+              className="flex items-center gap-2 px-4 py-3 min-h-[48px] bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium active:scale-95 transition-transform"
             >
               <Upload size={18} /> Capture from Machine
             </button>
             <button
               onClick={() => setShowCreate(true)}
-              className="flex items-center gap-2 px-4 py-3 min-h-[44px] bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-dark)] text-white rounded-lg text-sm font-medium active:scale-95 transition-transform"
+              className="flex items-center gap-2 px-4 py-3 min-h-[48px] bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-dark)] text-white rounded-lg text-sm font-medium active:scale-95 transition-transform"
             >
               <Plus size={18} /> New Job
             </button>
@@ -774,16 +863,16 @@ export function JobsPage({ user }: Props) {
               </div>
             )}
             <div className="flex gap-3">
-              <button onClick={handleCreate} className="px-5 py-3 min-h-[44px] bg-[var(--hmi-accent)] rounded-lg text-sm text-white active:scale-95 transition-transform">Create</button>
-              <button onClick={() => setShowCreate(false)} className="px-5 py-3 min-h-[44px] bg-slate-700 rounded-lg text-sm text-slate-300 active:scale-95 transition-transform">Cancel</button>
+              <button onClick={handleCreate} className="px-5 py-3 min-h-[48px] bg-[var(--hmi-accent)] rounded-lg text-sm text-white active:scale-95 transition-transform">Create</button>
+              <button onClick={() => setShowCreate(false)} className="px-5 py-3 min-h-[48px] bg-slate-700 rounded-lg text-sm text-slate-300 active:scale-95 transition-transform">Cancel</button>
             </div>
           </div>
         </div>
       )}
 
       <div className="flex flex-col lg:flex-row gap-4">
-        {/* Job list */}
-        <div className="w-full lg:w-96 flex-shrink-0">
+        {/* Job list — hidden on mobile when a job is selected */}
+        <div className={`w-full lg:w-96 flex-shrink-0 ${selectedJob ? 'hidden lg:block' : ''}`}>
           <div className="relative mb-3">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
@@ -791,48 +880,48 @@ export function JobsPage({ user }: Props) {
               placeholder="Search jobs..."
               value={jobSearch}
               onChange={e => setJobSearch(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-3 py-3 min-h-[44px] text-sm text-white outline-none focus:border-blue-500"
+              className={`w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 py-3 min-h-[48px] text-sm text-white outline-none focus:border-blue-500 ${jobSearch ? 'pr-10' : 'pr-3'}`}
             />
+            {jobSearch && (
+              <button
+                onClick={() => setJobSearch('')}
+                className="absolute right-1 top-1/2 -translate-y-1/2 p-2 min-h-[48px] min-w-[48px] flex items-center justify-center text-slate-400 hover:text-white active:scale-95 transition-transform"
+              >
+                <X size={16} />
+              </button>
+            )}
           </div>
           <div className="space-y-2">
             {filteredJobs.map((job) => (
               <div
                 key={job.id}
                 onClick={() => { setSelectedJob(job); setEditMode(false); }}
-                className={`p-4 rounded-xl border cursor-pointer transition-colors active:scale-[0.98] ${
+                className={`p-5 rounded-xl border cursor-pointer transition-colors active:scale-[0.98] ${
                   selectedJob?.id === job.id
                     ? 'bg-[var(--hmi-accent-bg)] border-[var(--hmi-accent)]/30'
                     : 'bg-slate-800 border-slate-700 hover:border-slate-600'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <div className="font-medium text-slate-200 text-sm truncate">{job.name}</div>
-                  <span className="text-xs text-slate-500 flex-shrink-0 ml-2">v{job.version}</span>
+                  <div className="font-medium text-slate-200 text-base truncate">{job.name}</div>
+                  <span className="text-sm text-slate-500 flex-shrink-0 ml-2">v{job.version}</span>
                 </div>
                 {job.description && (
-                  <div className="text-xs text-slate-400 mt-1 truncate">{job.description}</div>
+                  <div className="text-sm text-slate-400 mt-1 truncate">{job.description}</div>
                 )}
-                <div className="flex gap-2 mt-3 flex-wrap">
+                <div className="flex gap-3 mt-3 flex-wrap">
                   <button
                     onClick={(e) => { e.stopPropagation(); handleDownload(job.id); }}
-                    className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-green-600/20 text-green-400 rounded-lg text-sm hover:bg-green-600/30 active:scale-95 transition-transform"
+                    className="flex items-center gap-1.5 px-3 py-2.5 min-h-[48px] bg-green-600/20 text-green-400 rounded-lg text-sm hover:bg-green-600/30 active:scale-95 transition-transform"
                   >
                     <Download size={16} /> Download
                   </button>
                   {canEdit && (
                     <button
                       onClick={(e) => { e.stopPropagation(); handleClone(job); }}
-                      className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-[var(--hmi-accent-bg)] text-[var(--hmi-accent-text)] rounded-lg text-sm hover:bg-[var(--hmi-accent)]/30 active:scale-95 transition-transform"
+                      className="flex items-center gap-1.5 px-3 py-2.5 min-h-[48px] bg-[var(--hmi-accent-bg)] text-[var(--hmi-accent-text)] rounded-lg text-sm hover:bg-[var(--hmi-accent)]/30 active:scale-95 transition-transform"
                     >
                       <Copy size={16} /> Clone
-                    </button>
-                  )}
-                  {canDelete && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDelete(job.id); }}
-                      className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-red-600/20 text-red-400 rounded-lg text-sm hover:bg-red-600/30 active:scale-95 transition-transform"
-                    >
-                      <Trash2 size={16} /> Delete
                     </button>
                   )}
                 </div>
@@ -853,12 +942,20 @@ export function JobsPage({ user }: Props) {
         {/* Job detail */}
         {selectedJob && (
           <div className="flex-1 bg-slate-800 rounded-xl p-4 border border-slate-700">
+            {/* Mobile back button */}
+            <button
+              onClick={() => { setSelectedJob(null); setEditMode(false); }}
+              className="lg:hidden flex items-center gap-2 min-h-[48px] text-sm text-slate-400 hover:text-slate-200 mb-3 active:scale-95 transition-transform"
+            >
+              <ArrowLeft size={18} /> Back to Jobs
+            </button>
+
             <div className="flex items-center justify-between mb-1">
-              <h2 className="text-lg font-bold text-slate-100">{selectedJob.name}</h2>
+              <h2 className="text-xl font-bold text-slate-100">{selectedJob.name}</h2>
               <div className="flex gap-2 flex-wrap justify-end">
                 <button
                   onClick={() => setShowHistory(true)}
-                  className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-300 active:scale-95 transition-transform"
+                  className="flex items-center gap-1.5 px-3 py-2.5 min-h-[48px] bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-300 active:scale-95 transition-transform"
                   title="Version history"
                 >
                   <History size={16} /> History
@@ -866,27 +963,35 @@ export function JobsPage({ user }: Props) {
                 {canEdit && !editMode && (
                   <button
                     onClick={() => startEdit(selectedJob)}
-                    className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-300 active:scale-95 transition-transform"
+                    className="flex items-center gap-1.5 px-3 py-2.5 min-h-[48px] bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-300 active:scale-95 transition-transform"
                   >
                     <Edit size={16} /> Edit
                   </button>
                 )}
                 <button
                   onClick={handleExportJson}
-                  className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-300 active:scale-95 transition-transform"
+                  className="flex items-center gap-1.5 px-3 py-2.5 min-h-[48px] bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-300 active:scale-95 transition-transform"
                 >
                   <Upload size={16} /> Export JSON
                 </button>
+                {canDelete && !editMode && (
+                  <button
+                    onClick={() => handleDelete(selectedJob.id)}
+                    className="flex items-center gap-1.5 px-3 py-2.5 min-h-[48px] bg-red-600/20 text-red-400 rounded-lg text-sm hover:bg-red-600/30 active:scale-95 transition-transform"
+                  >
+                    <Trash2 size={16} /> Delete
+                  </button>
+                )}
               </div>
             </div>
-            <div className="text-xs text-slate-400 mb-4">
+            <div className="text-sm text-slate-400 mb-4">
               Version {selectedJob.version} &middot; Created by {selectedJob.created_by || 'unknown'} &middot; {new Date(selectedJob.created_at).toLocaleString()}
             </div>
 
             {editMode ? (
               <div className="space-y-4">
                 <div>
-                  <label className="text-xs text-slate-400 font-medium">Name</label>
+                  <label className="text-sm text-slate-400 font-medium">Name</label>
                   <input
                     value={editName}
                     onChange={e => setEditName(e.target.value)}
@@ -895,7 +1000,7 @@ export function JobsPage({ user }: Props) {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 font-medium">Description</label>
+                  <label className="text-sm text-slate-400 font-medium">Description</label>
                   <input
                     value={editDescription}
                     onChange={e => setEditDescription(e.target.value)}
@@ -907,13 +1012,13 @@ export function JobsPage({ user }: Props) {
                 <div className="flex gap-3 pt-2">
                   <button
                     onClick={handleSaveEdit}
-                    className="flex items-center gap-1.5 px-5 py-3 min-h-[44px] bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-dark)] rounded-lg text-sm text-white active:scale-95 transition-transform"
+                    className="flex items-center gap-1.5 px-5 py-3 min-h-[48px] bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-dark)] rounded-lg text-sm text-white active:scale-95 transition-transform"
                   >
                     <Save size={16} /> Save
                   </button>
                   <button
                     onClick={() => setEditMode(false)}
-                    className="flex items-center gap-1.5 px-5 py-3 min-h-[44px] bg-slate-700 rounded-lg text-sm text-slate-300 active:scale-95 transition-transform"
+                    className="flex items-center gap-1.5 px-5 py-3 min-h-[48px] bg-slate-700 rounded-lg text-sm text-slate-300 active:scale-95 transition-transform"
                   >
                     <X size={16} /> Cancel
                   </button>
@@ -925,7 +1030,7 @@ export function JobsPage({ user }: Props) {
                   <p className="text-sm text-slate-400 mb-3">{selectedJob.description}</p>
                 )}
 
-                <h3 className="text-sm font-medium text-slate-300 mb-2">Setpoints</h3>
+                <h3 className="text-base font-medium text-slate-300 mb-2">Setpoints</h3>
                 <JobSetpointDisplay setpoints={selectedJob.setpoints} tags={tags} />
 
                 {selectedJob.download_conditions && (() => {
@@ -934,19 +1039,19 @@ export function JobsPage({ user }: Props) {
                   if (guards.length === 0) return null;
                   return (
                     <>
-                      <h3 className="text-sm font-medium text-slate-300 mb-2 flex items-center gap-1.5">
-                        <Shield size={14} className="text-yellow-400" /> Download Conditions
+                      <h3 className="text-base font-medium text-slate-300 mb-2 flex items-center gap-1.5">
+                        <Shield size={16} className="text-yellow-400" /> Download Conditions
                       </h3>
                       <div className="bg-slate-900 rounded-lg border border-slate-700 mb-3 overflow-hidden">
-                        <table className="w-full text-sm">
+                        <table className="w-full text-base">
                           <tbody>
                             {guards.map((g: { tag: string; value: unknown }, i: number) => {
                               const guardTag = tags.find(t => t.name === g.tag);
                               return (
                                 <tr key={i} className="border-b border-slate-700/50">
-                                  <td className="px-4 py-3 text-slate-300 text-sm">{getTagDisplayName(g.tag, tags)}</td>
-                                  <td className="px-4 py-3 text-sm text-slate-500">=</td>
-                                  <td className="px-4 py-3 text-slate-200 text-sm">{formatTagValue(guardTag, g.value)}</td>
+                                  <td className="px-4 py-3 text-slate-300">{getTagDisplayName(g.tag, tags)}</td>
+                                  <td className="px-4 py-3 text-slate-500">=</td>
+                                  <td className="px-4 py-3 text-slate-200">{formatTagValue(guardTag, g.value)}</td>
                                 </tr>
                               );
                             })}
@@ -956,6 +1061,14 @@ export function JobsPage({ user }: Props) {
                     </>
                   );
                 })()}
+
+                {/* Prominent download button */}
+                <button
+                  onClick={() => handleDownload(selectedJob.id)}
+                  className="w-full flex items-center justify-center gap-2 py-4 min-h-[56px] bg-green-600 hover:bg-green-700 text-white rounded-lg text-base font-medium mt-4 active:scale-95 transition-transform"
+                >
+                  <Download size={20} /> Download to Machine
+                </button>
               </>
             )}
           </div>
@@ -966,6 +1079,24 @@ export function JobsPage({ user }: Props) {
       {showUpload && <UploadDialog tags={tags} onClose={() => setShowUpload(false)} onUploaded={loadJobs} />}
       {showHistory && selectedJob && (
         <HistoryDialog jobId={selectedJob.id} jobName={selectedJob.name} onRestore={handleRestore} onClose={() => setShowHistory(false)} />
+      )}
+      {confirmDialog && (
+        <ConfirmDialog
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmLabel={confirmDialog.confirmLabel}
+          variant={confirmDialog.variant}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(null)}
+        />
+      )}
+      {alertDialog && (
+        <AlertDialog
+          title={alertDialog.title}
+          message={alertDialog.message}
+          variant={alertDialog.variant}
+          onClose={() => setAlertDialog(null)}
+        />
       )}
     </div>
   );
