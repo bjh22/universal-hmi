@@ -292,17 +292,34 @@ Data sources define how the HMI communicates with your PLCs and controllers. Req
 2. The system attempts to connect and reports success or failure.
 3. For OPC-UA, the connection also auto-detects the CODESYS address prefix for tag import.
 
-#### Browsing Tags from a PLC
+#### Browsing and Importing Tags from an OPC-UA Server
 
-1. Click **Browse** on a connected data source.
-2. The system queries the PLC for available tags/nodes.
-3. Select which tags to import (see [Importing Tags](#importing-tags) below).
+The most direct way to populate tags is to browse them live from an OPC-UA server. This discovers every variable the PLC exposes and lets you import them in bulk — no CSV files or manual entry required.
+
+1. Click **Browse** on a connected OPC-UA data source.
+2. A browse dialog opens and loads the server's **root-level nodes** (folders and objects).
+3. **Navigate the tree** — click the arrow icon on any folder to expand it and load its children on demand (lazy loading keeps things fast even on servers with thousands of nodes).
+4. **Search** — type in the filter box to find tags by name or address. The filter searches across all loaded nodes. If you need deeper results, click **Full Scan** to load the entire server tree at once.
+5. **Review tags** — each variable node shows its OPC-UA display name, relative address, and data type. Tags that already exist in the HMI are marked **Exists**.
+6. **Import individual tags** — click **Create** next to any tag to import it immediately.
+7. **Import all visible tags** — click **Create All** to import every tag in the current filtered view at once.
+
+Imported tags are automatically configured with:
+- **Name** derived from the OPC-UA display name
+- **Address** set to the relative address (with the CODESYS prefix stripped when detected)
+- **Data source** linked to the OPC-UA connection
+- **Data type** mapped from the OPC-UA variant type (Boolean → `bool`, Int16/32/64 → `int`, Float/Double → `float`, String → `string`)
+- **Access mode** set to `read` (adjustable later in the tag editor)
+
+> **CODESYS servers:** When connecting to a CODESYS runtime, the HMI automatically detects the address prefix (e.g., `ns=4;s=|var|CODESYS_Control.Application.`) so that tag addresses are displayed as clean relative paths like `GVL.Motor_Speed` instead of full OPC-UA node IDs.
+
+> **Tip:** After importing, go to **Settings > Tags** to enable trending, configure alarms, assign labels, or adjust access modes on the imported tags.
 
 ---
 
-### Importing Tags
+### Importing Tags from Files
 
-Tags represent data points in your system — sensor readings, setpoints, machine states, counters, etc. The HMI supports three import formats.
+Tags represent data points in your system — sensor readings, setpoints, machine states, counters, etc. In addition to [browsing tags live from a PLC](#browsing-and-importing-tags-from-an-opc-ua-server), the HMI supports three file-based import formats.
 
 #### Method 1: HMI CSV Import
 
@@ -979,8 +996,9 @@ universal-hmi/
 │   ├── app/
 │   │   ├── api/           # FastAPI route handlers
 │   │   ├── core/          # Config, database, security
-│   │   ├── drivers/       # PLC protocol drivers (OPC-UA, Modbus, EtherNet/IP, MQTT)
+│   │   ├── drivers/       # PLC protocol drivers (opcua, modbus, ethernet_ip, mqtt) + driver_manager
 │   │   ├── models/        # SQLAlchemy models
+│   │   ├── integrations/  # Plugin integrations (zebra_printer, cognex_dataman, ftp_hot_folder)
 │   │   ├── services/      # Tag engine, alarm service, trend service, script engine
 │   │   ├── main.py        # FastAPI app entry point
 │   │   └── seed.py        # Database seed script
@@ -1061,8 +1079,10 @@ universal-hmi/
 | POST | `/api/datasources` | Create a data source |
 | PUT | `/api/datasources/{id}` | Update a data source |
 | DELETE | `/api/datasources/{id}` | Delete a data source |
-| POST | `/api/datasources/{id}/connect` | Test connection |
-| POST | `/api/datasources/{id}/browse` | Browse available tags |
+| POST | `/api/datasources/{id}/connect` | Test connection (auto-detects OPC-UA address prefix) |
+| POST | `/api/datasources/{id}/browse` | Full recursive tag browse |
+| POST | `/api/datasources/{id}/browse-level` | Lazy single-level browse (body: `{ parent_node_id }`) |
+| POST | `/api/datasources/{id}/browse-cache-clear` | Clear cached browse results |
 
 ### Jobs
 
