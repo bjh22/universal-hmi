@@ -180,7 +180,12 @@ goto end
 call :check_all
 if errorlevel 1 goto end
 echo ==^> Installing backend dependencies...
-cd /d "%ROOT_DIR%backend" && pip install -r requirements.txt
+if exist "%ROOT_DIR%backend\wheels" (
+    echo     Found bundled wheels -- installing offline (no internet required).
+    cd /d "%ROOT_DIR%backend" && pip install --no-index --find-links=wheels -r requirements.txt
+) else (
+    cd /d "%ROOT_DIR%backend" && pip install -r requirements.txt
+)
 if errorlevel 1 (
     echo [ERROR] Backend dependency install failed.
     goto end
