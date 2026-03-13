@@ -5,11 +5,17 @@ set -euo pipefail
 # deploy.sh — Package the HMI for offline deployment to industrial panel PCs
 #
 # Usage:
-#   ./deploy.sh                # Build for Linux only (current platform)
-#   ./deploy.sh --windows      # Also download Windows wheels
+#   ./deploy.sh                       # Build for Linux x86_64 (with bundled Python)
+#   ./deploy.sh --windows             # Also include Windows x86_64
+#   ./deploy.sh --arm                 # Also include Linux aarch64 (ARM)
+#   ./deploy.sh --no-bundle-python    # Skip bundling Python (target must have Python)
+#   ./deploy.sh --python-version 3.12.8  # Override Python version (default: 3.11.13)
 #
 # Output: dist/hmi-<version>.tar.gz  (always)
 #         dist/hmi-<version>.zip     (when --windows)
+#
+# Python is bundled from python-build-standalone (astral-sh) by default,
+# so target machines do NOT need Python pre-installed.
 #
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -17,21 +23,44 @@ VERSION=$(date +%Y%m%d-%H%M%S)
 DIST_DIR="$ROOT_DIR/dist"
 RELEASE_DIR="$DIST_DIR/hmi-release"
 BUILD_WINDOWS=false
+BUILD_ARM=false
+BUNDLE_PYTHON=true
+PYTHON_VERSION="3.11.13"
+# python-build-standalone release tag (date-based)
+PBS_RELEASE="20250828"
 
-for arg in "$@"; do
-    case "$arg" in
+while [[ $# -gt 0 ]]; do
+    case "$1" in
         --windows) BUILD_WINDOWS=true ;;
+        --arm) BUILD_ARM=true ;;
+        --no-bundle-python) BUNDLE_PYTHON=false ;;
+        --python-version)
+            shift
+            PYTHON_VERSION="$1"
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Usage: ./deploy.sh [--windows] [--arm] [--no-bundle-python] [--python-version X.Y.Z]"
+            exit 1
+            ;;
     esac
+    shift
 done
+
+# Derive Python major.minor for wheel downloads
+PYTHON_MAJOR_MINOR="${PYTHON_VERSION%.*}"
 
 echo "============================================"
 echo "  HMI Deployment Packager"
 echo "  Version: $VERSION"
-if $BUILD_WINDOWS; then
-echo "  Targets: Linux + Windows"
+echo -n "  Targets: Linux x86_64"
+$BUILD_ARM && echo -n " + Linux aarch64"
+$BUILD_WINDOWS && echo -n " + Windows x86_64"
+echo
+if $BUNDLE_PYTHON; then
+echo "  Python:  $PYTHON_VERSION (bundled)"
 else
-echo "  Target:  Linux"
-echo "  (use --windows to include Windows)"
+echo "  Python:  not bundled (target must have Python $PYTHON_MAJOR_MINOR+)"
 fi
 echo "============================================"
 echo
@@ -41,12 +70,16 @@ rm -rf "$RELEASE_DIR"
 mkdir -p "$RELEASE_DIR"
 
 # ──────────────────────────────────────────────
-# 1. Build frontend
+# Calculate total steps
 # ──────────────────────────────────────────────
 STEP_TOTAL=5
-$BUILD_WINDOWS && STEP_TOTAL=6
+$BUILD_WINDOWS && STEP_TOTAL=$((STEP_TOTAL + 1))
+$BUNDLE_PYTHON && STEP_TOTAL=$((STEP_TOTAL + 1))
 STEP=1
 
+# ──────────────────────────────────────────────
+# 1. Build frontend
+# ──────────────────────────────────────────────
 echo "==> [$STEP/$STEP_TOTAL] Building frontend..."
 cd "$ROOT_DIR/frontend"
 npm run build
@@ -101,7 +134,7 @@ if $BUILD_WINDOWS; then
         -r "$ROOT_DIR/backend/requirements.txt" \
         -d "$RELEASE_DIR/wheels-windows" \
         --platform win_amd64 \
-        --python-version 3.11 \
+        --python-version "$PYTHON_MAJOR_MINOR" \
         --only-binary=:all: \
         --no-deps \
         2>&1 | tail -3 || true
@@ -112,7 +145,7 @@ if $BUILD_WINDOWS; then
         -r "$ROOT_DIR/backend/requirements.txt" \
         -d "$RELEASE_DIR/wheels-windows" \
         --platform any \
-        --python-version 3.11 \
+        --python-version "$PYTHON_MAJOR_MINOR" \
         --only-binary=:all: \
         --no-deps \
         2>&1 | tail -3 || true
@@ -127,7 +160,65 @@ if $BUILD_WINDOWS; then
 fi
 
 # ──────────────────────────────────────────────
-# 4. Create install scripts for target machines
+# 4. Bundle standalone Python interpreter (if enabled)
+# ──────────────────────────────────────────────
+if $BUNDLE_PYTHON; then
+    STEP=$((STEP + 1))
+    echo "==> [$STEP/$STEP_TOTAL] Bundling standalone Python $PYTHON_VERSION..."
+
+    PBS_BASE_URL="https://github.com/astral-sh/python-build-standalone/releases/download/$PBS_RELEASE"
+
+    # Helper: download and extract a python-build-standalone archive
+    download_python() {
+        local TRIPLE="$1"        # e.g. x86_64-unknown-linux-gnu
+        local DEST_DIR="$2"      # e.g. $RELEASE_DIR/python-linux-x86_64
+        local ARCHIVE_NAME="cpython-${PYTHON_VERSION}+${PBS_RELEASE}-${TRIPLE}-install_only_stripped.tar.gz"
+        local URL="${PBS_BASE_URL}/${ARCHIVE_NAME}"
+
+        echo "    Downloading $ARCHIVE_NAME..."
+        mkdir -p "$DEST_DIR"
+        if ! curl -fSL --retry 4 --retry-delay 2 -o "/tmp/$ARCHIVE_NAME" "$URL"; then
+            echo "    ERROR: Failed to download $URL"
+            echo "    Check that Python $PYTHON_VERSION exists for $TRIPLE at:"
+            echo "      https://github.com/astral-sh/python-build-standalone/releases/tag/$PBS_RELEASE"
+            exit 1
+        fi
+
+        # python-build-standalone extracts to a 'python/' directory
+        tar -xzf "/tmp/$ARCHIVE_NAME" -C "$DEST_DIR"
+        rm -f "/tmp/$ARCHIVE_NAME"
+
+        # Verify the extracted Python works (for native platform only)
+        if [ -x "$DEST_DIR/python/bin/python3" ]; then
+            local PY_VER
+            PY_VER=$("$DEST_DIR/python/bin/python3" --version 2>&1 || true)
+            echo "    Extracted: $PY_VER"
+        else
+            echo "    Extracted to $DEST_DIR/python/"
+        fi
+    }
+
+    # Always bundle Linux x86_64
+    echo "    --- Linux x86_64 ---"
+    download_python "x86_64-unknown-linux-gnu" "$RELEASE_DIR/python-linux-x86_64"
+
+    # Optionally bundle Linux aarch64
+    if $BUILD_ARM; then
+        echo "    --- Linux aarch64 ---"
+        download_python "aarch64-unknown-linux-gnu" "$RELEASE_DIR/python-linux-aarch64"
+    fi
+
+    # Optionally bundle Windows x86_64
+    if $BUILD_WINDOWS; then
+        echo "    --- Windows x86_64 ---"
+        download_python "x86_64-pc-windows-msvc" "$RELEASE_DIR/python-windows"
+    fi
+
+    echo "    Python bundling complete."
+fi
+
+# ──────────────────────────────────────────────
+# 5. Create install scripts for target machines
 # ──────────────────────────────────────────────
 STEP=$((STEP + 1))
 echo "==> [$STEP/$STEP_TOTAL] Generating install scripts..."
@@ -140,7 +231,8 @@ set -euo pipefail
 #
 # install.sh — Install HMI on an offline Linux panel PC
 #
-# Prerequisites: Python 3.11+ must be installed on the target machine.
+# If a bundled Python is included in this package, no prerequisites are needed.
+# Otherwise, Python 3.11+ must be installed on the target machine.
 #
 # Usage:
 #   sudo ./install.sh              # Install to /opt/hmi (default)
@@ -156,22 +248,48 @@ echo "  Target: $INSTALL_DIR"
 echo "============================================"
 echo
 
-# Check Python
-if ! command -v python3 &> /dev/null; then
-    echo "ERROR: Python 3 is required but not found."
-    echo "Install Python 3.11+ and try again."
-    exit 1
+# ── Resolve Python interpreter ──
+# Prefer bundled Python (always used when present for version consistency).
+# Falls back to system Python only when no bundle is included.
+PYTHON_BIN=""
+ARCH=$(uname -m)
+
+if [ -d "$SCRIPT_DIR/python-linux-$ARCH/python" ]; then
+    echo "==> Found bundled Python for $ARCH"
+    BUNDLED_PYTHON_SRC="$SCRIPT_DIR/python-linux-$ARCH/python"
+else
+    BUNDLED_PYTHON_SRC=""
 fi
 
-PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-echo "==> Found Python $PYTHON_VERSION"
+if [ -n "$BUNDLED_PYTHON_SRC" ]; then
+    # Install bundled Python to the install directory
+    echo "==> Installing bundled Python..."
+    mkdir -p "$INSTALL_DIR"
+    cp -r "$BUNDLED_PYTHON_SRC" "$INSTALL_DIR/python"
+    PYTHON_BIN="$INSTALL_DIR/python/bin/python3"
+    PYTHON_VERSION=$("$PYTHON_BIN" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")')
+    echo "    Installed Python $PYTHON_VERSION"
+elif command -v python3 &> /dev/null; then
+    PYTHON_BIN="python3"
+    PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+    echo "==> Using system Python $PYTHON_VERSION"
+    echo "    NOTE: No bundled Python found for $ARCH."
+else
+    echo "ERROR: No Python found."
+    echo "  No bundled Python for architecture '$ARCH' was included in this package,"
+    echo "  and no system Python 3 was found on PATH."
+    echo
+    echo "  Either rebuild the deployment package with Python bundled for your platform,"
+    echo "  or install Python 3.11+ manually and retry."
+    exit 1
+fi
 
 # Create install directory
 mkdir -p "$INSTALL_DIR"
 
 # Create virtual environment
 echo "==> Creating virtual environment..."
-python3 -m venv "$INSTALL_DIR/venv"
+"$PYTHON_BIN" -m venv "$INSTALL_DIR/venv"
 source "$INSTALL_DIR/venv/bin/activate"
 
 # Install dependencies from local wheels (offline)
@@ -274,13 +392,14 @@ setlocal enabledelayedexpansion
 ::
 :: install.bat — Install HMI on an offline Windows panel PC
 ::
-:: Prerequisites: Python 3.11+ must be installed and on PATH.
+:: If a bundled Python is included in this package, no prerequisites are needed.
+:: Otherwise, Python 3.11+ must be installed and on PATH.
 ::
 :: Usage:
 ::   install.bat                    Install to C:\hmi (default)
 ::   install.bat D:\hmi             Install to custom location
 ::
-:: Run as Administrator for Windows Service registration.
+:: Run as Administrator for firewall and service registration.
 ::
 
 set "INSTALL_DIR=%~1"
@@ -293,25 +412,55 @@ echo   Target: %INSTALL_DIR%
 echo ============================================
 echo.
 
-:: Check Python
-python --version >nul 2>&1
-if errorlevel 1 (
-    echo ERROR: Python is required but not found on PATH.
-    echo Install Python 3.11+ from python.org and ensure it is added to PATH.
-    echo.
-    pause
-    exit /b 1
-)
+:: ── Resolve Python interpreter ──
+:: Prefer bundled Python (always used when present for version consistency).
+:: Falls back to system Python only when no bundle is included.
+set "PYTHON_BIN="
+set "BUNDLED=0"
 
-for /f "tokens=*" %%v in ('python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"') do set "PYTHON_VERSION=%%v"
-echo ==^> Found Python %PYTHON_VERSION%
+if exist "%SCRIPT_DIR%python-windows\python\" (
+    echo ==^> Found bundled Python
+    set "BUNDLED=1"
+) else (
+    :: Check for system Python as fallback
+    python --version >nul 2>&1
+    if errorlevel 1 (
+        echo ERROR: No Python found.
+        echo   No bundled Python was included in this package,
+        echo   and no system Python was found on PATH.
+        echo.
+        echo   Either rebuild the deployment package with --windows to include
+        echo   bundled Python, or install Python 3.11+ manually and retry.
+        echo.
+        pause
+        exit /b 1
+    )
+    for /f "tokens=*" %%v in ('python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"') do set "PYTHON_VERSION=%%v"
+    echo ==^> Using system Python !PYTHON_VERSION!
+    echo     NOTE: No bundled Python was included in this package.
+)
 
 :: Create install directory
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 
-:: Create virtual environment
-echo ==^> Creating virtual environment...
-python -m venv "%INSTALL_DIR%\venv"
+:: Install bundled Python or use system Python
+if "%BUNDLED%"=="1" (
+    echo ==^> Installing bundled Python...
+    xcopy /E /I /Y "%SCRIPT_DIR%python-windows\python\*" "%INSTALL_DIR%\python\" >nul
+    set "PYTHON_BIN=%INSTALL_DIR%\python\python.exe"
+
+    for /f "tokens=*" %%v in ('!PYTHON_BIN! -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')"') do set "PYTHON_VERSION=%%v"
+    echo     Installed Python !PYTHON_VERSION!
+
+    :: Create virtual environment using bundled Python
+    echo ==^> Creating virtual environment...
+    !PYTHON_BIN! -m venv "%INSTALL_DIR%\venv"
+) else (
+    :: Create virtual environment using system Python
+    echo ==^> Creating virtual environment...
+    python -m venv "%INSTALL_DIR%\venv"
+)
+
 call "%INSTALL_DIR%\venv\Scripts\activate.bat"
 
 :: Determine which wheel directory to use
@@ -442,7 +591,7 @@ WININSTALL_EOF
 echo "    Linux and Windows install scripts created."
 
 # ──────────────────────────────────────────────
-# 5. Create archives
+# 6. Create archives
 # ──────────────────────────────────────────────
 STEP=$((STEP + 1))
 echo "==> [$STEP/$STEP_TOTAL] Creating deployment packages..."
@@ -475,6 +624,12 @@ if $BUILD_WINDOWS; then
     echo "  Windows: dist/$ZIP_NAME ($ZIP_SIZE)"
 fi
 
+echo
+if $BUNDLE_PYTHON; then
+echo "  Python $PYTHON_VERSION is bundled — no prerequisites on target machine."
+else
+echo "  Python NOT bundled — target must have Python ${PYTHON_MAJOR_MINOR}+ installed."
+fi
 echo
 echo "  Linux deployment:"
 echo "    1. Copy $ARCHIVE_NAME to the panel PC"
