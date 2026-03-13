@@ -753,6 +753,18 @@ On your development machine:
 ./deploy.sh --python-version 3.12.8
 ```
 
+#### `deploy.sh` Flags
+
+| Flag | Description |
+|------|-------------|
+| *(none)* | Build for Linux x86_64 with bundled Python (default) |
+| `--windows` | Also build a Windows x86_64 package (downloads Windows-specific wheels and bundles a Windows Python interpreter) |
+| `--arm` | Also include a Linux aarch64 (ARM) Python interpreter for Raspberry Pi and ARM-based panel PCs |
+| `--no-bundle-python` | Skip bundling the standalone Python interpreter. The target machine must have Python 3.11+ pre-installed |
+| `--python-version X.Y.Z` | Override the bundled Python version (default: `3.11.13`). Must match a release available from [python-build-standalone](https://github.com/astral-sh/python-build-standalone/releases) |
+
+Flags can be combined freely (e.g., `./deploy.sh --windows --arm --python-version 3.12.8`).
+
 This performs the following steps automatically:
 1. Builds the frontend with `npm run build` (TypeScript check + Vite production build)
 2. Copies the backend source and built frontend into a release directory
@@ -782,6 +794,11 @@ sudo ./install.sh
 # Or specify a custom install location
 sudo ./install.sh /home/hmi/app
 ```
+
+| Argument | Description |
+|----------|-------------|
+| *(none)* | Install to `/opt/hmi` (default) |
+| `<path>` | Install to a custom directory (e.g., `sudo ./install.sh /home/hmi/app`) |
 
 The Linux installer:
 - Installs the bundled Python interpreter (or falls back to system Python 3 if `--no-bundle-python` was used)
@@ -825,6 +842,11 @@ install.bat
 REM Or specify a custom install location
 install.bat D:\hmi
 ```
+
+| Argument | Description |
+|----------|-------------|
+| *(none)* | Install to `C:\hmi` (default) |
+| `<path>` | Install to a custom directory (e.g., `install.bat D:\hmi`) |
 
 The Windows installer:
 - Installs the bundled Python interpreter (or falls back to system Python on PATH if `--no-bundle-python` was used)
