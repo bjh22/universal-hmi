@@ -164,7 +164,12 @@ cmd_seed() {
 cmd_install() {
   check_all
   echo "==> Installing backend dependencies..."
-  cd "$ROOT_DIR/backend" && "$PY" -m pip install -r requirements.txt
+  if [ -d "$ROOT_DIR/backend/wheels" ]; then
+    echo "    Found bundled wheels — installing offline (no internet required)."
+    cd "$ROOT_DIR/backend" && "$PY" -m pip install --no-index --find-links=wheels -r requirements.txt
+  else
+    cd "$ROOT_DIR/backend" && "$PY" -m pip install -r requirements.txt
+  fi
   echo "==> Installing frontend dependencies..."
   cd "$ROOT_DIR/frontend" && npm install
   echo "==> All dependencies installed successfully."

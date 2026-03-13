@@ -46,7 +46,11 @@ frontend/              React SPA (Vite + TypeScript)
 | **Python** | 3.10+ | [python.org](https://www.python.org/downloads/) or `winget install Python.Python.3.12` / `brew install python@3.12` |
 | **Node.js** | 18+ LTS | [nodejs.org](https://nodejs.org/) or `winget install OpenJS.NodeJS.LTS` / `brew install node@22` |
 
-`pip` and `npm` come bundled with Python and Node.js respectively. No C compiler or native build tools are needed — all Python dependencies ship prebuilt wheels. Run `doctor` to verify your setup:
+`pip` and `npm` come bundled with Python and Node.js respectively. No C compiler or native build tools are needed — all Python dependencies ship prebuilt wheels.
+
+**Offline install:** If a `backend/wheels/` directory exists, `install` uses `pip install --no-index --find-links=wheels` for fully offline Python dependency installation. To bundle wheels for offline use, run `pip download -r backend/requirements.txt -d backend/wheels` on a machine with internet access.
+
+Run `doctor` to verify your setup:
 
 ```bash
 ./dev.sh doctor        # Linux / macOS
@@ -60,7 +64,7 @@ dev.bat doctor         # Windows CMD
 
 **Linux / macOS:**
 ```bash
-./dev.sh install    # Install all dependencies (pip + npm)
+./dev.sh install    # Install all dependencies (pip + npm; uses offline wheels if backend/wheels/ exists)
 ./dev.sh dev        # Start backend (:8080) + frontend (:5173) dev servers
 ./dev.sh build      # TypeScript check + Vite build
 ./dev.sh lint       # ESLint
@@ -71,7 +75,7 @@ dev.bat doctor         # Windows CMD
 
 **Windows (CMD):**
 ```cmd
-dev.bat install     # Install all dependencies (pip + npm)
+dev.bat install     # Install all dependencies (pip + npm; uses offline wheels if backend\wheels\ exists)
 dev.bat dev         # Start backend (:8080) + frontend (:5173) dev servers
 dev.bat build       # TypeScript check + Vite build
 dev.bat lint        # ESLint
@@ -82,7 +86,7 @@ dev.bat doctor      # Check prerequisites
 
 **Windows (PowerShell):**
 ```powershell
-.\dev.ps1 install   # Install all dependencies (pip + npm)
+.\dev.ps1 install   # Install all dependencies (pip + npm; uses offline wheels if backend\wheels\ exists)
 .\dev.ps1 dev       # Start backend (:8080) + frontend (:5173) dev servers
 .\dev.ps1 build     # TypeScript check + Vite build
 .\dev.ps1 lint      # ESLint

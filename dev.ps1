@@ -183,7 +183,14 @@ function Invoke-Install {
     Assert-All
     Write-Host "==> Installing backend dependencies..." -ForegroundColor Cyan
     Push-Location "$RootDir\backend"
-    try { pip install -r requirements.txt } finally { Pop-Location }
+    try {
+        if (Test-Path "wheels") {
+            Write-Host "    Found bundled wheels - installing offline (no internet required)." -ForegroundColor DarkGray
+            pip install --no-index --find-links=wheels -r requirements.txt
+        } else {
+            pip install -r requirements.txt
+        }
+    } finally { Pop-Location }
 
     Write-Host "==> Installing frontend dependencies..." -ForegroundColor Cyan
     Push-Location "$RootDir\frontend"

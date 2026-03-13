@@ -51,6 +51,12 @@ A web-based Human-Machine Interface (HMI) for industrial automation. Connects to
 
 `pip` and `npm` come bundled with Python and Node.js respectively. No C compiler or native build tools are needed — all Python dependencies ship prebuilt wheels.
 
+> **Offline install:** The `install` command automatically detects a `backend/wheels/` directory and installs Python dependencies from local wheel files without requiring internet access. To pre-download wheels on a machine with internet, run:
+> ```bash
+> pip download -r backend/requirements.txt -d backend/wheels
+> ```
+> Then copy the project (including `backend/wheels/`) to the offline machine and run `install` as usual.
+
 Run the `doctor` command to verify your environment:
 
 ```bash
@@ -112,7 +118,7 @@ All platforms have the same commands — just use the script that matches your s
 
 | Command | Description |
 |---------|-------------|
-| `install` | Install all dependencies (pip + npm) |
+| `install` | Install all dependencies (pip + npm; offline if `backend/wheels/` exists) |
 | `dev` | Start backend (:8080) and frontend (:5173) dev servers |
 | `build` | TypeScript check + Vite production build |
 | `lint` | Run ESLint on the frontend |
