@@ -715,27 +715,42 @@ The packaging step runs on your **development machine** (Linux or macOS with int
 | Python 3.10+ | Downloads pip wheels for the target |
 | Node.js 18+ | Builds the frontend |
 | `pip` | Downloads offline wheel packages |
+| `curl` | Downloads standalone Python interpreter |
 | `zip` (optional) | Creates `.zip` archive for Windows targets |
 
 ### Prerequisites (Target Panel PC)
 
-| Platform | Requirement |
-|----------|-------------|
-| **Linux** | Python 3.11+ installed (`sudo apt install python3 python3-venv`) |
-| **Windows** | Python 3.11+ installed and on PATH ([python.org](https://www.python.org/downloads/)) |
+**None** — by default, `deploy.sh` bundles a standalone Python interpreter ([python-build-standalone](https://github.com/astral-sh/python-build-standalone)) into the deployment package, so the target machine needs no pre-installed software. No Python, Node.js, npm, or internet connection is required.
 
-No Node.js, npm, or internet connection is needed on the target — the frontend is pre-built and all Python packages are bundled as wheels.
+If you build the package with `--no-bundle-python`, the target machine must have Python 3.11+ installed:
+
+| Platform | Requirement (only with `--no-bundle-python`) |
+|----------|-------------|
+| **Linux** | Python 3.11+ (`sudo apt install python3 python3-venv`) |
+| **Windows** | Python 3.11+ on PATH ([python.org](https://www.python.org/downloads/)) |
 
 ### Step 1: Create the Deployment Package
 
 On your development machine:
 
 ```bash
-# Linux target only
+# Linux x86_64 (default — bundles Python interpreter)
 ./deploy.sh
 
 # Linux + Windows targets
 ./deploy.sh --windows
+
+# Include Linux ARM (aarch64) support (e.g., Raspberry Pi)
+./deploy.sh --arm
+
+# All platforms
+./deploy.sh --windows --arm
+
+# Skip bundling Python (target must have Python 3.11+ installed)
+./deploy.sh --no-bundle-python
+
+# Override the bundled Python version (default: 3.11.13)
+./deploy.sh --python-version 3.12.8
 ```
 
 This performs the following steps automatically:
@@ -743,8 +758,9 @@ This performs the following steps automatically:
 2. Copies the backend source and built frontend into a release directory
 3. Downloads all Python dependency wheels for offline installation
 4. Downloads Windows-specific wheels (when `--windows` is specified)
-5. Generates platform-specific install scripts (`install.sh` and `install.bat`)
-6. Creates deployment archives in `dist/`:
+5. Bundles a standalone Python interpreter for each target platform (unless `--no-bundle-python` is used)
+6. Generates platform-specific install scripts (`install.sh` and `install.bat`)
+7. Creates deployment archives in `dist/`:
    - `dist/hmi-<timestamp>.tar.gz` — Linux deployment package (always created)
    - `dist/hmi-<timestamp>-windows.zip` — Windows deployment package (when `--windows` is used)
 
@@ -768,7 +784,7 @@ sudo ./install.sh /home/hmi/app
 ```
 
 The Linux installer:
-- Verifies Python 3 is available
+- Installs the bundled Python interpreter (or falls back to system Python 3 if `--no-bundle-python` was used)
 - Creates a Python virtual environment at the install location
 - Installs all dependencies from bundled wheels (fully offline)
 - Copies the application files and built frontend
@@ -811,7 +827,7 @@ install.bat D:\hmi
 ```
 
 The Windows installer:
-- Verifies Python is available on PATH
+- Installs the bundled Python interpreter (or falls back to system Python on PATH if `--no-bundle-python` was used)
 - Creates a Python virtual environment at the install location (default: `C:\hmi`)
 - Installs all dependencies from bundled wheels (fully offline, uses Windows-specific wheels when available)
 - Copies the application files and built frontend
