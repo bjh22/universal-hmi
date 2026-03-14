@@ -1,6 +1,6 @@
 param(
     [Parameter(Position=0)]
-    [ValidateSet("build", "lint", "check", "dev", "seed", "install", "doctor")]
+    [ValidateSet("build", "lint", "check", "dev", "stop", "seed", "install", "doctor")]
     [string]$Command
 )
 
@@ -59,6 +59,33 @@ function Test-Npm {
 function Assert-Python { if (-not (Test-Python)) { exit 1 } }
 function Assert-Node   { if (-not (Test-Node))   { exit 1 } }
 function Assert-All    { Assert-Python; Assert-Node; if (-not (Test-Npm)) { exit 1 } }
+
+# --- Process management ---
+
+function Stop-ExistingServers {
+    $killed = $false
+    foreach ($port in @(8080, 5173)) {
+        try {
+            $connections = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
+            foreach ($conn in $connections) {
+                $pid = $conn.OwningProcess
+                if ($pid -and $pid -ne 0) {
+                    $proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
+                    if ($proc) {
+                        Write-Host "    Killing existing process on port ${port}: $($proc.ProcessName) (PID $pid)"
+                        Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+                        $killed = $true
+                    }
+                }
+            }
+        } catch {
+            # Port not in use, nothing to kill
+        }
+    }
+    if ($killed) {
+        Start-Sleep -Seconds 1
+    }
+}
 
 # --- Commands ---
 
@@ -151,8 +178,15 @@ function Invoke-Check {
     Write-Host "==> All checks passed." -ForegroundColor Green
 }
 
+function Invoke-Stop {
+    Write-Host "==> Stopping any running dev servers..." -ForegroundColor Cyan
+    Stop-ExistingServers
+    Write-Host "==> Done." -ForegroundColor Green
+}
+
 function Invoke-Dev {
     Assert-All
+    Stop-ExistingServers
     Write-Host "==> Starting backend and frontend dev servers..." -ForegroundColor Cyan
     Write-Host "    Backend:  http://localhost:8080"
     Write-Host "    Frontend: http://localhost:5173"
@@ -206,6 +240,7 @@ switch ($Command) {
     "lint"    { Invoke-Lint }
     "check"   { Invoke-Check }
     "dev"     { Invoke-Dev }
+    "stop"    { Invoke-Stop }
     "seed"    { Invoke-Seed }
     "install" { Invoke-Install }
     "doctor"  { Invoke-Doctor }
@@ -215,6 +250,7 @@ switch ($Command) {
         Write-Host "Commands:"
         Write-Host "  install     Install all dependencies (pip + npm)"
         Write-Host "  dev         Start backend (:8080) + frontend (:5173) dev servers"
+        Write-Host "  stop        Stop any running dev servers (ports 8080, 5173)"
         Write-Host "  build       TypeScript check + Vite build"
         Write-Host "  lint        Run ESLint on the frontend"
         Write-Host "  check       Run both build and lint"

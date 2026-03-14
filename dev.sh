@@ -59,6 +59,42 @@ check_all() {
   check_npm
 }
 
+# --- Process management ---
+
+kill_existing() {
+  local killed=false
+  # Kill processes on backend port 8080
+  if command -v lsof &>/dev/null; then
+    local pids
+    pids=$(lsof -ti:8080 2>/dev/null || true)
+    if [ -n "$pids" ]; then
+      echo "    Killing existing process(es) on port 8080: $pids"
+      echo "$pids" | xargs kill 2>/dev/null || true
+      killed=true
+    fi
+    pids=$(lsof -ti:5173 2>/dev/null || true)
+    if [ -n "$pids" ]; then
+      echo "    Killing existing process(es) on port 5173: $pids"
+      echo "$pids" | xargs kill 2>/dev/null || true
+      killed=true
+    fi
+  elif command -v fuser &>/dev/null; then
+    if fuser 8080/tcp &>/dev/null 2>&1; then
+      echo "    Killing existing process(es) on port 8080"
+      fuser -k 8080/tcp &>/dev/null 2>&1 || true
+      killed=true
+    fi
+    if fuser 5173/tcp &>/dev/null 2>&1; then
+      echo "    Killing existing process(es) on port 5173"
+      fuser -k 5173/tcp &>/dev/null 2>&1 || true
+      killed=true
+    fi
+  fi
+  if [ "$killed" = true ]; then
+    sleep 1
+  fi
+}
+
 # --- Commands ---
 
 cmd_doctor() {
@@ -142,8 +178,15 @@ cmd_check() {
   echo "==> All checks passed."
 }
 
+cmd_stop() {
+  echo "==> Stopping any running dev servers..."
+  kill_existing
+  echo "==> Done."
+}
+
 cmd_dev() {
   check_all
+  kill_existing
   echo "==> Starting backend and frontend dev servers..."
   echo "    Backend:  http://localhost:8080"
   echo "    Frontend: http://localhost:5173"
@@ -182,6 +225,7 @@ Usage: ./dev.sh <command>
 Commands:
   install     Install all dependencies (pip + npm)
   dev         Start backend (:8080) + frontend (:5173) dev servers
+  stop        Stop any running dev servers (ports 8080, 5173)
   build       TypeScript check + Vite build
   lint        Run ESLint on the frontend
   check       Run both build and lint
@@ -198,6 +242,7 @@ case "${1:-}" in
   lint)    cmd_lint ;;
   check)   cmd_check ;;
   dev)     cmd_dev ;;
+  stop)    cmd_stop ;;
   seed)    cmd_seed ;;
   install) cmd_install ;;
   doctor)  cmd_doctor ;;

@@ -8,6 +8,7 @@ if "%~1"=="build" goto build
 if "%~1"=="lint" goto lint
 if "%~1"=="check" goto check
 if "%~1"=="dev" goto dev
+if "%~1"=="stop" goto stop
 if "%~1"=="seed" goto seed
 if "%~1"=="install" goto install_deps
 if "%~1"=="doctor" goto doctor
@@ -158,9 +159,33 @@ if errorlevel 1 goto end
 echo ==^> All checks passed.
 goto end
 
+:kill_existing
+REM Kill processes on port 8080 (backend)
+for /f "tokens=5" %%p in ('netstat -ano 2^>nul ^| findstr ":8080 " ^| findstr "LISTENING"') do (
+    if not "%%p"=="0" (
+        echo     Killing existing process on port 8080 (PID %%p)
+        taskkill /PID %%p /F >nul 2>&1
+    )
+)
+REM Kill processes on port 5173 (frontend)
+for /f "tokens=5" %%p in ('netstat -ano 2^>nul ^| findstr ":5173 " ^| findstr "LISTENING"') do (
+    if not "%%p"=="0" (
+        echo     Killing existing process on port 5173 (PID %%p)
+        taskkill /PID %%p /F >nul 2>&1
+    )
+)
+exit /b 0
+
+:stop
+echo ==^> Stopping any running dev servers...
+call :kill_existing
+echo ==^> Done.
+goto end
+
 :dev
 call :check_all
 if errorlevel 1 goto end
+call :kill_existing
 echo ==^> Starting backend and frontend dev servers...
 echo     Backend:  http://localhost:8080
 echo     Frontend: http://localhost:5173
@@ -205,6 +230,7 @@ echo.
 echo Commands:
 echo   install     Install all dependencies (pip + npm)
 echo   dev         Start backend (:8080) + frontend (:5173) dev servers
+echo   stop        Stop any running dev servers (ports 8080, 5173)
 echo   build       TypeScript check + Vite build
 echo   lint        Run ESLint on the frontend
 echo   check       Run both build and lint
