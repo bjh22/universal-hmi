@@ -310,6 +310,11 @@ export const api = {
   updateProductionSettings: (data: ProductionSettings) =>
     request<ProductionSettings>('/production/settings/', { method: 'PUT', body: JSON.stringify(data) }),
 
+  // Service config
+  getServiceConfig: () => request<ServiceConfig>('/service/config/'),
+  updateServiceConfig: (data: ServiceConfig) =>
+    request<ServiceConfig>('/service/config/', { method: 'PUT', body: JSON.stringify(data) }),
+
   // Reason codes
   getReasonCodes: (activeOnly?: boolean) =>
     request<ReasonCode[]>(`/reason-codes/${activeOnly ? '?active_only=true' : ''}`),
