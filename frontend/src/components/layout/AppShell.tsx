@@ -114,16 +114,18 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
               <Link
                 key={item.to}
                 to={item.to}
-                className={`flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg transition-colors ${
+                className={`relative flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg transition-colors ${
                   active
                     ? 'bg-[var(--hmi-accent-bg)] text-[var(--hmi-accent-text)]'
                     : 'text-[var(--hmi-text-secondary)] hover:bg-[var(--hmi-bg-elevated)] hover:text-[var(--hmi-text-primary)]'
                 }`}
               >
-                <item.icon size={20} />
+                <item.icon size={20} className="shrink-0" />
                 {sidebarOpen && <span className="text-sm font-medium">{item.label}</span>}
                 {item.to === '/alarms' && activeAlarmCount > 0 && (
-                  <span className="ml-auto bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+                  <span className={`bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full ${
+                    sidebarOpen ? 'ml-auto' : 'absolute -top-1 -right-1 min-w-[18px] text-center'
+                  }`}>
                     {activeAlarmCount}
                   </span>
                 )}
