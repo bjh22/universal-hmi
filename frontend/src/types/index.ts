@@ -262,10 +262,19 @@ export interface TimeSeriesPoint {
   shifts: Record<string, { good: number; reject: number; avg_oee: number | null }>;
 }
 
+export interface ShiftDefinition {
+  name: string;
+  start_time: string;  // "HH:MM"
+  end_time: string;    // "HH:MM"
+  target_count: number | null;
+}
+
 export interface ProductionSettings {
   good_count_tag: string | null;
   reject_fault_tags: string[];
   downtime_alarm_tags: string[];
+  shift_mode: 'manual' | 'automatic';
+  shifts: ShiftDefinition[];
 }
 
 export interface BrowsedTag {

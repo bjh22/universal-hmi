@@ -800,11 +800,11 @@ The system spans three layers:
 
 ### How tag-driven counting works
 
-1. **Good count**: A PLC counter tag (configured in Settings > Production) is read at run start and run stop. Good count = stop value - start value (delta mode). The start value is stored on the `production_runs.start_good_count` column.
+1. **Good count**: A PLC counter tag (configured in Settings > Reporting) is read at run start and run stop. Good count = stop value - start value (delta mode). The start value is stored on the `production_runs.start_good_count` column.
 
-2. **Reject count**: Alarm-enabled tags configured as "reject fault tags" in Settings > Production. Each time the AlarmService fires an alarm for one of these tags, ProductionService increments `reject_count` on the active run.
+2. **Reject count**: Alarm-enabled tags configured as "reject fault tags" in Settings > Reporting. Each time the AlarmService fires an alarm for one of these tags, ProductionService increments `reject_count` on the active run.
 
-3. **Downtime**: Alarm-enabled tags configured as "downtime alarm tags" in Settings > Production. When an alarm activates, ProductionService creates a `DowntimeEvent` record. When the alarm clears, the event is closed with the duration calculated. Manual downtime entry is also supported.
+3. **Downtime**: Alarm-enabled tags configured as "downtime alarm tags" in Settings > Reporting. When an alarm activates, ProductionService creates a `DowntimeEvent` record. When the alarm clears, the event is closed with the duration calculated. Manual downtime entry is also supported.
 
 ### Inter-service communication
 

@@ -1715,7 +1715,7 @@ function BrowseTagsDialog({ dsId, dsName, existingTags, onCreateTag, onClose }: 
 
 // ─── Main SettingsPage ───
 export function SettingsPage({ user, tagValues }: Props) {
-  const [tab, setTab] = useState<'branding' | 'preferences' | 'tags' | 'datasources' | 'integrations' | 'production' | 'reason_codes' | 'users' | 'audit'>('tags');
+  const [tab, setTab] = useState<'branding' | 'preferences' | 'tags' | 'datasources' | 'integrations' | 'reporting' | 'users' | 'audit'>('tags');
   const [tags, setTags] = useState<Tag[]>([]);
   const [dataSources, setDataSources] = useState<DataSourceData[]>([]);
   const [users, setUsers] = useState<UserListEntry[]>([]);
@@ -2122,8 +2122,7 @@ export function SettingsPage({ user, tagValues }: Props) {
     { key: 'tags' as const, label: 'Tags' },
     { key: 'datasources' as const, label: 'Data Sources' },
     { key: 'integrations' as const, label: 'Integrations' },
-    { key: 'production' as const, label: 'Production' },
-    { key: 'reason_codes' as const, label: 'Reason Codes' },
+    { key: 'reporting' as const, label: 'Reporting' },
     { key: 'users' as const, label: 'Users' },
     { key: 'audit' as const, label: 'Audit Trail' },
   ];
@@ -2828,11 +2827,14 @@ export function SettingsPage({ user, tagValues }: Props) {
         <IntegrationsTab tagValues={tagValues} canManage={canManage} />
       )}
 
-      {/* ═══ Production ═══ */}
-      {tab === 'production' && <ProductionSettingsTab />}
-
-      {/* ═══ Reason Codes ═══ */}
-      {tab === 'reason_codes' && <ReasonCodesSettings />}
+      {/* ═══ Reporting ═══ */}
+      {tab === 'reporting' && (
+        <div className="space-y-10">
+          <ProductionSettingsTab />
+          <hr className="border-[var(--hmi-border)]" />
+          <ReasonCodesSettings />
+        </div>
+      )}
 
       {/* ═══ Users ═══ */}
       {tab === 'users' && (

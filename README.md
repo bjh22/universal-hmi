@@ -31,7 +31,7 @@ A web-based Human-Machine Interface (HMI) for industrial automation. Connects to
 - Alarm management with boolean triggers, acknowledgment, filtering, sorting, and history
 - Trend charting with configurable time ranges, saved views, and CSV export
 - Job/recipe management with setpoint editing, download guards, version history, and upload-from-machine
-- Production reporting with tag-driven OEE, time-series analytics, downtime Pareto, and managed reason codes
+- Production reporting with tag-driven OEE, time-series analytics, downtime Pareto, managed reason codes, and automatic shift scheduling
 - Python scripting engine for button actions
 - Multi-format tag import (HMI CSV, CODESYS XML, RSLogix 500 CSV) with preview and conflict resolution
 - Data source management with connection testing and tag browsing
@@ -517,15 +517,27 @@ The Reports page provides production analytics with tag-driven data collection a
 
 #### Automatic Reject and Downtime Tracking
 
-When configured in Settings > Production:
+When configured in Settings > Reporting:
 
 - **Reject fault tags** — Each time a configured fault alarm fires, the reject count for the active run is automatically incremented.
 - **Downtime alarm tags** — When a configured alarm activates, a downtime event is automatically created. When the alarm clears, the event is closed with the duration calculated.
 - Manual downtime entry is still available: click **+ Add Downtime** on a run's detail panel and select a reason code.
 
+#### Automatic Shift Scheduling
+
+Instead of starting and stopping runs manually, you can configure automatic shift-based runs:
+
+1. Go to **Settings** > **Reporting** tab.
+2. Under **Shift Mode**, select **Automatic Shifts**.
+3. Use a preset (1-Shift, 2-Shift, 3-Shift) or add shifts manually with name, start time, end time, and optional target count.
+4. The 24-hour timeline bar provides a visual overview of shift coverage.
+5. Click **Save**. The system will automatically start a run at each shift's start time and stop it at the end time.
+6. When in automatic mode, the Reports page shows an "Auto Shifts" badge and the manual Start Run button is hidden.
+7. Manual stop is still allowed for emergencies — the scheduler will restart a run on its next check if the shift is still active.
+
 #### Configuring Production Settings
 
-1. Go to **Settings** > **Production** tab.
+1. Go to **Settings** > **Reporting** tab.
 2. Configure the **Good Count Tag** — select an integer or float tag that represents a running counter on the PLC. The system uses delta mode (value at stop minus value at start).
 3. Select **Reject Fault Tags** — check alarm-enabled tags that indicate a faulty product. Each alarm activation increments the reject count.
 4. Select **Downtime Alarm Tags** — check alarm-enabled tags that indicate machine downtime. Alarm events auto-create and auto-close downtime records.
@@ -535,9 +547,9 @@ When configured in Settings > Production:
 
 Downtime reason codes are predefined categories used in the downtime Pareto chart and when logging downtime events.
 
-1. Go to **Settings** > **Reason Codes** tab.
+1. Go to **Settings** > **Reporting** tab, scroll to the **Downtime Reason Codes** section.
 2. The system comes seeded with default codes: MECHANICAL, ELECTRICAL, MATERIAL, CHANGEOVER, OPERATOR, PLANNED_MAINTENANCE, QUALITY_HOLD, OTHER.
-3. Click **+ Add Reason Code** to create a new code with an optional category.
+3. Click **+ Add Code** to create a new code with an optional category.
 4. Click a row to edit, or use the toggle to activate/deactivate a code.
 5. Deactivated codes are preserved for historical Pareto analysis but no longer appear in dropdown menus.
 
@@ -674,8 +686,7 @@ The Settings page is the central configuration hub, organized into tabs:
 | **Tags** | Create, edit, delete, and bulk-manage data points. Configure data types, addresses, alarms, trending, simulation, and enum mappings |
 | **Data Sources** | Add and configure PLC connections (OPC-UA, Modbus, EtherNet/IP, MQTT, Simulation) with test and browse capabilities |
 | **Integrations** | Manage third-party equipment connections (printers, scanners, file watchers) |
-| **Production** | Configure tag bindings for production tracking — good count tag, reject fault tags, and downtime alarm tags |
-| **Reason Codes** | Manage predefined downtime reason codes with categories for Pareto analysis |
+| **Reporting** | Configure shift schedules (manual or automatic), tag bindings for production tracking, and manage downtime reason codes |
 | **Users** | Create and manage user accounts, set roles and credentials |
 | **Audit Trail** | Browse all configuration changes with timestamps, usernames, actions, and source IPs. Filter and export to CSV |
 
