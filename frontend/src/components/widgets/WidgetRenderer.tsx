@@ -33,6 +33,7 @@ import { LightIndicator } from './LightIndicator';
 import { AutoFillWidget } from './AutoFillWidget';
 import { CognexViewerWidget } from './CognexViewerWidget';
 import { QRCodeWidget } from './QRCodeWidget';
+import { TrendWidget } from './TrendWidget';
 
 // TypeScript interface defining the data this component receives from its parent.
 // `Record<string, TagValue>` is a dictionary type — keys are tag name strings,
@@ -134,6 +135,8 @@ export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, 
       return <CollapsibleContainerWidget title={p.title as string} description={p.description as string} titleStyle={p.titleStyle as undefined} chrome={chrome} defaultCollapsed={p.defaultCollapsed as boolean} collapsed={collapsed} onToggleCollapsed={onToggleCollapsed} />;
     case 'qr_code':
       return <QRCodeWidget title={p.title as string} tag={p.tag as string} tagValues={tagValues} staticContent={p.staticContent as string} fgColor={p.fgColor as string} bgColor={p.bgColor as string} titleStyle={p.titleStyle as undefined} chrome={chrome} />;
+    case 'trend':
+      return <TrendWidget title={p.title as string} tags={p.tags as Array<{ tag: string; color?: string }> || []} hours={p.hours as number} refreshSeconds={p.refreshSeconds as number} chrome={chrome} />;
     default:
       return (
         <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 text-slate-400 text-sm">

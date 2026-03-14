@@ -1,6 +1,6 @@
 import {
   Activity, Gauge, Hash, ToggleLeft, MousePointerClick,
-  SlidersHorizontal, Type, FileText, Bell, ChevronDown, BarChart3, LayoutGrid, Square, Circle, Sparkles, ScanBarcode, PanelTopClose, QrCode,
+  SlidersHorizontal, Type, FileText, Bell, ChevronDown, BarChart3, LayoutGrid, Square, Circle, Sparkles, ScanBarcode, PanelTopClose, QrCode, TrendingUp,
 } from 'lucide-react';
 
 export interface WidgetTypeInfo {
@@ -105,5 +105,10 @@ export const WIDGET_TYPES: WidgetTypeInfo[] = [
     type: 'qr_code', label: 'QR Code', icon: QrCode, category: 'display',
     defaultW: 3, defaultH: 3, defaultAbsW: 200, defaultAbsH: 200,
     defaultProps: { title: 'QR Code', tag: '', staticContent: '', fgColor: '#ffffff', bgColor: 'transparent' },
+  },
+  {
+    type: 'trend', label: 'Trend Chart', icon: TrendingUp, category: 'display',
+    defaultW: 6, defaultH: 4, defaultAbsW: 480, defaultAbsH: 320,
+    defaultProps: { title: 'Trend', tags: [], hours: 24, refreshSeconds: 30 },
   },
 ];
