@@ -145,6 +145,9 @@ async def update_tag(
                         tag.deadband != body.deadband)
     for key, val in body.model_dump().items():
         setattr(tag, key, val)
+    # Clear persisted value when tag is no longer internal (nonvolatile)
+    if tag.data_source_id is not None or tag.simulation_enabled:
+        tag.persisted_value = None
     await session.flush()
     await session.refresh(tag, ["labels"])
     tag_engine.register_tag(tag)

@@ -64,6 +64,8 @@ async def lifespan(app: FastAPI):
         await tag_engine.ensure_system_tags(session)
         await session.commit()
 
+    tag_engine.set_session_factory(async_session)
+
     async with async_session() as session:
         # 2. Tags first — they're the central data model everything else references
         await tag_engine.load_tags(session)

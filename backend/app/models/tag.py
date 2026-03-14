@@ -123,6 +123,11 @@ class Tag(Base):
     # System tags are built-in (e.g. $CURRENT_TIME) — cannot be modified or deleted
     is_system: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # Persisted value for internal (nonvolatile) tags — JSON-serialized string.
+    # Internal tags (no data source, no simulation) store their current value here
+    # so it survives app restarts.
+    persisted_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # relationship() defines how tables connect in the ORM layer.
     # lazy="selectin" means labels are loaded in a single efficient query
     # when the tag is fetched, avoiding the "N+1 query" problem (one extra

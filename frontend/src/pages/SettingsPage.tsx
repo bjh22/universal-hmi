@@ -412,7 +412,7 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
                 onChange={e => set('data_source_id', e.target.value ? Number(e.target.value) : null)}
                 className={inputCls}
               >
-                <option value="">None (simulation)</option>
+                <option value="">Internal</option>
                 {dataSources.map(ds => (
                   <option key={ds.id} value={ds.id}>{ds.name} ({ds.protocol})</option>
                 ))}
@@ -664,7 +664,7 @@ function BulkEditDialog({ tagCount, dataSources, onApply, onClose }: {
               value={fields.data_source_id.value == null ? '' : String(fields.data_source_id.value)}
               onChange={e => setValue('data_source_id', e.target.value ? Number(e.target.value) : null)}
               disabled={!fields.data_source_id.enabled} className={ctrlCls}>
-              <option value="">None (simulation)</option>
+              <option value="">Internal</option>
               {dataSources.map(ds => <option key={ds.id} value={ds.id}>{ds.name} ({ds.protocol})</option>)}
             </select>
           </div>
@@ -2474,7 +2474,7 @@ export function SettingsPage({ user, tagValues }: Props) {
                 className="bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-lg px-3 py-1.5 text-sm text-[var(--hmi-text-secondary)] outline-none"
               >
                 <option value="all">All Sources</option>
-                <option value="none">Simulation</option>
+                <option value="none">Internal</option>
                 {dataSources.map(ds => <option key={ds.id} value={ds.id}>{ds.name}</option>)}
               </select>
               {(tagTypeFilter !== 'all' || tagSourceFilter !== 'all') && (
@@ -2594,7 +2594,7 @@ export function SettingsPage({ user, tagValues }: Props) {
                       </div>
                     </td>
                     <td className="px-4 py-2 text-[var(--hmi-text-secondary)] text-xs">
-                      {tag.data_source_id ? dsNameMap.get(tag.data_source_id) || `#${tag.data_source_id}` : '\u2014'}
+                      {tag.data_source_id ? dsNameMap.get(tag.data_source_id) || `#${tag.data_source_id}` : (tag.simulation_enabled ? 'Simulation' : 'Internal')}
                     </td>
                     <td className="px-4 py-2 text-[var(--hmi-text-secondary)]">{tag.data_type}</td>
                     <td className="px-4 py-2 text-[var(--hmi-text-secondary)]">{tag.access_mode}</td>
