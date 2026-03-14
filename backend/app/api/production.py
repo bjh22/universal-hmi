@@ -69,7 +69,7 @@ def _utc_iso(dt: datetime | None) -> str | None:
     return dt.isoformat() + ("" if dt.tzinfo else "Z")
 
 
-def _run_out(r: ProductionRun) -> dict:
+async def _run_out(r: ProductionRun, session: AsyncSession) -> dict:
     good_count = r.good_count
 
     # Compute live good count for active runs with tag-driven tracking
@@ -83,6 +83,42 @@ def _run_out(r: ProductionRun) -> dict:
                 except (ValueError, TypeError):
                     pass
 
+    # For active runs, compute live OEE on-the-fly
+    availability = r.availability
+    performance = r.performance
+    quality = r.quality
+    oee = r.oee
+
+    if not r.end_time:
+        total_parts = good_count + r.reject_count
+        # Quality
+        quality = good_count / total_parts if total_parts > 0 else None
+        # Availability
+        if r.start_time:
+            start = r.start_time.replace(tzinfo=None) if r.start_time.tzinfo else r.start_time
+            run_duration = (datetime.utcnow() - start).total_seconds()
+            if run_duration > 0:
+                dt_result = await session.execute(
+                    select(func.coalesce(func.sum(DowntimeEvent.duration_seconds), 0))
+                    .where(DowntimeEvent.production_run_id == r.id)
+                )
+                total_downtime = dt_result.scalar() or 0
+                availability = max(0, (run_duration - total_downtime) / run_duration)
+            else:
+                availability = 1.0
+        else:
+            availability = 1.0
+        # Performance
+        if r.target_count and r.target_count > 0 and total_parts > 0:
+            performance = min(total_parts / r.target_count, 1.0)
+        else:
+            performance = 1.0
+        # OEE composite
+        if availability is not None and quality is not None:
+            oee = availability * performance * quality
+        else:
+            oee = None
+
     return {
         "id": r.id,
         "job_name": r.job_name,
@@ -91,10 +127,10 @@ def _run_out(r: ProductionRun) -> dict:
         "good_count": good_count,
         "reject_count": r.reject_count,
         "target_count": r.target_count,
-        "availability": r.availability,
-        "performance": r.performance,
-        "quality": r.quality,
-        "oee": r.oee,
+        "availability": availability,
+        "performance": performance,
+        "quality": quality,
+        "oee": oee,
         "shift": r.shift,
         "start_good_count": r.start_good_count,
         "good_count_tag": r.good_count_tag,
@@ -149,11 +185,11 @@ async def _calculate_oee(run: ProductionRun, session: AsyncSession) -> None:
     else:
         run.availability = None
 
-    # Performance
+    # Performance (default to 1.0 when no target is set)
     if run.target_count and run.target_count > 0 and total_parts > 0:
         run.performance = min(total_parts / run.target_count, 1.0)
     else:
-        run.performance = None
+        run.performance = 1.0
 
     # OEE composite
     if run.availability is not None and run.performance is not None and run.quality is not None:
@@ -180,7 +216,8 @@ async def list_runs(
         query = query.where(ProductionRun.start_time <= _parse_iso(end))
     query = query.limit(limit)
     result = await session.execute(query)
-    return [_run_out(r) for r in result.scalars().all()]
+    runs = result.scalars().all()
+    return [await _run_out(r, session) for r in runs]
 
 
 @router.get("/runs/{run_id}")
@@ -188,7 +225,7 @@ async def get_run(run_id: int, session: AsyncSession = Depends(get_db)):
     run = await session.get(ProductionRun, run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Production run not found")
-    return _run_out(run)
+    return await _run_out(run, session)
 
 
 @router.post("/runs", status_code=201)
@@ -226,7 +263,7 @@ async def start_run(
         details=f"Started run #{run.id} job='{body.job_name}' shift='{body.shift}'",
     )
     await session.commit()
-    return _run_out(run)
+    return await _run_out(run, session)
 
 
 @router.post("/runs/{run_id}/stop")
@@ -267,7 +304,7 @@ async def stop_run(
         details=f"Stopped run #{run.id} good={body.good_count} reject={body.reject_count}",
     )
     await session.commit()
-    return _run_out(run)
+    return await _run_out(run, session)
 
 
 @router.put("/runs/{run_id}")
@@ -295,7 +332,7 @@ async def update_run(
         details=f"Updated run #{run.id}",
     )
     await session.commit()
-    return _run_out(run)
+    return await _run_out(run, session)
 
 
 @router.delete("/runs/{run_id}", status_code=204)
@@ -448,6 +485,33 @@ async def downtime_summary(
 # Time-series analytics
 # ---------------------------------------------------------------------------
 
+def _compute_oee_from_aggregates(
+    total_good: int, total_reject: int, total_target: int,
+    total_duration: int, total_downtime: int,
+) -> dict[str, float | None]:
+    """Compute OEE components from raw aggregate data."""
+    total_parts = total_good + total_reject
+    quality = total_good / total_parts if total_parts > 0 else None
+    availability = (
+        max(0, (total_duration - total_downtime) / total_duration)
+        if total_duration > 0 else None
+    )
+    performance = (
+        min(total_parts / total_target, 1.0)
+        if total_target > 0 and total_parts > 0 else 1.0
+    )
+    if quality is not None and availability is not None:
+        oee = availability * performance * quality
+    else:
+        oee = None
+    return {
+        "oee": round(oee, 4) if oee is not None else None,
+        "availability": round(availability, 4) if availability is not None else None,
+        "performance": round(performance, 4),
+        "quality": round(quality, 4) if quality is not None else None,
+    }
+
+
 _GRANULARITY_FMT = {
     "day": "%Y-%m-%d",
     "week": "%Y-W%W",
@@ -471,30 +535,13 @@ async def time_series(
             func.count(ProductionRun.id).label("run_count"),
             func.coalesce(func.sum(ProductionRun.good_count), 0).label("total_good"),
             func.coalesce(func.sum(ProductionRun.reject_count), 0).label("total_reject"),
-            func.avg(
-                case(
-                    (ProductionRun.oee.isnot(None), ProductionRun.oee),
-                    else_=None,
-                )
-            ).label("avg_oee"),
-            func.avg(
-                case(
-                    (ProductionRun.availability.isnot(None), ProductionRun.availability),
-                    else_=None,
-                )
-            ).label("avg_availability"),
-            func.avg(
-                case(
-                    (ProductionRun.performance.isnot(None), ProductionRun.performance),
-                    else_=None,
-                )
-            ).label("avg_performance"),
-            func.avg(
-                case(
-                    (ProductionRun.quality.isnot(None), ProductionRun.quality),
-                    else_=None,
-                )
-            ).label("avg_quality"),
+            func.coalesce(func.sum(ProductionRun.target_count), 0).label("total_target"),
+            func.coalesce(
+                func.sum(
+                    func.strftime('%s', func.coalesce(ProductionRun.end_time, func.datetime('now')))
+                    - func.strftime('%s', ProductionRun.start_time)
+                ), 0
+            ).label("total_duration_seconds"),
         )
         .group_by(literal_column("period"))
         .order_by(literal_column("period"))
@@ -532,12 +579,13 @@ async def time_series(
             func.coalesce(ProductionRun.shift, literal_column("'Unassigned'")).label("shift"),
             func.sum(ProductionRun.good_count).label("good"),
             func.sum(ProductionRun.reject_count).label("reject"),
-            func.avg(
-                case(
-                    (ProductionRun.oee.isnot(None), ProductionRun.oee),
-                    else_=None,
-                )
-            ).label("avg_oee"),
+            func.coalesce(func.sum(ProductionRun.target_count), 0).label("target"),
+            func.coalesce(
+                func.sum(
+                    func.strftime('%s', func.coalesce(ProductionRun.end_time, func.datetime('now')))
+                    - func.strftime('%s', ProductionRun.start_time)
+                ), 0
+            ).label("duration"),
         )
         .group_by(literal_column("period"), literal_column("shift"))
         .order_by(literal_column("period"))
@@ -547,29 +595,62 @@ async def time_series(
     if end:
         shift_query = shift_query.where(ProductionRun.start_time <= _parse_iso(end))
 
+    # Get per-shift downtime
+    shift_dt_query = (
+        select(
+            func.strftime(fmt, ProductionRun.start_time).label("period"),
+            func.coalesce(ProductionRun.shift, literal_column("'Unassigned'")).label("shift"),
+            func.coalesce(func.sum(DowntimeEvent.duration_seconds), 0).label("downtime"),
+        )
+        .join(ProductionRun, DowntimeEvent.production_run_id == ProductionRun.id)
+        .group_by(literal_column("period"), literal_column("shift"))
+    )
+    if start:
+        shift_dt_query = shift_dt_query.where(ProductionRun.start_time >= _parse_iso(start))
+    if end:
+        shift_dt_query = shift_dt_query.where(ProductionRun.start_time <= _parse_iso(end))
+
     shift_result = await session.execute(shift_query)
+    shift_dt_result = await session.execute(shift_dt_query)
+    shift_dt_map: dict[tuple[str, str], int] = {}
+    for r in shift_dt_result:
+        shift_dt_map[(r.period, r.shift or "Unassigned")] = int(r.downtime or 0)
+
     shift_map: dict[str, dict] = {}
     for r in shift_result:
         if r.period not in shift_map:
             shift_map[r.period] = {}
+        s_good = int(r.good or 0)
+        s_reject = int(r.reject or 0)
+        s_oee = _compute_oee_from_aggregates(
+            s_good, s_reject, int(r.target or 0),
+            int(r.duration or 0), shift_dt_map.get((r.period, r.shift or "Unassigned"), 0),
+        )
         shift_map[r.period][r.shift or "Unassigned"] = {
-            "good": int(r.good or 0),
-            "reject": int(r.reject or 0),
-            "avg_oee": round(float(r.avg_oee), 4) if r.avg_oee is not None else None,
+            "good": s_good,
+            "reject": s_reject,
+            "avg_oee": s_oee["oee"],
         }
 
-    return [
-        {
+    result_list = []
+    for r in rows:
+        good = int(r.total_good)
+        reject = int(r.total_reject)
+        target = int(r.total_target)
+        duration = int(r.total_duration_seconds)
+        downtime = downtime_map.get(r.period, 0)
+        oee_data = _compute_oee_from_aggregates(good, reject, target, duration, downtime)
+        result_list.append({
             "period": r.period,
             "run_count": r.run_count,
-            "total_good": int(r.total_good),
-            "total_reject": int(r.total_reject),
-            "avg_oee": round(float(r.avg_oee), 4) if r.avg_oee is not None else None,
-            "avg_availability": round(float(r.avg_availability), 4) if r.avg_availability is not None else None,
-            "avg_performance": round(float(r.avg_performance), 4) if r.avg_performance is not None else None,
-            "avg_quality": round(float(r.avg_quality), 4) if r.avg_quality is not None else None,
-            "total_downtime_seconds": downtime_map.get(r.period, 0),
+            "total_good": good,
+            "total_reject": reject,
+            "avg_oee": oee_data["oee"],
+            "avg_availability": oee_data["availability"],
+            "avg_performance": oee_data["performance"],
+            "avg_quality": oee_data["quality"],
+            "total_downtime_seconds": downtime,
+            "total_duration_seconds": duration,
             "shifts": shift_map.get(r.period, {}),
-        }
-        for r in rows
-    ]
+        })
+    return result_list

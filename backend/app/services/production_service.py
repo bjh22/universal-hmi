@@ -246,11 +246,11 @@ class ProductionService:
         else:
             run.availability = None
 
-        # Performance
+        # Performance (default to 1.0 when no target is set)
         if run.target_count and run.target_count > 0 and total_parts > 0:
             run.performance = min(total_parts / run.target_count, 1.0)
         else:
-            run.performance = None
+            run.performance = 1.0
 
         # OEE composite
         if run.availability is not None and run.performance is not None and run.quality is not None:
