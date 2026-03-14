@@ -278,6 +278,15 @@ export interface ProductionSettings {
   shifts: ShiftDefinition[];
 }
 
+export interface ServiceTagOverride {
+  mode: 'momentary' | 'toggle';
+}
+
+export interface ServiceConfig {
+  overrides: Record<string, ServiceTagOverride>;
+  order: Record<string, string[]>;
+}
+
 export interface BrowsedTag {
   name?: string;
   display_name?: string;

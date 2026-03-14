@@ -123,6 +123,8 @@ async def _add_column_if_missing(conn, table: str, column: str, col_type: str):
     """Add a column to an existing table if it doesn't exist yet."""
     result = await conn.execute(text(f"PRAGMA table_info({table})"))
     columns = [row[1] for row in result.fetchall()]
+    if not columns:
+        return  # Table doesn't exist yet (will be created by create_all)
     if column not in columns:
         await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
 

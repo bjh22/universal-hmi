@@ -228,6 +228,291 @@ async def create_demo_resources(session: AsyncSession):
     session.add(machine_label)
     await session.flush()
 
+    # I/O and Service labels
+    input_label = TagLabel(
+        name="Input",
+        color="#8b5cf6",
+        description="Machine digital/analog inputs",
+    )
+    session.add(input_label)
+
+    output_label = TagLabel(
+        name="Output",
+        color="#f97316",
+        description="Machine digital/analog outputs",
+    )
+    session.add(output_label)
+
+    service_label = TagLabel(
+        name="Service",
+        color="#ef4444",
+        description="Tags available for manual actuation in Service mode",
+    )
+    session.add(service_label)
+
+    seal_flattener_label = TagLabel(
+        name="Seal Flattener",
+        color="#06b6d4",
+        description="Seal flattener station actuators",
+    )
+    session.add(seal_flattener_label)
+
+    bag_open_label = TagLabel(
+        name="Bag Open",
+        color="#84cc16",
+        description="Bag opening station actuators",
+    )
+    session.add(bag_open_label)
+
+    conveyor_label = TagLabel(
+        name="Conveyor",
+        color="#eab308",
+        description="Conveyor system actuators",
+    )
+    session.add(conveyor_label)
+    await session.flush()
+
+    # I/O tags — digital inputs (read-only sensors/switches)
+    io_tags = [
+        Tag(
+            name="IO.BagDetectSensor",
+            display_name="Bag detect sensor",
+            description="Detects presence of bag at filling station",
+            data_source_id=sim_ds.id,
+            data_type=TagDataType.BOOL,
+            access_mode=TagAccessMode.READ,
+            simulation_enabled=True,
+            simulation_behavior=SimulationBehavior.TOGGLE,
+            simulation_config=json.dumps({"period": 8}),
+        ),
+        Tag(
+            name="IO.SealTempOK",
+            display_name="Seal temp OK",
+            description="Sealing bar temperature within operating range",
+            data_source_id=sim_ds.id,
+            data_type=TagDataType.BOOL,
+            access_mode=TagAccessMode.READ,
+            simulation_enabled=True,
+            simulation_behavior=SimulationBehavior.TOGGLE,
+            simulation_config=json.dumps({"period": 30}),
+        ),
+        Tag(
+            name="IO.AirPressureOK",
+            display_name="Air pressure OK",
+            description="Pneumatic supply pressure above minimum threshold",
+            data_source_id=sim_ds.id,
+            data_type=TagDataType.BOOL,
+            access_mode=TagAccessMode.READ,
+            simulation_enabled=True,
+            simulation_behavior=SimulationBehavior.TOGGLE,
+            simulation_config=json.dumps({"period": 45}),
+        ),
+        Tag(
+            name="IO.GuardDoorClosed",
+            display_name="Guard door closed",
+            description="Safety guard door interlock switch",
+            data_source_id=sim_ds.id,
+            data_type=TagDataType.BOOL,
+            access_mode=TagAccessMode.READ,
+            simulation_enabled=True,
+            simulation_behavior=SimulationBehavior.TOGGLE,
+            simulation_config=json.dumps({"period": 60}),
+        ),
+        Tag(
+            name="IO.FilmLowSensor",
+            display_name="Film low sensor",
+            description="Film roll diameter below minimum threshold",
+            data_source_id=sim_ds.id,
+            data_type=TagDataType.BOOL,
+            access_mode=TagAccessMode.READ,
+            simulation_enabled=True,
+            simulation_behavior=SimulationBehavior.TOGGLE,
+            simulation_config=json.dumps({"period": 90}),
+        ),
+        Tag(
+            name="IO.InfeedConveyorSpeed",
+            display_name="Infeed conveyor speed",
+            description="Measured speed of infeed conveyor belt",
+            data_source_id=sim_ds.id,
+            data_type=TagDataType.FLOAT,
+            access_mode=TagAccessMode.READ,
+            engineering_units="m/min",
+            min_value=0,
+            max_value=30,
+            simulation_enabled=True,
+            simulation_behavior=SimulationBehavior.SINE,
+            simulation_config=json.dumps({"min": 8, "max": 15, "period": 40}),
+        ),
+    ]
+
+    # I/O tags — digital outputs (writable actuators)
+    output_tags = [
+        Tag(
+            name="IO.SealBarHeater",
+            display_name="Seal bar heater",
+            description="Main sealing bar heater element",
+            data_source_id=sim_ds.id,
+            data_type=TagDataType.BOOL,
+            access_mode=TagAccessMode.READ_WRITE,
+            simulation_enabled=True,
+            simulation_behavior=SimulationBehavior.TOGGLE,
+            simulation_config=json.dumps({"period": 20}),
+        ),
+        Tag(
+            name="IO.FilmAdvanceMotor",
+            display_name="Film advance motor",
+            description="Film feed motor run output",
+            data_source_id=sim_ds.id,
+            data_type=TagDataType.BOOL,
+            access_mode=TagAccessMode.READ_WRITE,
+            simulation_enabled=True,
+            simulation_behavior=SimulationBehavior.TOGGLE,
+            simulation_config=json.dumps({"period": 10}),
+        ),
+        Tag(
+            name="IO.DischargeConveyor",
+            display_name="Discharge conveyor",
+            description="Discharge conveyor belt run output",
+            data_source_id=sim_ds.id,
+            data_type=TagDataType.BOOL,
+            access_mode=TagAccessMode.READ_WRITE,
+            simulation_enabled=True,
+            simulation_behavior=SimulationBehavior.TOGGLE,
+            simulation_config=json.dumps({"period": 15}),
+        ),
+        Tag(
+            name="IO.StackerPusher",
+            display_name="Stacker pusher",
+            description="Stacker pusher cylinder output",
+            data_source_id=sim_ds.id,
+            data_type=TagDataType.BOOL,
+            access_mode=TagAccessMode.READ_WRITE,
+            simulation_enabled=True,
+            simulation_behavior=SimulationBehavior.TOGGLE,
+            simulation_config=json.dumps({"period": 12}),
+        ),
+    ]
+
+    # Service tags — grouped by station
+    service_tags_seal = [
+        Tag(
+            name="Service.SealFlattener.Extend",
+            display_name="Flattener extend",
+            description="Extend seal flattener cylinder",
+            data_source_id=sim_ds.id,
+            data_type=TagDataType.BOOL,
+            access_mode=TagAccessMode.READ_WRITE,
+            simulation_enabled=True,
+            simulation_behavior=SimulationBehavior.STATIC,
+            simulation_config=json.dumps({"value": False}),
+        ),
+        Tag(
+            name="Service.SealFlattener.Retract",
+            display_name="Flattener retract",
+            description="Retract seal flattener cylinder",
+            data_source_id=sim_ds.id,
+            data_type=TagDataType.BOOL,
+            access_mode=TagAccessMode.READ_WRITE,
+            simulation_enabled=True,
+            simulation_behavior=SimulationBehavior.STATIC,
+            simulation_config=json.dumps({"value": False}),
+        ),
+        Tag(
+            name="Service.SealFlattener.HeaterEnable",
+            display_name="Flattener heater",
+            description="Enable seal flattener heater element",
+            data_source_id=sim_ds.id,
+            data_type=TagDataType.BOOL,
+            access_mode=TagAccessMode.READ_WRITE,
+            simulation_enabled=True,
+            simulation_behavior=SimulationBehavior.STATIC,
+            simulation_config=json.dumps({"value": False}),
+        ),
+    ]
+
+    service_tags_bag = [
+        Tag(
+            name="Service.BagOpen.Gripper",
+            display_name="Bag gripper",
+            description="Actuate bag opening gripper jaws",
+            data_source_id=sim_ds.id,
+            data_type=TagDataType.BOOL,
+            access_mode=TagAccessMode.READ_WRITE,
+            simulation_enabled=True,
+            simulation_behavior=SimulationBehavior.STATIC,
+            simulation_config=json.dumps({"value": False}),
+        ),
+        Tag(
+            name="Service.BagOpen.Vacuum",
+            display_name="Bag vacuum",
+            description="Activate vacuum cups for bag opening",
+            data_source_id=sim_ds.id,
+            data_type=TagDataType.BOOL,
+            access_mode=TagAccessMode.READ_WRITE,
+            simulation_enabled=True,
+            simulation_behavior=SimulationBehavior.STATIC,
+            simulation_config=json.dumps({"value": False}),
+        ),
+        Tag(
+            name="Service.BagOpen.BlowOff",
+            display_name="Bag blow-off",
+            description="Activate air blow-off to open bag mouth",
+            data_source_id=sim_ds.id,
+            data_type=TagDataType.BOOL,
+            access_mode=TagAccessMode.READ_WRITE,
+            simulation_enabled=True,
+            simulation_behavior=SimulationBehavior.STATIC,
+            simulation_config=json.dumps({"value": False}),
+        ),
+    ]
+
+    service_tags_conveyor = [
+        Tag(
+            name="Service.Conveyor.InfeedRun",
+            display_name="Infeed conveyor",
+            description="Run infeed conveyor in service mode",
+            data_source_id=sim_ds.id,
+            data_type=TagDataType.BOOL,
+            access_mode=TagAccessMode.READ_WRITE,
+            simulation_enabled=True,
+            simulation_behavior=SimulationBehavior.STATIC,
+            simulation_config=json.dumps({"value": False}),
+        ),
+        Tag(
+            name="Service.Conveyor.DischargeRun",
+            display_name="Discharge conveyor",
+            description="Run discharge conveyor in service mode",
+            data_source_id=sim_ds.id,
+            data_type=TagDataType.BOOL,
+            access_mode=TagAccessMode.READ_WRITE,
+            simulation_enabled=True,
+            simulation_behavior=SimulationBehavior.STATIC,
+            simulation_config=json.dumps({"value": False}),
+        ),
+        Tag(
+            name="Service.Conveyor.Speed",
+            display_name="Conveyor speed",
+            description="Manual speed setpoint for conveyors in service mode",
+            data_source_id=sim_ds.id,
+            data_type=TagDataType.FLOAT,
+            access_mode=TagAccessMode.READ_WRITE,
+            engineering_units="m/min",
+            min_value=0,
+            max_value=30,
+            simulation_enabled=True,
+            simulation_behavior=SimulationBehavior.STATIC,
+            simulation_config=json.dumps({"value": 5.0}),
+        ),
+    ]
+
+    all_io_input_tags = io_tags
+    all_io_output_tags = output_tags
+    all_service_tags = service_tags_seal + service_tags_bag + service_tags_conveyor
+
+    for t in all_io_input_tags + all_io_output_tags + all_service_tags:
+        session.add(t)
+    await session.flush()
+
     # Assign labels to tags
     setpoint_names = {"Machine.TargetSpeed", "Machine.FilmWidth", "Machine.SealTemp"}
     for t in sim_tags:
@@ -238,6 +523,42 @@ async def create_demo_resources(session: AsyncSession):
         if db_tag.name in setpoint_names:
             db_tag.labels.append(job_setpoint_label)
         db_tag.labels.append(machine_label)
+
+    # Assign Input label
+    for t in all_io_input_tags:
+        result = await session.execute(select(Tag).where(Tag.name == t.name))
+        db_tag = result.scalar_one_or_none()
+        if db_tag:
+            db_tag.labels.append(input_label)
+
+    # Assign Output label
+    for t in all_io_output_tags:
+        result = await session.execute(select(Tag).where(Tag.name == t.name))
+        db_tag = result.scalar_one_or_none()
+        if db_tag:
+            db_tag.labels.append(output_label)
+
+    # Assign Service + station labels
+    for t in service_tags_seal:
+        result = await session.execute(select(Tag).where(Tag.name == t.name))
+        db_tag = result.scalar_one_or_none()
+        if db_tag:
+            db_tag.labels.append(service_label)
+            db_tag.labels.append(seal_flattener_label)
+
+    for t in service_tags_bag:
+        result = await session.execute(select(Tag).where(Tag.name == t.name))
+        db_tag = result.scalar_one_or_none()
+        if db_tag:
+            db_tag.labels.append(service_label)
+            db_tag.labels.append(bag_open_label)
+
+    for t in service_tags_conveyor:
+        result = await session.execute(select(Tag).where(Tag.name == t.name))
+        db_tag = result.scalar_one_or_none()
+        if db_tag:
+            db_tag.labels.append(service_label)
+            db_tag.labels.append(conveyor_label)
 
     # Default dashboard screen (absolute mode, 1920x1080)
     session.add(Screen(
