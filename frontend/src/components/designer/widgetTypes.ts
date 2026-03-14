@@ -1,6 +1,6 @@
 import {
   Activity, Gauge, Hash, ToggleLeft, MousePointerClick,
-  SlidersHorizontal, Type, FileText, Bell, ChevronDown, BarChart3, LayoutGrid, Square, Circle, Sparkles, ScanBarcode, PanelTopClose, QrCode, TrendingUp,
+  SlidersHorizontal, Type, FileText, Bell, ChevronDown, BarChart3, LayoutGrid, Square, Circle, Sparkles, ScanBarcode, PanelTopClose, QrCode, TrendingUp, Printer,
 } from 'lucide-react';
 
 export interface WidgetTypeInfo {
@@ -110,5 +110,10 @@ export const WIDGET_TYPES: WidgetTypeInfo[] = [
     type: 'trend', label: 'Trend Chart', icon: TrendingUp, category: 'display',
     defaultW: 6, defaultH: 4, defaultAbsW: 480, defaultAbsH: 320,
     defaultProps: { title: 'Trend', tags: [], hours: 24, refreshSeconds: 30 },
+  },
+  {
+    type: 'zpl_preview', label: 'ZPL Preview', icon: Printer, category: 'display',
+    defaultW: 5, defaultH: 5, defaultAbsW: 360, defaultAbsH: 400,
+    defaultProps: { title: 'Label Preview', tag: '', staticZpl: '', dpi: 203, refreshOnTagChange: true },
   },
 ];
