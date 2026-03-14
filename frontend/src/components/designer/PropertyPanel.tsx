@@ -384,7 +384,7 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
         </Section>
 
         {/* Tag Binding */}
-        {widget.type !== 'text_label' && widget.type !== 'alarm_summary' && widget.type !== 'multi_value' && widget.type !== 'control_group' && widget.type !== 'auto_fill' && widget.type !== 'container' && widget.type !== 'collapsible_container' && widget.type !== 'cognex_viewer' && (
+        {widget.type !== 'text_label' && widget.type !== 'alarm_summary' && widget.type !== 'multi_value' && widget.type !== 'control_group' && widget.type !== 'auto_fill' && widget.type !== 'container' && widget.type !== 'collapsible_container' && widget.type !== 'cognex_viewer' && widget.type !== 'trend' && (
           <Section title="Tag Binding">
             <Field label="Tag Name">
               <TagPicker value={p.tag || ''} onChange={v => setProp('tag', v)} />
@@ -732,6 +732,66 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
                 className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
             </Field>
           </Section>
+        )}
+
+        {/* Trend Widget */}
+        {widget.type === 'trend' && (
+          <>
+            <Section title="Trend Tags">
+              {((p.tags as Array<{ tag: string; color?: string }>) || []).map((t, i) => (
+                <div key={i} className="flex items-center gap-1 mb-1">
+                  <input
+                    type="color"
+                    value={t.color || ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#f97316'][i % 8]}
+                    onChange={e => {
+                      const arr = [...((p.tags as Array<{ tag: string; color?: string }>) || [])];
+                      arr[i] = { ...arr[i], color: e.target.value };
+                      setProp('tags', arr);
+                    }}
+                    className="w-6 h-6 rounded border border-slate-600 bg-transparent cursor-pointer shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <TagPicker value={t.tag} onChange={v => {
+                      const arr = [...((p.tags as Array<{ tag: string; color?: string }>) || [])];
+                      arr[i] = { ...arr[i], tag: v };
+                      setProp('tags', arr);
+                    }} />
+                  </div>
+                  <button
+                    onClick={() => {
+                      const arr = [...((p.tags as Array<{ tag: string; color?: string }>) || [])];
+                      arr.splice(i, 1);
+                      setProp('tags', arr);
+                    }}
+                    className="text-slate-500 hover:text-red-400 text-xs shrink-0 px-1"
+                    title="Remove tag"
+                  >&#x2715;</button>
+                </div>
+              ))}
+              {((p.tags as Array<{ tag: string; color?: string }>) || []).length < 8 && (
+                <button
+                  onClick={() => {
+                    const arr = [...((p.tags as Array<{ tag: string; color?: string }>) || [])];
+                    arr.push({ tag: '' });
+                    setProp('tags', arr);
+                  }}
+                  className="w-full text-left px-2 py-1 text-xs text-blue-400 hover:text-blue-300"
+                >+ Add Tag</button>
+              )}
+            </Section>
+            <Section title="Time Range">
+              <Field label="Hours">
+                <input type="number" value={p.hours ?? 24} onChange={e => setProp('hours', Number(e.target.value))}
+                  min={0.1} step={1}
+                  className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
+              </Field>
+              <Field label="Refresh (seconds)">
+                <input type="number" value={p.refreshSeconds ?? 30} onChange={e => setProp('refreshSeconds', Number(e.target.value))}
+                  min={0} step={5}
+                  className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
+              </Field>
+            </Section>
+          </>
         )}
 
         {/* Position & Size */}
