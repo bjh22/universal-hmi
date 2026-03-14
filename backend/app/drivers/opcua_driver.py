@@ -40,6 +40,8 @@ class OpcuaDriver(ProtocolDriver):
         self._variant_type_cache: dict[str, Any] = {}
         # Max nodes per ReadRequest — lower this if the server raises BadTooManyOperations
         self._read_batch_size: int = int(config.get("read_batch_size", _READ_BATCH_SIZE))
+        # Reusable concurrency limiter for parallel OPC UA reads
+        self._read_semaphore: asyncio.Semaphore = asyncio.Semaphore(_MAX_CONCURRENT_READS)
         # Consecutive read failure counter — used to detect dead sessions
         self._consecutive_failures: int = 0
         self._max_consecutive_failures: int = int(config.get("max_consecutive_failures", 3))
@@ -260,10 +262,8 @@ class OpcuaDriver(ProtocolDriver):
 
     async def _read_node_classes_parallel(self, nodes: list) -> list[int]:
         """Read node classes for a list of nodes with concurrency limiting."""
-        sem = asyncio.Semaphore(_MAX_CONCURRENT_READS)
-
         async def read_class(node):
-            async with sem:
+            async with self._read_semaphore:
                 try:
                     cls = await node.read_node_class()
                     return cls.value
@@ -274,10 +274,8 @@ class OpcuaDriver(ProtocolDriver):
 
     async def _read_variable_attrs_parallel(self, variables: list) -> list[dict]:
         """Read display_name and data_type for variable nodes in parallel."""
-        sem = asyncio.Semaphore(_MAX_CONCURRENT_READS)
-
         async def read_attrs(node):
-            async with sem:
+            async with self._read_semaphore:
                 try:
                     display_name, data_type = await asyncio.gather(
                         node.read_display_name(),
@@ -354,10 +352,8 @@ class OpcuaDriver(ProtocolDriver):
 
         # Read object display names in parallel
         if objects:
-            sem = asyncio.Semaphore(_MAX_CONCURRENT_READS)
-
             async def read_object_info(obj_node):
-                async with sem:
+                async with self._read_semaphore:
                     try:
                         display_name = await obj_node.read_display_name()
                         # Check if it has children (for UI expand indicator)

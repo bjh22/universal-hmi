@@ -30,6 +30,7 @@ from app.models.reason_code import ReasonCode  # noqa: F401 — ensure table cre
 from app.services.alarm_service import AlarmService
 from app.services.tag_engine import tag_engine
 from app.services.production_service import ProductionService
+from app.services.script_engine import shutdown_executor as shutdown_script_executor
 from app.services.trend_service import TrendService
 
 logging.basicConfig(level=logging.INFO if not settings.debug else logging.DEBUG)
@@ -103,6 +104,7 @@ async def lifespan(app: FastAPI):
     await alarm_service.stop()
     await trend_service.stop()
     await driver_manager.disconnect_all()
+    shutdown_script_executor()
 
 
 app = FastAPI(
