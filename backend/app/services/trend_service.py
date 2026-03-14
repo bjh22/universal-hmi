@@ -72,6 +72,9 @@ class TrendService:
         if self._running:
             return
         self._running = True
+        logger.info("TrendService starting with %d trending tags: %s",
+                     len(self._trending_tags),
+                     [t["name"] for t in self._trending_tags])
         self._task = asyncio.create_task(self._sample_loop())
         self._cleanup_task = asyncio.create_task(self._cleanup_loop())
 
