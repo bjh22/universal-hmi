@@ -22,8 +22,9 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     debug: bool = False
 
-    # Database
-    database_url: str = "sqlite+aiosqlite:///./hmi.db"
+    # Database — resolve relative to the backend/ directory so the same DB is used
+    # regardless of which directory the server is launched from.
+    database_url: str = f"sqlite+aiosqlite:///{Path(__file__).resolve().parent.parent.parent / 'hmi.db'}"
 
     # Authentication
     # IMPORTANT: The default secret_key is only for development convenience.
