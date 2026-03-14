@@ -161,8 +161,8 @@ Environment variables prefixed with `HMI_` (or `.env` file):
 | POST | `/api/production/runs/start` | Start a production run |
 | POST | `/api/production/runs/{id}/stop` | Stop a production run |
 | GET | `/api/production/analytics/time-series` | Aggregated production analytics (day/week/month) |
-| GET | `/api/production/settings/` | Get production tag bindings |
-| PUT | `/api/production/settings/` | Update production tag bindings |
+| GET | `/api/production/settings/` | Get production settings (tag bindings + shift schedule) |
+| PUT | `/api/production/settings/` | Update production settings (tag bindings + shift schedule) |
 | GET | `/api/reason-codes/` | List downtime reason codes |
 | POST | `/api/reason-codes/` | Create a reason code |
 | PUT | `/api/reason-codes/{id}` | Update a reason code |
@@ -175,7 +175,7 @@ Environment variables prefixed with `HMI_` (or `.env` file):
 
 - **TagEngine** (`services/tag_engine.py`): In-memory tag store, simulation engine (sine/ramp/random/toggle/enum_cycle), 500ms update cycle, publishes to WebSocket subscribers
 - **AlarmService** (`services/alarm_service.py`): Boolean alarm evaluation — each alarm-enabled tag is compared against its `trigger_on` value (default `true`). Analog threshold alarming is handled on the PLC side and reported to the HMI as boolean fault flags. State machine with four states: `active_unacked`, `active_acked`, `inactive_unacked` (alarm clears before acknowledgment), `inactive` (cleared). History recording. Supports external callbacks (e.g., ProductionService) via `add_alarm_callback()`.
-- **ProductionService** (`services/production_service.py`): Monitors active production runs against live machine data. On run start, captures counter tag value; on run stop, computes good count delta. Listens for alarm events via AlarmService callbacks to auto-increment reject counts (from configurable fault tags) and auto-create/close downtime events (from configurable downtime alarm tags). Production settings (tag bindings) stored in `app_settings` table.
+- **ProductionService** (`services/production_service.py`): Monitors active production runs against live machine data. On run start, captures counter tag value; on run stop, computes good count delta. Listens for alarm events via AlarmService callbacks to auto-increment reject counts (from configurable fault tags) and auto-create/close downtime events (from configurable downtime alarm tags). Includes an optional shift scheduler that auto-starts/stops runs at configured shift boundaries (30s polling loop, handles overnight shifts). Production settings (tag bindings, shift schedule) stored in `app_settings` table.
 - **TrendService** (`services/trend_service.py`): Time-series sampling, 90-day retention
 - **ScriptEngine** (`services/script_engine.py`): Sandboxed Python execution for button actions (5s timeout, restricted builtins)
 

@@ -10,7 +10,7 @@ import { DowntimeDialog } from '../components/reports/DowntimeDialog';
 import { OEETrendChart } from '../components/reports/OEETrendChart';
 import { ProductionTrendChart } from '../components/reports/ProductionTrendChart';
 import { DowntimePareto } from '../components/reports/DowntimePareto';
-import type { ProductionRun, DowntimeEvent, DowntimeSummary, TimeSeriesPoint, ReasonCode, JobData, UserData } from '../types';
+import type { ProductionRun, DowntimeEvent, DowntimeSummary, TimeSeriesPoint, ReasonCode, JobData, UserData, ProductionSettings } from '../types';
 
 const OEE_COLORS = { good: '#22c55e', warning: '#f59e0b', bad: '#ef4444' };
 function oeeColor(pct: number) { return pct >= 85 ? OEE_COLORS.good : pct >= 60 ? OEE_COLORS.warning : OEE_COLORS.bad; }
@@ -64,6 +64,9 @@ export function ReportsPage({ user }: Props) {
   const [reasonCodes, setReasonCodes] = useState<ReasonCode[]>([]);
   const [jobs, setJobs] = useState<JobData[]>([]);
 
+  // Shift mode
+  const [shiftMode, setShiftMode] = useState<ProductionSettings['shift_mode']>('manual');
+
   // Dialogs
   const [showStartDialog, setShowStartDialog] = useState(false);
   const [showStopDialog, setShowStopDialog] = useState(false);
@@ -98,6 +101,7 @@ export function ReportsPage({ user }: Props) {
   useEffect(() => {
     api.getJobs().then(setJobs).catch(() => {});
     api.getReasonCodes(true).then(setReasonCodes).catch(() => {});
+    api.getProductionSettings().then(s => setShiftMode(s.shift_mode)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -349,8 +353,15 @@ export function ReportsPage({ user }: Props) {
     return (
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-xl font-bold text-slate-100">Production Reports</h1>
-          {canStartStop && (
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-slate-100">Production Reports</h1>
+            {shiftMode === 'automatic' && (
+              <span className="flex items-center gap-1 px-2 py-0.5 bg-blue-600/20 border border-blue-500/30 rounded-full text-xs font-medium text-blue-400">
+                <Clock size={12} /> Auto Shifts
+              </span>
+            )}
+          </div>
+          {canStartStop && shiftMode !== 'automatic' && (
             <button
               onClick={() => setShowStartDialog(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium"
@@ -361,8 +372,8 @@ export function ReportsPage({ user }: Props) {
         </div>
         <div className="text-center text-slate-500 py-20">
           <BarChart3 size={40} className="mx-auto mb-3 opacity-50" />
-          <p>No production runs recorded</p>
-          {canStartStop && (
+          <p>{shiftMode === 'automatic' ? 'No production runs yet — the scheduler will start one at the next shift boundary' : 'No production runs recorded'}</p>
+          {canStartStop && shiftMode !== 'automatic' && (
             <button onClick={() => setShowStartDialog(true)} className="mt-3 text-blue-400 hover:text-blue-300 text-sm">
               Start your first run
             </button>
@@ -379,9 +390,16 @@ export function ReportsPage({ user }: Props) {
     <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold text-slate-100">Production Reports</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-bold text-slate-100">Production Reports</h1>
+          {shiftMode === 'automatic' && (
+            <span className="flex items-center gap-1 px-2 py-0.5 bg-blue-600/20 border border-blue-500/30 rounded-full text-xs font-medium text-blue-400">
+              <Clock size={12} /> Auto Shifts
+            </span>
+          )}
+        </div>
         <div className="flex gap-2">
-          {canStartStop && (
+          {canStartStop && shiftMode !== 'automatic' && (
             <button
               onClick={() => setShowStartDialog(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium"

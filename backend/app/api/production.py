@@ -70,12 +70,25 @@ def _utc_iso(dt: datetime | None) -> str | None:
 
 
 def _run_out(r: ProductionRun) -> dict:
+    good_count = r.good_count
+
+    # Compute live good count for active runs with tag-driven tracking
+    if not r.end_time and r.good_count_tag and r.start_good_count is not None:
+        from app.services.production_service import production_service
+        if production_service:
+            tv = production_service._tag_engine.get_value(r.good_count_tag)
+            if tv:
+                try:
+                    good_count = max(0, int(tv.value) - r.start_good_count)
+                except (ValueError, TypeError):
+                    pass
+
     return {
         "id": r.id,
         "job_name": r.job_name,
         "start_time": _utc_iso(r.start_time),
         "end_time": _utc_iso(r.end_time),
-        "good_count": r.good_count,
+        "good_count": good_count,
         "reject_count": r.reject_count,
         "target_count": r.target_count,
         "availability": r.availability,
@@ -120,7 +133,10 @@ async def _calculate_oee(run: ProductionRun, session: AsyncSession) -> None:
 
     # Availability (based on downtime)
     if run.end_time and run.start_time:
-        run_duration = (run.end_time - run.start_time).total_seconds()
+        # Normalise timezone awareness (SQLite returns naive datetimes)
+        end = run.end_time.replace(tzinfo=None) if run.end_time.tzinfo else run.end_time
+        start = run.start_time.replace(tzinfo=None) if run.start_time.tzinfo else run.start_time
+        run_duration = (end - start).total_seconds()
         if run_duration > 0:
             result = await session.execute(
                 select(func.coalesce(func.sum(DowntimeEvent.duration_seconds), 0))
@@ -183,6 +199,14 @@ async def start_run(
         require_role(UserRole.OPERATOR, UserRole.SUPERVISOR, UserRole.ENGINEER, UserRole.DESIGNER)
     ),
 ):
+    # Block manual start when in automatic shift mode
+    from app.services.production_service import production_service
+    if production_service and production_service.shift_mode == "automatic":
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot manually start a run in automatic shift mode. Switch to manual mode in Settings first.",
+        )
+
     run = ProductionRun(
         job_name=body.job_name,
         shift=body.shift,
@@ -193,7 +217,6 @@ async def start_run(
     await session.flush()
 
     # Capture initial counter value from tag engine
-    from app.services.production_service import production_service
     if production_service:
         await production_service.on_run_start(run, session)
 
