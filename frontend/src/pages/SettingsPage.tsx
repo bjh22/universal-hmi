@@ -3,6 +3,8 @@ import { Search, Download, UserPlus, Plus, Pencil, Trash2, Upload, X, Plug, Unpl
 import { api } from '../lib/api';
 import { PROTOCOL_CONFIGS } from '../lib/protocolConfigs';
 import { IntegrationsTab } from '../components/settings/IntegrationsTab';
+import { ReasonCodesSettings } from '../components/settings/ReasonCodesSettings';
+import { ProductionSettingsTab } from '../components/settings/ProductionSettings';
 import { THEME_PRESETS, ACCENT_SWATCHES, applyTheme, DEFAULT_ACCENT, DEFAULT_PRESET } from '../lib/theme';
 import type { Tag, TagLabel, DataSourceData, ProtocolType, AuditEntry, UserData, BrowsedTag, BrowsedNode, UserListEntry, ImportPreviewTag, ImportConflictMode, TagValue } from '../types';
 
@@ -1713,7 +1715,7 @@ function BrowseTagsDialog({ dsId, dsName, existingTags, onCreateTag, onClose }: 
 
 // ─── Main SettingsPage ───
 export function SettingsPage({ user, tagValues }: Props) {
-  const [tab, setTab] = useState<'branding' | 'preferences' | 'tags' | 'datasources' | 'integrations' | 'users' | 'audit'>('tags');
+  const [tab, setTab] = useState<'branding' | 'preferences' | 'tags' | 'datasources' | 'integrations' | 'production' | 'reason_codes' | 'users' | 'audit'>('tags');
   const [tags, setTags] = useState<Tag[]>([]);
   const [dataSources, setDataSources] = useState<DataSourceData[]>([]);
   const [users, setUsers] = useState<UserListEntry[]>([]);
@@ -2120,6 +2122,8 @@ export function SettingsPage({ user, tagValues }: Props) {
     { key: 'tags' as const, label: 'Tags' },
     { key: 'datasources' as const, label: 'Data Sources' },
     { key: 'integrations' as const, label: 'Integrations' },
+    { key: 'production' as const, label: 'Production' },
+    { key: 'reason_codes' as const, label: 'Reason Codes' },
     { key: 'users' as const, label: 'Users' },
     { key: 'audit' as const, label: 'Audit Trail' },
   ];
@@ -2823,6 +2827,12 @@ export function SettingsPage({ user, tagValues }: Props) {
       {tab === 'integrations' && (
         <IntegrationsTab tagValues={tagValues} canManage={canManage} />
       )}
+
+      {/* ═══ Production ═══ */}
+      {tab === 'production' && <ProductionSettingsTab />}
+
+      {/* ═══ Reason Codes ═══ */}
+      {tab === 'reason_codes' && <ReasonCodesSettings />}
 
       {/* ═══ Users ═══ */}
       {tab === 'users' && (

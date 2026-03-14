@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import case, func, literal_column, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -83,6 +83,8 @@ def _run_out(r: ProductionRun) -> dict:
         "quality": r.quality,
         "oee": r.oee,
         "shift": r.shift,
+        "start_good_count": r.start_good_count,
+        "good_count_tag": r.good_count_tag,
     }
 
 
@@ -189,6 +191,12 @@ async def start_run(
     )
     session.add(run)
     await session.flush()
+
+    # Capture initial counter value from tag engine
+    from app.services.production_service import production_service
+    if production_service:
+        await production_service.on_run_start(run, session)
+
     await log_audit(
         session, AuditAction.PRODUCTION_START,
         user=current_user.username,
@@ -214,8 +222,17 @@ async def stop_run(
         raise HTTPException(status_code=400, detail="Run already stopped")
 
     run.end_time = datetime.now(timezone.utc)
-    run.good_count = body.good_count
-    run.reject_count = body.reject_count
+
+    # Let production service compute tag-driven counts
+    from app.services.production_service import production_service
+    if production_service:
+        await production_service.on_run_stop(run, session)
+
+    # Manual overrides (if provided and non-zero, they take precedence)
+    if body.good_count > 0 or not run.good_count_tag:
+        run.good_count = body.good_count
+    if body.reject_count > 0:
+        run.reject_count = body.reject_count
     if body.target_count is not None:
         run.target_count = body.target_count
 
@@ -401,4 +418,135 @@ async def downtime_summary(
     return [
         {"reason_code": r.reason_code or "Unknown", "count": r.count, "total_duration": r.total_duration or 0}
         for r in result
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Time-series analytics
+# ---------------------------------------------------------------------------
+
+_GRANULARITY_FMT = {
+    "day": "%Y-%m-%d",
+    "week": "%Y-W%W",
+    "month": "%Y-%m",
+}
+
+
+@router.get("/analytics/time-series")
+async def time_series(
+    granularity: str = "day",
+    start: str | None = None,
+    end: str | None = None,
+    session: AsyncSession = Depends(get_db),
+):
+    fmt = _GRANULARITY_FMT.get(granularity, "%Y-%m-%d")
+    period_expr = func.strftime(fmt, ProductionRun.start_time)
+
+    query = (
+        select(
+            period_expr.label("period"),
+            func.count(ProductionRun.id).label("run_count"),
+            func.coalesce(func.sum(ProductionRun.good_count), 0).label("total_good"),
+            func.coalesce(func.sum(ProductionRun.reject_count), 0).label("total_reject"),
+            func.avg(
+                case(
+                    (ProductionRun.oee.isnot(None), ProductionRun.oee),
+                    else_=None,
+                )
+            ).label("avg_oee"),
+            func.avg(
+                case(
+                    (ProductionRun.availability.isnot(None), ProductionRun.availability),
+                    else_=None,
+                )
+            ).label("avg_availability"),
+            func.avg(
+                case(
+                    (ProductionRun.performance.isnot(None), ProductionRun.performance),
+                    else_=None,
+                )
+            ).label("avg_performance"),
+            func.avg(
+                case(
+                    (ProductionRun.quality.isnot(None), ProductionRun.quality),
+                    else_=None,
+                )
+            ).label("avg_quality"),
+        )
+        .group_by(literal_column("period"))
+        .order_by(literal_column("period"))
+    )
+
+    if start:
+        query = query.where(ProductionRun.start_time >= _parse_iso(start))
+    if end:
+        query = query.where(ProductionRun.start_time <= _parse_iso(end))
+
+    result = await session.execute(query)
+    rows = result.all()
+
+    # Get downtime totals per period
+    dt_query = (
+        select(
+            func.strftime(fmt, ProductionRun.start_time).label("period"),
+            func.coalesce(func.sum(DowntimeEvent.duration_seconds), 0).label("total_downtime"),
+        )
+        .join(ProductionRun, DowntimeEvent.production_run_id == ProductionRun.id)
+        .group_by(literal_column("period"))
+    )
+    if start:
+        dt_query = dt_query.where(ProductionRun.start_time >= _parse_iso(start))
+    if end:
+        dt_query = dt_query.where(ProductionRun.start_time <= _parse_iso(end))
+
+    dt_result = await session.execute(dt_query)
+    downtime_map = {r.period: r.total_downtime for r in dt_result}
+
+    # Get shift breakdown per period
+    shift_query = (
+        select(
+            func.strftime(fmt, ProductionRun.start_time).label("period"),
+            func.coalesce(ProductionRun.shift, literal_column("'Unassigned'")).label("shift"),
+            func.sum(ProductionRun.good_count).label("good"),
+            func.sum(ProductionRun.reject_count).label("reject"),
+            func.avg(
+                case(
+                    (ProductionRun.oee.isnot(None), ProductionRun.oee),
+                    else_=None,
+                )
+            ).label("avg_oee"),
+        )
+        .group_by(literal_column("period"), literal_column("shift"))
+        .order_by(literal_column("period"))
+    )
+    if start:
+        shift_query = shift_query.where(ProductionRun.start_time >= _parse_iso(start))
+    if end:
+        shift_query = shift_query.where(ProductionRun.start_time <= _parse_iso(end))
+
+    shift_result = await session.execute(shift_query)
+    shift_map: dict[str, dict] = {}
+    for r in shift_result:
+        if r.period not in shift_map:
+            shift_map[r.period] = {}
+        shift_map[r.period][r.shift or "Unassigned"] = {
+            "good": int(r.good or 0),
+            "reject": int(r.reject or 0),
+            "avg_oee": round(float(r.avg_oee), 4) if r.avg_oee is not None else None,
+        }
+
+    return [
+        {
+            "period": r.period,
+            "run_count": r.run_count,
+            "total_good": int(r.total_good),
+            "total_reject": int(r.total_reject),
+            "avg_oee": round(float(r.avg_oee), 4) if r.avg_oee is not None else None,
+            "avg_availability": round(float(r.avg_availability), 4) if r.avg_availability is not None else None,
+            "avg_performance": round(float(r.avg_performance), 4) if r.avg_performance is not None else None,
+            "avg_quality": round(float(r.avg_quality), 4) if r.avg_quality is not None else None,
+            "total_downtime_seconds": downtime_map.get(r.period, 0),
+            "shifts": shift_map.get(r.period, {}),
+        }
+        for r in rows
     ]

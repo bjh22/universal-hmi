@@ -9,12 +9,12 @@ Full-stack industrial HMI (Human-Machine Interface) for monitoring and controlli
 ```
 backend/               Python FastAPI application
   app/
-    api/               Route handlers (alarms, auth, screens, tags, websocket, etc.)
+    api/               Route handlers (alarms, auth, screens, tags, production, reason_codes, production_settings, websocket, etc.)
     core/              Config (pydantic-settings), database (async SQLAlchemy), security (JWT)
     drivers/           Protocol drivers (opcua, modbus, ethernet_ip, mqtt) + base.py + driver_manager.py
     integrations/      Plugin system for external equipment (base.py, manager.py, zebra_printer/, cognex_dataman/, ftp_hot_folder/)
-    models/            SQLAlchemy 2.0 models (user, tag, alarm, screen, job, trend, audit, production, datasource, integration)
-    services/          Business logic (tag_engine, alarm_service, trend_service, script_engine, audit_service)
+    models/            SQLAlchemy 2.0 models (user, tag, alarm, screen, job, trend, audit, production, reason_code, datasource, integration)
+    services/          Business logic (tag_engine, alarm_service, trend_service, production_service, script_engine, audit_service)
     main.py            FastAPI app with lifespan, CORS, static file serving
     seed.py            Database seeder with default users and demo tags
   run.py               Entry point (uvicorn on port 8080)
@@ -25,6 +25,8 @@ frontend/              React SPA (Vite + TypeScript)
     components/
       designer/        Screen designer (DesignCanvas, PropertyPanel, WidgetPalette, EditorToolbar)
       widgets/         Runtime widgets (StatusIndicator, Gauge, Toggle, CommandButton, etc.)
+      reports/         Production report components (StartRunDialog, StopRunDialog, DowntimeDialog, OEETrendChart, ProductionTrendChart, DowntimePareto)
+      settings/        Settings tab components (ReasonCodesSettings, ProductionSettings)
       layout/          AppShell (sidebar nav, header)
     hooks/             useDesignMode, useWebSocket, useAuth
     lib/               api.ts (fetch wrapper), textStyle.ts
@@ -155,6 +157,16 @@ Environment variables prefixed with `HMI_` (or `.env` file):
 | GET | `/api/alarms/active` | Active alarms |
 | POST | `/api/alarms/{id}/acknowledge` | Acknowledge alarm |
 | GET | `/api/trends/data/{tag_id}` | Trend data |
+| GET | `/api/production/runs` | List production runs |
+| POST | `/api/production/runs/start` | Start a production run |
+| POST | `/api/production/runs/{id}/stop` | Stop a production run |
+| GET | `/api/production/analytics/time-series` | Aggregated production analytics (day/week/month) |
+| GET | `/api/production/settings/` | Get production tag bindings |
+| PUT | `/api/production/settings/` | Update production tag bindings |
+| GET | `/api/reason-codes/` | List downtime reason codes |
+| POST | `/api/reason-codes/` | Create a reason code |
+| PUT | `/api/reason-codes/{id}` | Update a reason code |
+| DELETE | `/api/reason-codes/{id}` | Soft-delete a reason code |
 | WS | `/ws` | Real-time tag values + alarms |
 
 **WebSocket messages:** `snapshot` (initial), `tag_update` (deltas), `alarm` (state changes), `keepalive` (30s)
@@ -162,7 +174,8 @@ Environment variables prefixed with `HMI_` (or `.env` file):
 ## Key Backend Services
 
 - **TagEngine** (`services/tag_engine.py`): In-memory tag store, simulation engine (sine/ramp/random/toggle/enum_cycle), 500ms update cycle, publishes to WebSocket subscribers
-- **AlarmService** (`services/alarm_service.py`): Boolean alarm evaluation — each alarm-enabled tag is compared against its `trigger_on` value (default `true`). Analog threshold alarming is handled on the PLC side and reported to the HMI as boolean fault flags. State machine with four states: `active_unacked`, `active_acked`, `inactive_unacked` (alarm clears before acknowledgment), `inactive` (cleared). History recording.
+- **AlarmService** (`services/alarm_service.py`): Boolean alarm evaluation — each alarm-enabled tag is compared against its `trigger_on` value (default `true`). Analog threshold alarming is handled on the PLC side and reported to the HMI as boolean fault flags. State machine with four states: `active_unacked`, `active_acked`, `inactive_unacked` (alarm clears before acknowledgment), `inactive` (cleared). History recording. Supports external callbacks (e.g., ProductionService) via `add_alarm_callback()`.
+- **ProductionService** (`services/production_service.py`): Monitors active production runs against live machine data. On run start, captures counter tag value; on run stop, computes good count delta. Listens for alarm events via AlarmService callbacks to auto-increment reject counts (from configurable fault tags) and auto-create/close downtime events (from configurable downtime alarm tags). Production settings (tag bindings) stored in `app_settings` table.
 - **TrendService** (`services/trend_service.py`): Time-series sampling, 90-day retention
 - **ScriptEngine** (`services/script_engine.py`): Sandboxed Python execution for button actions (5s timeout, restricted builtins)
 
@@ -214,12 +227,15 @@ See `DEVELOPER.md` → "Creating a Plugin Integration" for a full walkthrough wi
 - `backend/app/services/tag_engine.py` — Tag polling, simulation, value store
 - `backend/app/core/config.py` — Settings (env vars with `HMI_` prefix)
 - `backend/app/api/deps.py` — Auth dependencies (`require_role`)
+- `backend/app/services/production_service.py` — Live production run monitoring (counts, rejects, downtime)
+- `backend/app/api/production_settings.py` — Production tag binding configuration API
+- `backend/app/api/reason_codes.py` — Downtime reason codes CRUD API
 - `backend/app/integrations/base.py` — Integration plugin base class
 - `backend/app/integrations/manager.py` — Plugin discovery and lifecycle management
 
 ## Database Tables
 
-users, tags, tag_templates, data_sources, alarms, alarm_history, trends, screens, screen_versions, screen_templates, jobs, production_runs, audit_logs, integrations
+users, tags, tag_templates, data_sources, alarms, alarm_history, trends, screens, screen_versions, screen_templates, jobs, production_runs, downtime_events, reason_codes, app_settings, audit_logs, integrations
 
 ## Keyboard Shortcuts (Design Mode)
 

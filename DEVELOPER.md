@@ -9,6 +9,7 @@ This guide covers the common development tasks you'll encounter when extending t
 - [Adding a Backend API Endpoint](#adding-a-backend-api-endpoint)
 - [Adding a Database Model](#adding-a-database-model)
 - [Creating a Plugin Integration](#creating-a-plugin-integration)
+- [Production & Reporting System](#production--reporting-system)
 - [Frontend Patterns](#frontend-patterns)
 - [Backend Patterns](#backend-patterns)
 
@@ -365,8 +366,9 @@ async def trigger_alarm_eval(request: Request):
     return {"status": "ok"}
 ```
 
-Available on `app.state`: `alarm_service`, `trend_service`, `integration_manager`.
+Available on `app.state`: `alarm_service`, `trend_service`, `production_service`, `integration_manager`.
 The `tag_engine` is accessed via `from app.services.tag_engine import tag_engine` (module-level singleton).
+The `production_service` is also available as a module-level variable: `from app.services.production_service import production_service`.
 
 ### Adding a frontend API method
 
@@ -781,6 +783,80 @@ class DiagnosticOut(BaseModel):
 ```
 
 The table is automatically created on next startup via `Base.metadata.create_all()` in `database.py:init_db()`. No migration step is needed for new tables.
+
+---
+
+## Production & Reporting System
+
+The production reporting system tracks OEE (Overall Equipment Effectiveness) by combining tag-driven data collection with manual entry.
+
+### Architecture
+
+The system spans three layers:
+
+- **ProductionService** (`backend/app/services/production_service.py`) — Background service that monitors active production runs against live tag data. Listens for alarm events via `AlarmService.add_alarm_callback()`.
+- **Production API** (`backend/app/api/production.py`) — REST endpoints for starting/stopping runs and querying time-series analytics.
+- **Reports Page** (`frontend/src/pages/ReportsPage.tsx`) — Unified scrollable layout with summary cards, charts, Pareto, and run table.
+
+### How tag-driven counting works
+
+1. **Good count**: A PLC counter tag (configured in Settings > Production) is read at run start and run stop. Good count = stop value - start value (delta mode). The start value is stored on the `production_runs.start_good_count` column.
+
+2. **Reject count**: Alarm-enabled tags configured as "reject fault tags" in Settings > Production. Each time the AlarmService fires an alarm for one of these tags, ProductionService increments `reject_count` on the active run.
+
+3. **Downtime**: Alarm-enabled tags configured as "downtime alarm tags" in Settings > Production. When an alarm activates, ProductionService creates a `DowntimeEvent` record. When the alarm clears, the event is closed with the duration calculated. Manual downtime entry is also supported.
+
+### Inter-service communication
+
+ProductionService uses the AlarmService callback pattern:
+
+```python
+# In ProductionService.start():
+alarm_service.add_alarm_callback(self._on_alarm_event)
+
+# The callback is synchronous (called from AlarmService's broadcast loop),
+# so it schedules async work via the event loop:
+def _on_alarm_event(self, alarm_data: dict):
+    loop = asyncio.get_event_loop()
+    loop.create_task(self._handle_alarm_async(alarm_data))
+```
+
+### Production settings storage
+
+Production configuration (tag bindings) is stored in the `app_settings` table as key-value pairs:
+
+| Key | Value |
+|-----|-------|
+| `production.good_count_tag` | Tag name string (e.g., `"Line1.GoodCount"`) |
+| `production.reject_fault_tags` | JSON array of tag names |
+| `production.downtime_alarm_tags` | JSON array of tag names |
+
+The `load_production_settings()` helper in `production_settings.py` is reused by both the API endpoint and ProductionService.
+
+### Time-series analytics endpoint
+
+`GET /api/production/analytics/time-series` returns aggregated production data with configurable granularity:
+
+- **Query params**: `granularity` (day/week/month), `start`, `end`
+- **Bucketing**: Uses SQLite `strftime` for date grouping
+- **Response**: Array of `{ period, good_count, reject_count, oee, availability, performance, quality, run_count, downtime_minutes }` objects
+
+### Reason codes
+
+Downtime reason codes are managed via a dedicated model (`ReasonCode`) and CRUD API at `/api/reason-codes/`. Codes use soft-delete (`is_active=false`) to preserve historical Pareto analysis. The `reason_code` field on `DowntimeEvent` is a string (not a FK) for backward compatibility.
+
+### Frontend chart components
+
+Report charts are in `frontend/src/components/reports/`:
+
+| Component | Description |
+|-----------|-------------|
+| `OEETrendChart` | Recharts LineChart — OEE, Availability, Performance, Quality over time |
+| `ProductionTrendChart` | Recharts stacked BarChart — good/reject counts per period |
+| `DowntimePareto` | Recharts ComposedChart — bars (duration) + cumulative % line |
+| `StartRunDialog` | Dialog for starting a new production run |
+| `StopRunDialog` | Dialog for stopping a run with tag-driven count info |
+| `DowntimeDialog` | Dialog for manual downtime entry with reason code dropdown |
 
 ---
 

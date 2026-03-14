@@ -23,6 +23,9 @@ import type {
   ProductionRun,
   DowntimeEvent,
   DowntimeSummary,
+  ReasonCode,
+  TimeSeriesPoint,
+  ProductionSettings,
   ProjectData,
   ProjectDetail,
   ImportPreviewTag,
@@ -291,6 +294,31 @@ export const api = {
     const q = qs.toString();
     return request<DowntimeSummary[]>(`/production/downtime/summary${q ? `?${q}` : ''}`);
   },
+
+  // Production analytics
+  getProductionTimeSeries: (params?: { start?: string; end?: string; granularity?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.start) qs.set('start', params.start);
+    if (params?.end) qs.set('end', params.end);
+    if (params?.granularity) qs.set('granularity', params.granularity);
+    const q = qs.toString();
+    return request<TimeSeriesPoint[]>(`/production/analytics/time-series${q ? `?${q}` : ''}`);
+  },
+
+  // Production settings
+  getProductionSettings: () => request<ProductionSettings>('/production/settings/'),
+  updateProductionSettings: (data: ProductionSettings) =>
+    request<ProductionSettings>('/production/settings/', { method: 'PUT', body: JSON.stringify(data) }),
+
+  // Reason codes
+  getReasonCodes: (activeOnly?: boolean) =>
+    request<ReasonCode[]>(`/reason-codes/${activeOnly ? '?active_only=true' : ''}`),
+  createReasonCode: (data: { code: string; description?: string; category?: string; sort_order?: number }) =>
+    request<ReasonCode>('/reason-codes/', { method: 'POST', body: JSON.stringify(data) }),
+  updateReasonCode: (id: number, data: Partial<ReasonCode>) =>
+    request<ReasonCode>(`/reason-codes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteReasonCode: (id: number) =>
+    request(`/reason-codes/${id}`, { method: 'DELETE' }),
 
   // Scripts
   executeScript: (script: string) =>

@@ -31,7 +31,7 @@ A web-based Human-Machine Interface (HMI) for industrial automation. Connects to
 - Alarm management with boolean triggers, acknowledgment, filtering, sorting, and history
 - Trend charting with configurable time ranges, saved views, and CSV export
 - Job/recipe management with setpoint editing, download guards, version history, and upload-from-machine
-- OEE/production reporting with summary cards and charts
+- Production reporting with tag-driven OEE, time-series analytics, downtime Pareto, and managed reason codes
 - Python scripting engine for button actions
 - Multi-format tag import (HMI CSV, CODESYS XML, RSLogix 500 CSV) with preview and conflict resolution
 - Data source management with connection testing and tag browsing
@@ -487,10 +487,59 @@ Jobs define sets of machine setpoints that can be downloaded to a PLC in one ope
 
 ### Production Reports
 
+The Reports page provides production analytics with tag-driven data collection and OEE tracking.
+
+#### Viewing Reports
+
 1. Navigate to the **Reports** page.
-2. View production run summaries in **Table** or **Charts** mode.
-3. Reports include OEE metrics (Availability, Performance, Quality) and production counts.
-4. Click **Export CSV** to download report data for external analysis.
+2. The page displays a unified scrollable layout:
+   - **Summary cards** — Total Runs, Good Count, Reject Count, Average OEE, Yield Rate, and Downtime minutes.
+   - **OEE Trend chart** — OEE, Availability, Performance, and Quality over time with an 85% target reference line.
+   - **Production Volume chart** — Stacked bar chart of good and reject counts per period.
+   - **Downtime Pareto chart** — Bar chart of downtime by reason code with a cumulative percentage line.
+   - **Production Runs table** — All runs with expandable detail panels showing downtime events.
+3. Use the **Day / Week / Month** toggle to change the time-series granularity.
+4. Filter by date range using the preset buttons (7d, 30d, 90d, YTD) or a custom date picker.
+5. Click **Export CSV** to download report data for external analysis.
+
+#### Starting a Production Run
+
+1. Click **Start Run** on the Reports page.
+2. Enter a **product name** and optional **target count** and **target rate**.
+3. Click **Start**. If a good count tag is configured in Settings, the current counter value is captured automatically as the baseline.
+
+#### Stopping a Production Run
+
+1. Click the **Stop** button on an active run.
+2. If tag-driven counting is configured, good count is computed automatically as the delta between the current counter value and the start value. You can enter a manual override if needed.
+3. Enter reject count (if not tracked automatically via fault tags) and select a stop reason.
+4. Click **Stop Run**. OEE is calculated server-side as Availability × Performance × Quality.
+
+#### Automatic Reject and Downtime Tracking
+
+When configured in Settings > Production:
+
+- **Reject fault tags** — Each time a configured fault alarm fires, the reject count for the active run is automatically incremented.
+- **Downtime alarm tags** — When a configured alarm activates, a downtime event is automatically created. When the alarm clears, the event is closed with the duration calculated.
+- Manual downtime entry is still available: click **+ Add Downtime** on a run's detail panel and select a reason code.
+
+#### Configuring Production Settings
+
+1. Go to **Settings** > **Production** tab.
+2. Configure the **Good Count Tag** — select an integer or float tag that represents a running counter on the PLC. The system uses delta mode (value at stop minus value at start).
+3. Select **Reject Fault Tags** — check alarm-enabled tags that indicate a faulty product. Each alarm activation increments the reject count.
+4. Select **Downtime Alarm Tags** — check alarm-enabled tags that indicate machine downtime. Alarm events auto-create and auto-close downtime records.
+5. Click **Save**.
+
+#### Managing Reason Codes
+
+Downtime reason codes are predefined categories used in the downtime Pareto chart and when logging downtime events.
+
+1. Go to **Settings** > **Reason Codes** tab.
+2. The system comes seeded with default codes: MECHANICAL, ELECTRICAL, MATERIAL, CHANGEOVER, OPERATOR, PLANNED_MAINTENANCE, QUALITY_HOLD, OTHER.
+3. Click **+ Add Reason Code** to create a new code with an optional category.
+4. Click a row to edit, or use the toggle to activate/deactivate a code.
+5. Deactivated codes are preserved for historical Pareto analysis but no longer appear in dropdown menus.
 
 ---
 
@@ -625,6 +674,8 @@ The Settings page is the central configuration hub, organized into tabs:
 | **Tags** | Create, edit, delete, and bulk-manage data points. Configure data types, addresses, alarms, trending, simulation, and enum mappings |
 | **Data Sources** | Add and configure PLC connections (OPC-UA, Modbus, EtherNet/IP, MQTT, Simulation) with test and browse capabilities |
 | **Integrations** | Manage third-party equipment connections (printers, scanners, file watchers) |
+| **Production** | Configure tag bindings for production tracking — good count tag, reject fault tags, and downtime alarm tags |
+| **Reason Codes** | Manage predefined downtime reason codes with categories for Pareto analysis |
 | **Users** | Create and manage user accounts, set roles and credentials |
 | **Audit Trail** | Browse all configuration changes with timestamps, usernames, actions, and source IPs. Filter and export to CSV |
 
