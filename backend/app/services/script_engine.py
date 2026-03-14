@@ -89,6 +89,12 @@ class ScriptContext:
 _executor = ThreadPoolExecutor(max_workers=2)
 
 
+def shutdown_executor():
+    """Shut down the script executor. Called during app shutdown to release
+    thread resources cleanly and avoid leaked-resource warnings."""
+    _executor.shutdown(wait=False)
+
+
 async def execute_script(
     script: str,
     tag_engine: TagEngine,
