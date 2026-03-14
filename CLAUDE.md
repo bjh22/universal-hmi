@@ -67,7 +67,8 @@ dev.bat doctor         # Windows CMD
 **Linux / macOS:**
 ```bash
 ./dev.sh install    # Install all dependencies (pip + npm; uses offline wheels if backend/wheels/ exists)
-./dev.sh dev        # Start backend (:8080) + frontend (:5173) dev servers
+./dev.sh dev        # Start backend (:8080) + frontend (:5173) dev servers (kills existing first)
+./dev.sh stop       # Stop any running dev servers (ports 8080, 5173)
 ./dev.sh build      # TypeScript check + Vite build
 ./dev.sh lint       # ESLint
 ./dev.sh check      # Build + lint
@@ -78,7 +79,8 @@ dev.bat doctor         # Windows CMD
 **Windows (CMD):**
 ```cmd
 dev.bat install     # Install all dependencies (pip + npm; uses offline wheels if backend\wheels\ exists)
-dev.bat dev         # Start backend (:8080) + frontend (:5173) dev servers
+dev.bat dev         # Start backend (:8080) + frontend (:5173) dev servers (kills existing first)
+dev.bat stop        # Stop any running dev servers (ports 8080, 5173)
 dev.bat build       # TypeScript check + Vite build
 dev.bat lint        # ESLint
 dev.bat check       # Build + lint
@@ -89,7 +91,8 @@ dev.bat doctor      # Check prerequisites
 **Windows (PowerShell):**
 ```powershell
 .\dev.ps1 install   # Install all dependencies (pip + npm; uses offline wheels if backend\wheels\ exists)
-.\dev.ps1 dev       # Start backend (:8080) + frontend (:5173) dev servers
+.\dev.ps1 dev       # Start backend (:8080) + frontend (:5173) dev servers (kills existing first)
+.\dev.ps1 stop      # Stop any running dev servers (ports 8080, 5173)
 .\dev.ps1 build     # TypeScript check + Vite build
 .\dev.ps1 lint      # ESLint
 .\dev.ps1 check     # Build + lint
