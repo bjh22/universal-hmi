@@ -84,6 +84,10 @@ class TagValue:
         return d
 
 
+# Quick lookup: system tag name → data_type string
+_SYSTEM_TAG_TYPES = {d["name"]: d["data_type"] for d in SYSTEM_TAG_DEFS}
+
+
 class TagEngine:
     def __init__(self):
         self._values: dict[str, TagValue] = {}
@@ -96,6 +100,7 @@ class TagEngine:
         self._subscribers: list[asyncio.Queue] = []
         self._start_time = time.time()
         self._system_values: dict[str, object] = {}  # mutable system tag values
+        self._last_system_broadcast: dict[str, object] = {}  # last broadcast values for change detection
         # Caches the serialized dict of all tag values. Invalidated on any value change.
         # Without this, we'd re-serialize all tags every 500ms for EACH WebSocket client,
         # which is wasteful when many clients are connected.
@@ -232,12 +237,19 @@ class TagEngine:
         return self._values.get(tag_name)
 
     def get_all_values(self) -> dict[str, dict]:
+        # Build cached snapshot of regular tags
         if self._snapshot_cache is not None:
-            return self._snapshot_cache
-        result = {}
-        for name, tv in self._values.items():
-            result[name] = tv.to_dict()
-        self._snapshot_cache = result
+            result = dict(self._snapshot_cache)
+        else:
+            cache = {}
+            for name, tv in self._values.items():
+                cache[name] = tv.to_dict()
+            self._snapshot_cache = cache
+            result = dict(cache)
+        # Merge system tag values (computed fresh — they change every cycle)
+        for sdef in SYSTEM_TAG_DEFS:
+            tv = self._get_system_tag(sdef["name"])
+            result[tv.name] = tv.to_dict()
         return result
 
     def _invalidate_snapshot(self):
@@ -246,6 +258,10 @@ class TagEngine:
     def set_value(self, tag_name: str, value) -> bool:
         if tag_name.startswith("$"):
             self._system_values[tag_name] = value
+            # Broadcast immediately so subscribers see the change
+            tv = self._get_system_tag(tag_name)
+            self._last_system_broadcast[tag_name] = tv.value
+            self._broadcast({"type": "tag_update", "data": {tag_name: tv.to_dict()}})
             return True
         tv = self._values.get(tag_name)
         if tv is None:
@@ -346,6 +362,7 @@ class TagEngine:
     def _get_system_tag(self, name: str) -> TagValue:
         now = datetime.now(timezone.utc)
         value: object
+        data_type = _SYSTEM_TAG_TYPES.get(name, "string")
         match name:
             case "$CURRENT_TIME":
                 value = now.strftime("%H:%M:%S")
@@ -360,16 +377,16 @@ class TagEngine:
             case "$APP_UPTIME":
                 value = int(time.time() - self._start_time)
             case "$ACTIVE_ALARM_COUNT":
-                value = 0  # Updated by alarm service
+                value = self._system_values.get(name, 0)
             case "$CRITICAL_ALARM_COUNT":
-                value = 0
+                value = self._system_values.get(name, 0)
             case "$UNACKED_ALARM_COUNT":
-                value = 0
+                value = self._system_values.get(name, 0)
             case "$ACTIVE_JOB":
                 value = self._system_values.get(name, "None")
             case _:
                 value = self._system_values.get(name)
-        return TagValue(tag_id=0, name=name, value=value, data_type="string")
+        return TagValue(tag_id=0, name=name, value=value, data_type=data_type)
 
     async def reload(self, session: AsyncSession):
         """Reload all tags from the database (e.g. after a project load/switch)."""
@@ -426,6 +443,15 @@ class TagEngine:
                     tv.value = new_val
                     tv.timestamp = datetime.now(timezone.utc)
                     changed[name] = tv.to_dict()
+
+            # Compute system tag values and include any changes
+            for sdef in SYSTEM_TAG_DEFS:
+                sname = sdef["name"]
+                tv = self._get_system_tag(sname)
+                cur_value = tv.value
+                if self._last_system_broadcast.get(sname) != cur_value:
+                    changed[sname] = tv.to_dict()
+                    self._last_system_broadcast[sname] = cur_value
 
             if changed:
                 self._invalidate_snapshot()
