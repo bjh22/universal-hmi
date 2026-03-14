@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
-  BarChart3, Download, Play, Square, Plus, Pencil, Trash2, Clock, ChevronLeft,
+  BarChart3, Download, Play, Square, Plus, Pencil, Trash2, Clock, ChevronLeft, AlertTriangle,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { Dialog } from '../components/Dialog';
@@ -16,6 +16,13 @@ const OEE_COLORS = { good: '#22c55e', warning: '#f59e0b', bad: '#ef4444' };
 function oeeColor(pct: number) { return pct >= 85 ? OEE_COLORS.good : pct >= 60 ? OEE_COLORS.warning : OEE_COLORS.bad; }
 
 type Granularity = 'day' | 'week' | 'month';
+type DisplayMode = 'count' | 'rate';
+
+function computeRate(count: number, startTime: string, endTime: string | null): number {
+  const endMs = endTime ? new Date(endTime).getTime() : Date.now();
+  const hours = (endMs - new Date(startTime).getTime()) / 3600000;
+  return hours > 0 ? Math.round(count / hours) : 0;
+}
 
 const DATE_PRESETS: { label: string; getRange: () => { start?: string; end?: string } }[] = [
   { label: 'Today', getRange: () => { const d = new Date(); d.setHours(0, 0, 0, 0); return { start: d.toISOString() }; } },
@@ -46,6 +53,7 @@ interface Props {
 export function ReportsPage({ user }: Props) {
   const [runs, setRuns] = useState<ProductionRun[]>([]);
   const [granularity, setGranularity] = useState<Granularity>('day');
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('count');
 
   // Date filtering
   const [dateStart, setDateStart] = useState<string | undefined>();
@@ -71,6 +79,7 @@ export function ReportsPage({ user }: Props) {
   const [showStartDialog, setShowStartDialog] = useState(false);
   const [showStopDialog, setShowStopDialog] = useState(false);
   const [showDowntimeDialog, setShowDowntimeDialog] = useState(false);
+  const [downtimeRunOverride, setDowntimeRunOverride] = useState<ProductionRun | null>(null);
   const [editingDowntime, setEditingDowntime] = useState<DowntimeEvent | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
@@ -98,19 +107,34 @@ export function ReportsPage({ user }: Props) {
 
   useEffect(() => { loadRuns(); loadAnalytics(); }, [loadRuns, loadAnalytics]);
 
+  // Auto-refresh while page is open
+  useEffect(() => {
+    const id = setInterval(() => { loadRuns(); loadAnalytics(); }, 5000);
+    return () => clearInterval(id);
+  }, [loadRuns, loadAnalytics]);
+
   useEffect(() => {
     api.getJobs().then(setJobs).catch(() => {});
     api.getReasonCodes(true).then(setReasonCodes).catch(() => {});
     api.getProductionSettings().then(s => setShiftMode(s.shift_mode)).catch(() => {});
   }, []);
 
-  useEffect(() => {
+  const loadDowntime = useCallback(() => {
     if (selectedRun) {
       api.getDowntimeEvents(selectedRun.id).then(setDowntimeEvents).catch(() => {});
     } else {
       setDowntimeEvents([]);
     }
   }, [selectedRun]);
+
+  useEffect(() => { loadDowntime(); }, [loadDowntime]);
+
+  // Auto-refresh downtime events for selected run
+  useEffect(() => {
+    if (!selectedRun) return;
+    const id = setInterval(loadDowntime, 5000);
+    return () => clearInterval(id);
+  }, [selectedRun, loadDowntime]);
 
   // Keep selectedRun fresh when runs reload
   useEffect(() => {
@@ -122,6 +146,11 @@ export function ReportsPage({ user }: Props) {
   }, [runs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- Computed ----
+  const activeRun = useMemo(() => runs.find(r => !r.end_time) ?? null, [runs]);
+
+  // The run to use for the downtime dialog — prefer override (header button), else selected run
+  const downtimeTargetRun = downtimeRunOverride || selectedRun;
+
   const summaryData = useMemo(() => {
     if (runs.length === 0) return null;
     const totalGood = runs.reduce((s, r) => s + r.good_count, 0);
@@ -129,10 +158,18 @@ export function ReportsPage({ user }: Props) {
     const withOee = runs.filter(r => r.oee != null);
     const avgOee = withOee.length > 0 ? withOee.reduce((s, r) => s + (r.oee || 0), 0) / withOee.length : 0;
     const totalDowntime = downtimeSummary.reduce((s, d) => s + d.total_duration, 0);
+    const totalDurationHours = runs.reduce((s, r) => {
+      const endMs = r.end_time ? new Date(r.end_time).getTime() : Date.now();
+      return s + (endMs - new Date(r.start_time).getTime()) / 3600000;
+    }, 0);
+    const avgGoodRate = totalDurationHours > 0 ? Math.round(totalGood / totalDurationHours) : 0;
+    const avgRejectRate = totalDurationHours > 0 ? Math.round(totalReject / totalDurationHours) : 0;
     return {
       totalRuns: runs.length,
       totalGood,
       totalReject,
+      avgGoodRate,
+      avgRejectRate,
       avgOee: +(avgOee * 100).toFixed(1),
       yieldRate: totalGood + totalReject > 0 ? +((totalGood / (totalGood + totalReject)) * 100).toFixed(1) : 0,
       totalDowntime: Math.round(totalDowntime / 60),
@@ -151,11 +188,16 @@ export function ReportsPage({ user }: Props) {
   }, []);
 
   const exportCsv = useCallback(() => {
-    const header = 'Job,Start,End,Good,Reject,Target,Availability,Performance,Quality,OEE,Shift';
-    const rows = runs.map(r =>
-      [r.job_name || '', r.start_time, r.end_time || '', r.good_count, r.reject_count,
-       r.target_count ?? '', r.availability ?? '', r.performance ?? '', r.quality ?? '', r.oee ?? '', r.shift || ''].join(',')
-    );
+    const isRate = displayMode === 'rate';
+    const header = isRate
+      ? 'Job,Start,End,Good (packs/hr),Reject (packs/hr),Target,Availability,Performance,Quality,OEE,Shift'
+      : 'Job,Start,End,Good,Reject,Target,Availability,Performance,Quality,OEE,Shift';
+    const rows = runs.map(r => {
+      const good = isRate ? computeRate(r.good_count, r.start_time, r.end_time) : r.good_count;
+      const reject = isRate ? computeRate(r.reject_count, r.start_time, r.end_time) : r.reject_count;
+      return [r.job_name || '', r.start_time, r.end_time || '', good, reject,
+       r.target_count ?? '', r.availability ?? '', r.performance ?? '', r.quality ?? '', r.oee ?? '', r.shift || ''].join(',');
+    });
     const csv = [header, ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -164,7 +206,7 @@ export function ReportsPage({ user }: Props) {
     link.download = `production_report_${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
-  }, [runs]);
+  }, [runs, displayMode]);
 
   const handleDeleteRun = useCallback(async (id: number) => {
     await api.deleteProductionRun(id);
@@ -196,16 +238,16 @@ export function ReportsPage({ user }: Props) {
   const detailPanel = selectedRun && (
     <div className="w-[420px] flex-shrink-0 bg-slate-800 rounded-xl border border-slate-700 p-4 overflow-y-auto max-h-[calc(100vh-180px)]">
       <div className="flex items-center justify-between mb-4">
-        <button onClick={() => setSelectedRun(null)} className="text-slate-400 hover:text-white">
-          <ChevronLeft size={18} />
+        <button onClick={() => setSelectedRun(null)} className="text-slate-400 hover:text-white active:text-white p-2 -ml-2 min-w-[44px] min-h-[44px] flex items-center justify-center">
+          <ChevronLeft size={20} />
         </button>
-        <h3 className="text-sm font-bold text-white flex-1 ml-2">Run Details</h3>
+        <h3 className="text-sm font-bold text-white flex-1 ml-1">Run Details</h3>
         {canStartStop && !selectedRun.end_time && (
           <button
             onClick={() => setShowStopDialog(true)}
-            className="flex items-center gap-1 px-2 py-1 bg-red-600 hover:bg-red-500 text-white rounded text-xs font-medium"
+            className="flex items-center gap-1.5 px-3 py-2 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white rounded-lg text-sm font-medium min-h-[44px]"
           >
-            <Square size={12} /> Stop
+            <Square size={14} /> Stop
           </button>
         )}
       </div>
@@ -259,15 +301,23 @@ export function ReportsPage({ user }: Props) {
       </div>
 
       {/* Production counts */}
-      <h4 className="text-xs text-slate-400 uppercase font-medium mb-2">Production Counts</h4>
+      <h4 className="text-xs text-slate-400 uppercase font-medium mb-2">{displayMode === 'rate' ? 'Production Rates' : 'Production Counts'}</h4>
       <div className="grid grid-cols-2 gap-2 mb-4">
         <div className="bg-slate-700/50 rounded-lg p-3">
-          <div className="text-xs text-slate-400">Good</div>
-          <div className="text-lg font-bold text-green-400">{selectedRun.good_count.toLocaleString()}</div>
+          <div className="text-xs text-slate-400">{displayMode === 'rate' ? 'Good Rate' : 'Good'}</div>
+          <div className="text-lg font-bold text-green-400">
+            {displayMode === 'rate'
+              ? `${computeRate(selectedRun.good_count, selectedRun.start_time, selectedRun.end_time)} packs/hr`
+              : selectedRun.good_count.toLocaleString()}
+          </div>
         </div>
         <div className="bg-slate-700/50 rounded-lg p-3">
-          <div className="text-xs text-slate-400">Reject</div>
-          <div className="text-lg font-bold text-red-400">{selectedRun.reject_count.toLocaleString()}</div>
+          <div className="text-xs text-slate-400">{displayMode === 'rate' ? 'Reject Rate' : 'Reject'}</div>
+          <div className="text-lg font-bold text-red-400">
+            {displayMode === 'rate'
+              ? `${computeRate(selectedRun.reject_count, selectedRun.start_time, selectedRun.end_time)} packs/hr`
+              : selectedRun.reject_count.toLocaleString()}
+          </div>
         </div>
         {selectedRun.target_count != null && (
           <>
@@ -309,35 +359,35 @@ export function ReportsPage({ user }: Props) {
         {canStartStop && (
           <button
             onClick={() => { setEditingDowntime(null); setShowDowntimeDialog(true); }}
-            className="flex items-center gap-1 px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-xs"
+            className="flex items-center gap-1.5 px-3 py-2 bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white rounded-lg text-sm font-medium min-h-[44px]"
           >
-            <Plus size={12} /> Add
+            <Plus size={16} /> Add Downtime
           </button>
         )}
       </div>
       {downtimeEvents.length === 0 ? (
-        <div className="text-xs text-slate-500 py-4 text-center">No downtime events</div>
+        <div className="text-sm text-slate-500 py-4 text-center">No downtime events</div>
       ) : (
         <div className="space-y-2">
           {downtimeEvents.map(evt => (
-            <div key={evt.id} className="bg-slate-700/50 rounded-lg p-2.5 text-xs">
+            <div key={evt.id} className="bg-slate-700/50 rounded-lg p-3 text-sm">
               <div className="flex justify-between items-start">
                 <div>
                   <div className="text-slate-200 font-medium">{evt.reason_code || 'Unknown'}</div>
-                  {evt.reason_text && <div className="text-slate-400 mt-0.5">{evt.reason_text}</div>}
+                  {evt.reason_text && <div className="text-slate-400 text-xs mt-0.5">{evt.reason_text}</div>}
                 </div>
                 {canEdit && (
-                  <div className="flex gap-1">
-                    <button onClick={() => { setEditingDowntime(evt); setShowDowntimeDialog(true); }} className="text-slate-400 hover:text-white p-0.5">
-                      <Pencil size={12} />
+                  <div className="flex gap-0.5">
+                    <button onClick={() => { setEditingDowntime(evt); setShowDowntimeDialog(true); }} className="text-slate-400 hover:text-white active:text-white p-2 min-w-[44px] min-h-[44px] flex items-center justify-center">
+                      <Pencil size={16} />
                     </button>
-                    <button onClick={() => api.deleteDowntimeEvent(evt.id).then(() => api.getDowntimeEvents(selectedRun.id).then(setDowntimeEvents))} className="text-slate-400 hover:text-red-400 p-0.5">
-                      <Trash2 size={12} />
+                    <button onClick={() => api.deleteDowntimeEvent(evt.id).then(() => api.getDowntimeEvents(selectedRun.id).then(setDowntimeEvents))} className="text-slate-400 hover:text-red-400 active:text-red-300 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center">
+                      <Trash2 size={16} />
                     </button>
                   </div>
                 )}
               </div>
-              <div className="flex gap-3 mt-1.5 text-slate-400">
+              <div className="flex gap-3 mt-1.5 text-slate-400 text-xs">
                 <span>{new Date(evt.start_time).toLocaleString()}</span>
                 {evt.duration_seconds != null && <span>{Math.round(evt.duration_seconds / 60)}m</span>}
               </div>
@@ -389,7 +439,7 @@ export function ReportsPage({ user }: Props) {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <h1 className="text-xl font-bold text-slate-100">Production Reports</h1>
           {shiftMode === 'automatic' && (
@@ -398,28 +448,47 @@ export function ReportsPage({ user }: Props) {
             </span>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {canStartStop && shiftMode !== 'automatic' && (
             <button
               onClick={() => setShowStartDialog(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium"
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-green-600 hover:bg-green-500 active:bg-green-700 text-white rounded-lg text-sm font-medium min-h-[44px]"
             >
-              <Play size={16} /> Start Run
+              <Play size={18} /> Start Run
             </button>
           )}
+          {canStartStop && activeRun && (
+            <button
+              onClick={() => { setDowntimeRunOverride(activeRun); setEditingDowntime(null); setShowDowntimeDialog(true); }}
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white rounded-lg text-sm font-medium min-h-[44px]"
+            >
+              <AlertTriangle size={18} /> Log Downtime
+            </button>
+          )}
+          <div className="flex gap-1">
+            {(['count', 'rate'] as DisplayMode[]).map(mode => (
+              <button
+                key={mode}
+                onClick={() => setDisplayMode(mode)}
+                className={`px-4 py-2.5 rounded-lg text-sm font-medium min-h-[44px] ${displayMode === mode ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-800 text-slate-400 hover:text-white active:bg-slate-600'}`}
+              >
+                {mode === 'count' ? 'Count' : 'Rate'}
+              </button>
+            ))}
+          </div>
           <div className="flex gap-1">
             {(['day', 'week', 'month'] as Granularity[]).map(g => (
               <button
                 key={g}
                 onClick={() => setGranularity(g)}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium capitalize ${granularity === g ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                className={`px-4 py-2.5 rounded-lg text-sm font-medium capitalize min-h-[44px] ${granularity === g ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-800 text-slate-400 hover:text-white active:bg-slate-600'}`}
               >
                 {g}
               </button>
             ))}
           </div>
-          <button onClick={exportCsv} disabled={runs.length === 0} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm disabled:opacity-50">
-            <Download size={16} /> Export CSV
+          <button onClick={exportCsv} disabled={runs.length === 0} className="flex items-center gap-1.5 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 active:bg-slate-500 text-slate-300 rounded-lg text-sm disabled:opacity-50 min-h-[44px]">
+            <Download size={18} /> Export CSV
           </button>
         </div>
       </div>
@@ -430,7 +499,7 @@ export function ReportsPage({ user }: Props) {
           <button
             key={p.label}
             onClick={() => handlePreset(p.label)}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium ${activePreset === p.label ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+            className={`px-4 py-2.5 rounded-lg text-sm font-medium min-h-[44px] ${activePreset === p.label ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-800 text-slate-400 hover:text-white active:bg-slate-600'}`}
           >
             {p.label}
           </button>
@@ -440,25 +509,25 @@ export function ReportsPage({ user }: Props) {
             type="datetime-local"
             value={dateStart ? toLocalInput(dateStart) : ''}
             onChange={e => { setActivePreset(''); setDateStart(e.target.value ? new Date(e.target.value).toISOString() : undefined); }}
-            className="bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-sm text-slate-300"
+            className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-300 min-h-[44px]"
           />
           <span className="text-slate-500 text-sm">to</span>
           <input
             type="datetime-local"
             value={dateEnd ? toLocalInput(dateEnd) : ''}
             onChange={e => { setActivePreset(''); setDateEnd(e.target.value ? new Date(e.target.value).toISOString() : undefined); }}
-            className="bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-sm text-slate-300"
+            className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-300 min-h-[44px]"
           />
         </div>
       </div>
 
       {/* Summary cards */}
       {summaryData && (
-        <div className="grid grid-cols-6 gap-3 mb-4">
+        <div className="grid grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
           {[
             { label: 'Total Runs', value: summaryData.totalRuns, color: 'text-blue-400' },
-            { label: 'Good Count', value: summaryData.totalGood.toLocaleString(), color: 'text-green-400' },
-            { label: 'Reject Count', value: summaryData.totalReject.toLocaleString(), color: 'text-red-400' },
+            { label: displayMode === 'rate' ? 'Good Rate' : 'Good Count', value: displayMode === 'rate' ? `${summaryData.avgGoodRate.toLocaleString()} packs/hr` : summaryData.totalGood.toLocaleString(), color: 'text-green-400' },
+            { label: displayMode === 'rate' ? 'Reject Rate' : 'Reject Count', value: displayMode === 'rate' ? `${summaryData.avgRejectRate.toLocaleString()} packs/hr` : summaryData.totalReject.toLocaleString(), color: 'text-red-400' },
             { label: 'Avg OEE', value: `${summaryData.avgOee}%`, color: summaryData.avgOee >= 85 ? 'text-green-400' : summaryData.avgOee >= 60 ? 'text-yellow-400' : 'text-red-400' },
             { label: 'Yield Rate', value: `${summaryData.yieldRate}%`, color: 'text-blue-400' },
             { label: 'Downtime', value: `${summaryData.totalDowntime}m`, color: 'text-orange-400' },
@@ -474,7 +543,7 @@ export function ReportsPage({ user }: Props) {
       {/* Time-series charts */}
       <div className="grid grid-cols-2 gap-4 mb-4">
         <OEETrendChart data={timeSeries} />
-        <ProductionTrendChart data={timeSeries} />
+        <ProductionTrendChart data={timeSeries} displayMode={displayMode} />
       </div>
 
       {/* Downtime Pareto */}
@@ -492,8 +561,8 @@ export function ReportsPage({ user }: Props) {
                   <th className="text-left px-4 py-3 font-medium">Job</th>
                   <th className="text-left px-4 py-3 font-medium">Start</th>
                   <th className="text-left px-4 py-3 font-medium">Duration</th>
-                  <th className="text-right px-4 py-3 font-medium">Good</th>
-                  <th className="text-right px-4 py-3 font-medium">Reject</th>
+                  <th className="text-right px-4 py-3 font-medium">{displayMode === 'rate' ? 'Good (packs/hr)' : 'Good'}</th>
+                  <th className="text-right px-4 py-3 font-medium">{displayMode === 'rate' ? 'Reject (packs/hr)' : 'Reject'}</th>
                   <th className="text-right px-4 py-3 font-medium">OEE</th>
                   <th className="text-left px-4 py-3 font-medium">Shift</th>
                   <th className="text-right px-4 py-3 font-medium">Actions</th>
@@ -504,36 +573,40 @@ export function ReportsPage({ user }: Props) {
                   <tr
                     key={run.id}
                     onClick={() => setSelectedRun(run)}
-                    className={`border-b border-slate-700/50 cursor-pointer ${selectedRun?.id === run.id ? 'bg-slate-700/50' : 'hover:bg-slate-700/30'}`}
+                    className={`border-b border-slate-700/50 cursor-pointer ${selectedRun?.id === run.id ? 'bg-slate-700/50' : 'hover:bg-slate-700/30 active:bg-slate-700/50'}`}
                   >
-                    <td className="px-4 py-3 text-slate-200">{run.job_name || '\u2014'}</td>
-                    <td className="px-4 py-3 text-slate-300 whitespace-nowrap">{new Date(run.start_time).toLocaleString()}</td>
-                    <td className="px-4 py-3 text-slate-300">
+                    <td className="px-4 py-4 text-slate-200">{run.job_name || '\u2014'}</td>
+                    <td className="px-4 py-4 text-slate-300 whitespace-nowrap">{new Date(run.start_time).toLocaleString()}</td>
+                    <td className="px-4 py-4 text-slate-300">
                       <span className="flex items-center gap-1">
                         {!run.end_time && <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />}
                         {formatDuration(run.start_time, run.end_time)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right text-green-400">{run.good_count}</td>
-                    <td className="px-4 py-3 text-right text-red-400">{run.reject_count}</td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-4 text-right text-green-400">
+                      {displayMode === 'rate' ? computeRate(run.good_count, run.start_time, run.end_time) : run.good_count}
+                    </td>
+                    <td className="px-4 py-4 text-right text-red-400">
+                      {displayMode === 'rate' ? computeRate(run.reject_count, run.start_time, run.end_time) : run.reject_count}
+                    </td>
+                    <td className="px-4 py-4 text-right">
                       {run.oee != null ? (
                         <span className="font-medium" style={{ color: oeeColor(run.oee * 100) }}>
                           {(run.oee * 100).toFixed(1)}%
                         </span>
                       ) : '\u2014'}
                     </td>
-                    <td className="px-4 py-3 text-slate-300">{run.shift || '\u2014'}</td>
-                    <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
+                    <td className="px-4 py-4 text-slate-300">{run.shift || '\u2014'}</td>
+                    <td className="px-4 py-4 text-right" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
                         {canStartStop && !run.end_time && (
-                          <button onClick={() => { setSelectedRun(run); setShowStopDialog(true); }} className="p-1 text-slate-400 hover:text-red-400" title="Stop">
-                            <Square size={14} />
+                          <button onClick={() => { setSelectedRun(run); setShowStopDialog(true); }} className="p-2.5 text-slate-400 hover:text-red-400 active:text-red-300 min-w-[44px] min-h-[44px] flex items-center justify-center" title="Stop">
+                            <Square size={16} />
                           </button>
                         )}
                         {canDelete && (
-                          <button onClick={() => setConfirmDelete(run.id)} className="p-1 text-slate-400 hover:text-red-400" title="Delete">
-                            <Trash2 size={14} />
+                          <button onClick={() => setConfirmDelete(run.id)} className="p-2.5 text-slate-400 hover:text-red-400 active:text-red-300 min-w-[44px] min-h-[44px] flex items-center justify-center" title="Delete">
+                            <Trash2 size={16} />
                           </button>
                         )}
                       </div>
@@ -565,17 +638,18 @@ export function ReportsPage({ user }: Props) {
         />
       )}
 
-      {showDowntimeDialog && selectedRun && (
+      {showDowntimeDialog && downtimeTargetRun && (
         <DowntimeDialog
-          runId={selectedRun.id}
+          runId={downtimeTargetRun.id}
           existing={editingDowntime}
-          runStart={selectedRun.start_time}
+          runStart={downtimeTargetRun.start_time}
           reasonCodes={reasonCodes}
-          onClose={() => { setShowDowntimeDialog(false); setEditingDowntime(null); }}
+          onClose={() => { setShowDowntimeDialog(false); setEditingDowntime(null); setDowntimeRunOverride(null); }}
           onSaved={() => {
             setShowDowntimeDialog(false);
             setEditingDowntime(null);
-            api.getDowntimeEvents(selectedRun.id).then(setDowntimeEvents);
+            setDowntimeRunOverride(null);
+            if (selectedRun) api.getDowntimeEvents(selectedRun.id).then(setDowntimeEvents);
             loadAnalytics();
           }}
         />
@@ -585,8 +659,8 @@ export function ReportsPage({ user }: Props) {
         <Dialog title="Delete Production Run" onClose={() => setConfirmDelete(null)}>
           <p className="text-sm text-slate-300 mb-4">Are you sure you want to delete this production run? This cannot be undone.</p>
           <div className="flex justify-end gap-2">
-            <button onClick={() => setConfirmDelete(null)} className="px-3 py-1.5 bg-slate-700 text-slate-300 rounded-lg text-sm">Cancel</button>
-            <button onClick={() => handleDeleteRun(confirmDelete)} className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm">Delete</button>
+            <button onClick={() => setConfirmDelete(null)} className="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 active:bg-slate-500 text-slate-300 rounded-lg text-sm min-h-[44px]">Cancel</button>
+            <button onClick={() => handleDeleteRun(confirmDelete)} className="px-4 py-2.5 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white rounded-lg text-sm min-h-[44px]">Delete</button>
           </div>
         </Dialog>
       )}

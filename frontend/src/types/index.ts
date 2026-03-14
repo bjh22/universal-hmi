@@ -259,6 +259,7 @@ export interface TimeSeriesPoint {
   avg_performance: number | null;
   avg_quality: number | null;
   total_downtime_seconds: number;
+  total_duration_seconds: number;
   shifts: Record<string, { good: number; reject: number; avg_oee: number | null }>;
 }
 
