@@ -10,6 +10,7 @@ Unsupported commands are silently skipped so partial renders always succeed.
 
 from __future__ import annotations
 
+import base64
 import io
 import logging
 import pathlib
@@ -81,6 +82,7 @@ class _LabelState:
     field_rotation: int = 0       # ^A — per-field override (0 = use default_rotation)
     field_rotation_set: bool = False  # True when ^A set rotation for this field
     font_width_explicit: bool = False  # True when ^A explicitly set a non-zero width
+    label_reverse: bool = False   # ^LR — global reverse mode
     field_reverse: bool = False
     barcode_module_width: int = 2
     barcode_wide_ratio: float = 3.0
@@ -348,6 +350,12 @@ def _handle_FR(state: _LabelState, _params: str) -> None:
     state.field_reverse = True
 
 
+def _handle_LR(state: _LabelState, params: str) -> None:
+    """^LR — Label Reverse. Y = all subsequent fields render in reverse."""
+    val = params.strip().upper()
+    state.label_reverse = val.startswith("Y")
+
+
 def _handle_FB(state: _LabelState, params: str) -> None:
     parts = _split_params(params)
     width = _parse_int(parts[0], 0) if len(parts) >= 1 else 0
@@ -389,7 +397,7 @@ def _draw_text(
     y = state.label_home_y + state.field_origin_y
     rotation = state.field_rotation if state.field_rotation_set else state.default_rotation
 
-    if state.field_reverse:
+    if state.field_reverse or state.label_reverse:
         if state.field_block:
             _draw_field_block_reverse(image, state, text, font, x, y, rotation, x_scale)
         else:
@@ -668,17 +676,64 @@ def _draw_field_block(
             draw.text((lx, ly), line, fill=fill, font=font)
 
 
+def _draw_box_to_image(
+    w: int,
+    h: int,
+    thickness: int,
+    corner_rounding: int,
+    fill_color: int,
+) -> Image.Image:
+    """Render a box to a temporary image (for XOR compositing).
+
+    Uses mode '1' (binary) to avoid anti-aliasing on rounded corners,
+    then converts to 'L' for compositing.
+    """
+    bin_color = 0 if fill_color == 0 else 1
+    bin_bg = 1 if fill_color == 0 else 0
+    tmp_bin = Image.new("1", (w + 1, h + 1), bin_bg)
+    tmp_draw = ImageDraw.Draw(tmp_bin)
+    # Treat as filled when thickness covers the interior
+    is_filled = thickness >= w or thickness >= h or thickness * 2 >= min(w, h)
+    if is_filled:
+        if corner_rounding > 0:
+            r = min(corner_rounding * min(w, h) // 16, min(w, h) // 2)
+            tmp_draw.rounded_rectangle([0, 0, w, h], radius=r, fill=bin_color)
+        else:
+            tmp_draw.rectangle([0, 0, w, h], fill=bin_color)
+    else:
+        if corner_rounding > 0:
+            r = min(corner_rounding * min(w, h) // 16, min(w, h) // 2)
+            for t in range(thickness):
+                if w - t <= t or h - t <= t:
+                    break
+                tmp_draw.rounded_rectangle(
+                    [t, t, w - t, h - t],
+                    radius=max(r - t, 0),
+                    outline=bin_color,
+                )
+        else:
+            for t in range(thickness):
+                if w - t <= t or h - t <= t:
+                    break
+                tmp_draw.rectangle(
+                    [t, t, w - t, h - t],
+                    outline=bin_color,
+                )
+    return tmp_bin.convert("L")
+
+
 def _draw_graphic_box(
     draw: ImageDraw.ImageDraw,
+    image: Image.Image,
     state: _LabelState,
     params: str,
-) -> None:
-    """^GB — draw a rectangle/line."""
+) -> ImageDraw.ImageDraw:
+    """^GB — draw a rectangle/line. Returns (possibly refreshed) draw."""
     parts = _split_params(params)
     w = _parse_int(parts[0], 1) if len(parts) >= 1 else 1
     h = _parse_int(parts[1], 1) if len(parts) >= 2 else 1
     thickness = _parse_int(parts[2], 1) if len(parts) >= 3 else 1
-    color = parts[3].strip() if len(parts) >= 4 else "B"
+    color = parts[3].strip() if len(parts) >= 4 and parts[3].strip() else "B"
     corner_rounding = _parse_int(parts[4], 0) if len(parts) >= 5 else 0
 
     x = state.label_home_x + state.field_origin_x
@@ -693,20 +748,53 @@ def _draw_graphic_box(
     if h <= 0:
         h = thickness
 
-    # If thickness >= width or height, draw filled
-    if thickness >= w or thickness >= h:
+    if state.label_reverse:
+        # XOR compositing: render to temp image, then XOR onto canvas
+        tmp = _draw_box_to_image(w, h, thickness, corner_rounding, 0)
+        _xor_paste_text(image, tmp, x, y)
+        return ImageDraw.Draw(image)
+
+    # Normal rendering — treat as filled when thickness covers the interior
+    is_filled = thickness >= w or thickness >= h or thickness * 2 >= min(w, h)
+    if is_filled:
         if corner_rounding > 0:
             r = min(corner_rounding * min(w, h) // 16, min(w, h) // 2)
-            draw.rounded_rectangle([x, y, x + w, y + h], radius=r, fill=fill_color)
+            # Render box in binary mode to avoid anti-aliased corners
+            tmp = Image.new("1", (w + 1, h + 1), 1 if fill_color == 255 else 0)
+            tmp_draw = ImageDraw.Draw(tmp)
+            tmp_draw.rounded_rectangle(
+                [0, 0, w, h], radius=r,
+                fill=0 if fill_color == 0 else 1,
+            )
+            image.paste(tmp.convert("L"), (x, y))
+            return ImageDraw.Draw(image)
         else:
             draw.rectangle([x, y, x + w, y + h], fill=fill_color)
     else:
-        # Draw border only
-        for t in range(thickness):
-            draw.rectangle(
-                [x + t, y + t, x + w - t, y + h - t],
-                outline=fill_color,
-            )
+        if corner_rounding > 0:
+            r = min(corner_rounding * min(w, h) // 16, min(w, h) // 2)
+            # Render in binary mode to avoid anti-aliased corners
+            tmp = Image.new("1", (w + 1, h + 1), 1 if fill_color == 255 else 0)
+            tmp_draw = ImageDraw.Draw(tmp)
+            for t in range(thickness):
+                if w - 2 * t <= 0 or h - 2 * t <= 0:
+                    break
+                tmp_draw.rounded_rectangle(
+                    [t, t, w - t, h - t],
+                    radius=max(r - t, 0),
+                    outline=0 if fill_color == 0 else 1,
+                )
+            image.paste(tmp.convert("L"), (x, y))
+            return ImageDraw.Draw(image)
+        else:
+            for t in range(thickness):
+                if w - 2 * t <= 0 or h - 2 * t <= 0:
+                    break
+                draw.rectangle(
+                    [x + t, y + t, x + w - t, y + h - t],
+                    outline=fill_color,
+                )
+    return draw
 
 
 def _draw_graphic_diagonal(
@@ -726,6 +814,8 @@ def _draw_graphic_diagonal(
     y = state.label_home_y + state.field_origin_y
 
     fill_color = 0 if color == "B" else 255
+    if state.field_reverse:
+        fill_color = 255 if fill_color == 0 else 0
 
     if orientation == "L":
         draw.line([x + w, y, x, y + h], fill=fill_color, width=thickness)
@@ -748,6 +838,8 @@ def _draw_graphic_circle(
     y = state.label_home_y + state.field_origin_y
 
     fill_color = 0 if color == "B" else 255
+    if state.field_reverse:
+        fill_color = 255 if fill_color == 0 else 0
 
     if thickness >= diameter // 2:
         draw.ellipse([x, y, x + diameter, y + diameter], fill=fill_color)
@@ -780,9 +872,31 @@ def _draw_graphic_field(
     x = state.label_home_x + state.field_origin_x
     y = state.label_home_y + state.field_origin_y
 
-    # Decode hex data
+    # Decode data
     raw = field_data.replace("\n", "").replace("\r", "").replace(" ", "")
-    if fmt == "A":
+
+    # Check for :Z64: (base64+zlib compressed) or :B64: (base64 only) prefix
+    if raw.startswith(":Z64:") or raw.startswith(":z64:"):
+        b64_data = raw[5:]
+        # Strip trailing CRC (":XXXX" at the end)
+        if ":" in b64_data:
+            b64_data = b64_data[:b64_data.rindex(":")]
+        try:
+            compressed = base64.b64decode(b64_data)
+            pixel_data = zlib.decompress(compressed)
+        except Exception as e:
+            logger.debug("Failed to decode :Z64: graphic: %s", e)
+            return
+    elif raw.startswith(":B64:") or raw.startswith(":b64:"):
+        b64_data = raw[5:]
+        if ":" in b64_data:
+            b64_data = b64_data[:b64_data.rindex(":")]
+        try:
+            pixel_data = base64.b64decode(b64_data)
+        except Exception as e:
+            logger.debug("Failed to decode :B64: graphic: %s", e)
+            return
+    elif fmt == "A":
         raw = _expand_zpl_hex(raw, bytes_per_row)
         pixel_data = bytes.fromhex(raw) if raw else b""
     else:
@@ -953,19 +1067,43 @@ def _draw_barcode_128(
         bc_img = _render_barcode_image("code128", data, module, height)
         target_w = bc_img.width
 
-        # Paste onto label
-        mask = bc_img.point(lambda p: 255 if p < 128 else 0)
-        draw.bitmap((x, y), mask, fill=0)
-
-        # Human-readable text below (centered)
+        # Human-readable text
+        hr_img = None
         if print_text == "Y":
             hr_font_size = max(module * 10, 14)
             font = _get_font(hr_font_size)
-            bbox = font.getbbox(text)
-            tw = bbox[2] - bbox[0] if bbox else len(text) * 8
-            text_x = x + (target_w - tw) // 2
-            text_y = y + height + 4 if text_above != "Y" else y - hr_font_size - 4
-            draw.text((text_x, text_y), text, fill=0, font=font)
+            hr_img, hr_tw, hr_th, hr_ox, hr_oy = _render_text_to_image(text, font)
+
+        # Apply rotation
+        rot = _ROTATION_MAP.get(orientation, 0)
+        if rot:
+            bc_img_l = bc_img.convert("L")
+            bc_img_l = _apply_rotation(bc_img_l, rot)
+            mask = bc_img_l.point(lambda p: 255 if p < 128 else 0)
+            draw.bitmap((x, y), mask, fill=0)
+            # Position human-readable text for rotated barcodes
+            if hr_img is not None:
+                hr_img = _apply_rotation(hr_img, rot)
+                hr_mask = hr_img.point(lambda p: 255 if p < 128 else 0)
+                if rot == 270:  # B — bottom-up
+                    text_x = x + bc_img_l.width + 4 if text_above != "Y" else x - hr_img.width - 4
+                    text_y = y + (bc_img_l.height - hr_img.height) // 2
+                elif rot == 90:  # R — 90° CW
+                    text_x = x + (bc_img_l.width - hr_img.width) // 2
+                    text_y = y + bc_img_l.height + 4 if text_above != "Y" else y - hr_img.height - 4
+                else:  # 180 — inverted
+                    text_x = x + (bc_img_l.width - hr_img.width) // 2
+                    text_y = y - hr_img.height - 4 if text_above != "Y" else y + bc_img_l.height + 4
+                draw.bitmap((text_x, text_y), hr_mask, fill=0)
+        else:
+            # No rotation — paste normally
+            mask = bc_img.point(lambda p: 255 if p < 128 else 0)
+            draw.bitmap((x, y), mask, fill=0)
+            if hr_img is not None:
+                hr_mask = hr_img.point(lambda p: 255 if p < 128 else 0)
+                text_x = x + (target_w - hr_img.width) // 2
+                text_y = y + height + 4 if text_above != "Y" else y - hr_img.height - 4
+                draw.bitmap((text_x, text_y), hr_mask, fill=0)
 
     except ImportError:
         # Fallback: draw a placeholder rectangle
@@ -1407,6 +1545,8 @@ def _render_single_label(zpl: str, dpi: int = 203, width_dots: int | None = None
                 _handle_FH(state, params)
             elif cmd == "FR":
                 _handle_FR(state, params)
+            elif cmd == "LR":
+                _handle_LR(state, params)
             elif cmd == "FB":
                 _handle_FB(state, params)
             elif cmd == "CI":
@@ -1424,7 +1564,7 @@ def _render_single_label(zpl: str, dpi: int = 203, width_dots: int | None = None
             elif cmd == "FD" or cmd == "FN":
                 _handle_FD(state, params)
             elif cmd == "GB":
-                _draw_graphic_box(draw, state, params)
+                draw = _draw_graphic_box(draw, image, state, params)
             elif cmd == "GD":
                 _draw_graphic_diagonal(draw, state, params)
             elif cmd == "GC":

@@ -9,7 +9,6 @@ const DPI_OPTIONS = [152, 203, 300, 600];
 export function ZplPreviewPage() {
   const [mode, setMode] = useState<InputMode>('paste');
   const [zplText, setZplText] = useState('');
-  const [file, setFile] = useState<File | null>(null);
   const [dpi, setDpi] = useState(203);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -25,19 +24,14 @@ export function ZplPreviewPage() {
   }, [previewUrl]);
 
   const handleRender = useCallback(async () => {
+    if (!zplText.trim()) {
+      setError('Please enter ZPL text');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      let blob: Blob;
-      if (mode === 'upload' && file) {
-        blob = await api.zplPreviewRenderFile(file, dpi);
-      } else if (mode === 'paste' && zplText.trim()) {
-        blob = await api.zplPreviewRender(zplText, dpi);
-      } else {
-        setError(mode === 'upload' ? 'Please select a file' : 'Please enter ZPL text');
-        setLoading(false);
-        return;
-      }
+      const blob = await api.zplPreviewRender(zplText, dpi);
       setPreviewUrl(prev => {
         if (prev) URL.revokeObjectURL(prev);
         return URL.createObjectURL(blob);
@@ -46,7 +40,7 @@ export function ZplPreviewPage() {
       setError(e instanceof Error ? e.message : 'Render failed');
     }
     setLoading(false);
-  }, [mode, file, zplText, dpi]);
+  }, [zplText, dpi]);
 
   const handleDownload = useCallback(() => {
     if (!previewUrl) return;
@@ -58,23 +52,34 @@ export function ZplPreviewPage() {
     document.body.removeChild(link);
   }, [previewUrl]);
 
+  const loadFileContents = useCallback((f: File) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result;
+      if (typeof text === 'string') {
+        setZplText(text);
+        setMode('paste');
+      }
+    };
+    reader.readAsText(f);
+  }, []);
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
     const droppedFile = e.dataTransfer.files[0];
     if (droppedFile) {
-      setFile(droppedFile);
-      setMode('upload');
+      loadFileContents(droppedFile);
     }
-  }, []);
+  }, [loadFileContents]);
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
-    if (selected) setFile(selected);
-  }, []);
+    if (selected) loadFileContents(selected);
+  }, [loadFileContents]);
 
   return (
-    <div className="flex gap-4 h-full min-h-0">
+    <div className="flex gap-4 h-full min-h-0" style={{ minHeight: 'calc(100vh - 240px)' }}>
       {/* Left panel — input */}
       <div className="w-1/2 flex flex-col gap-3 min-h-0">
         {/* Mode tabs */}
@@ -120,14 +125,8 @@ export function ZplPreviewPage() {
             }`}
           >
             <Upload size={24} className="text-slate-400" />
-            {file ? (
-              <span className="text-sm text-[var(--hmi-text-primary)]">{file.name}</span>
-            ) : (
-              <>
-                <span className="text-sm text-[var(--hmi-text-secondary)]">Drop a .zpl file here or click to browse</span>
-                <span className="text-xs text-slate-500">Supports .zpl, .txt, .prn</span>
-              </>
-            )}
+            <span className="text-sm text-[var(--hmi-text-secondary)]">Drop a .zpl file here or click to browse</span>
+            <span className="text-xs text-slate-500">Supports .zpl, .txt, .prn — contents will load into the editor</span>
             <input
               ref={fileInputRef}
               type="file"
