@@ -137,9 +137,9 @@ export function FactoryConfigPage({ user, tagValues }: Props) {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <Cog size={24} className="text-slate-400" />
+          <Cog size={28} className="text-slate-400" />
           <div>
-            <h1 className="text-xl font-semibold text-white">Factory Configuration</h1>
+            <h1 className="text-2xl font-semibold text-white">Factory Configuration</h1>
             <p className="text-sm text-slate-400">Parameters configured before machine shipment</p>
           </div>
         </div>
@@ -147,27 +147,27 @@ export function FactoryConfigPage({ user, tagValues }: Props) {
           <button
             onClick={enterEditMode}
             disabled={factoryTags.length === 0}
-            className="flex items-center gap-2 px-4 py-2 min-h-[44px] bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors active:scale-95"
+            className="flex items-center gap-2 px-5 py-3 min-h-[48px] bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed text-white text-base font-medium rounded-lg transition-colors active:scale-95"
           >
-            <Edit size={16} />
+            <Edit size={18} />
             Edit
           </button>
         )}
         {editMode && (
-          <div className="flex gap-2">
+          <div className="flex gap-3">
             <button
               onClick={cancelEdit}
-              className="flex items-center gap-2 px-4 py-2 min-h-[44px] bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium rounded-lg transition-colors active:scale-95"
+              className="flex items-center gap-2 px-5 py-3 min-h-[48px] bg-slate-700 hover:bg-slate-600 text-white text-base font-medium rounded-lg transition-colors active:scale-95"
             >
-              <X size={16} />
+              <X size={18} />
               Cancel
             </button>
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-2 px-4 py-2 min-h-[44px] bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors active:scale-95"
+              className="flex items-center gap-2 px-5 py-3 min-h-[48px] bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-base font-medium rounded-lg transition-colors active:scale-95"
             >
-              <Save size={16} />
+              <Save size={18} />
               {saving ? 'Saving...' : 'Save'}
             </button>
           </div>
@@ -175,7 +175,7 @@ export function FactoryConfigPage({ user, tagValues }: Props) {
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 mb-4 px-4 py-3 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-sm">
+        <div className="flex items-center gap-2 mb-4 px-4 py-3 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-base">
           <AlertCircle size={16} />
           {error}
         </div>
@@ -185,7 +185,7 @@ export function FactoryConfigPage({ user, tagValues }: Props) {
       {factoryTags.length === 0 && (
         <div className="text-center py-16">
           <TagIcon size={40} className="mx-auto mb-4 text-slate-600" />
-          <p className="text-slate-400 mb-2">No factory configuration parameters found</p>
+          <p className="text-base text-slate-400 mb-2">No factory configuration parameters found</p>
           <p className="text-sm text-slate-500">
             Add the <span className="text-blue-400 font-medium">{LABEL_NAME}</span> label to tags in Settings to include them here.
           </p>
@@ -199,16 +199,16 @@ export function FactoryConfigPage({ user, tagValues }: Props) {
             {grouped.length > 1 && (
               <button
                 onClick={() => toggleGroup(group)}
-                className="flex items-center gap-1.5 w-full py-2 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors"
+                className="flex items-center gap-2 w-full py-3 min-h-[48px] text-sm font-medium text-slate-400 hover:text-slate-200 active:bg-slate-700/50 transition-colors rounded-lg"
               >
-                {collapsed.has(group) ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                {collapsed.has(group) ? <ChevronRight size={20} /> : <ChevronDown size={20} />}
                 {group}
-                <span className="text-slate-600 ml-1">({groupTags.length})</span>
+                <span className="text-slate-500 ml-1">({groupTags.length})</span>
               </button>
             )}
             {!collapsed.has(group) && (
               <div className="bg-slate-900 rounded-lg border border-slate-700 overflow-hidden">
-                <table className="w-full text-sm">
+                <table className="w-full text-base">
                   <tbody>
                     {groupTags.map(tag => {
                       const liveValue = tagValues[tag.name]?.value;
@@ -223,24 +223,24 @@ export function FactoryConfigPage({ user, tagValues }: Props) {
                         const hasEnum = enumMap && Object.keys(enumMap).length > 0;
                         return (
                           <tr key={tag.name} className="border-b border-slate-700/50 last:border-b-0">
-                            <td className="px-4 py-3 text-slate-300 text-sm">
+                            <td className="px-5 py-4 text-slate-300">
                               {tag.display_name || tag.name}
                               {tag.engineering_units && (
                                 <span className="text-slate-500 ml-1">({tag.engineering_units})</span>
                               )}
                             </td>
-                            <td className="px-4 py-3 text-right">
+                            <td className="px-5 py-4 text-right">
                               {isBool ? (
                                 <button
                                   type="button"
                                   onClick={() => updateValue(tag.name, !Boolean(editVal))}
-                                  className="inline-flex items-center gap-2 min-h-[44px] px-3 py-2"
+                                  className="inline-flex items-center gap-3 min-h-[48px] px-3 py-2"
                                 >
-                                  <div className={`w-10 h-5 rounded-full transition-colors relative flex-shrink-0 ${Boolean(editVal) ? 'bg-green-500' : 'bg-slate-600'}`}>
-                                    <span className="absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow-sm"
-                                      style={{ left: Boolean(editVal) ? '1.25rem' : '0.125rem' }} />
+                                  <div className={`w-12 h-6 rounded-full transition-colors relative flex-shrink-0 ${Boolean(editVal) ? 'bg-green-500' : 'bg-slate-600'}`}>
+                                    <span className="absolute top-0.5 w-5 h-5 bg-white rounded-full transition-transform shadow-sm"
+                                      style={{ left: Boolean(editVal) ? '1.5rem' : '0.125rem' }} />
                                   </div>
-                                  <span className={`text-xs font-medium ${Boolean(editVal) ? 'text-green-400' : 'text-slate-500'}`}>
+                                  <span className={`text-sm font-medium ${Boolean(editVal) ? 'text-green-400' : 'text-slate-500'}`}>
                                     {Boolean(editVal) ? 'ON' : 'OFF'}
                                   </span>
                                 </button>
@@ -248,7 +248,7 @@ export function FactoryConfigPage({ user, tagValues }: Props) {
                                 <select
                                   value={String(editVal ?? '')}
                                   onChange={e => updateValue(tag.name, parseTypedValue(e.target.value))}
-                                  className="min-h-[44px] min-w-[120px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white hover:border-blue-500 transition-all"
+                                  className="min-h-[48px] min-w-[120px] bg-slate-700 border border-slate-600 rounded-md px-3 py-3 text-base text-white hover:border-blue-500 transition-all"
                                 >
                                   <option value="">Select…</option>
                                   {Object.entries(enumMap!).map(([k, label]) => (
@@ -259,7 +259,7 @@ export function FactoryConfigPage({ user, tagValues }: Props) {
                                 <button
                                   type="button"
                                   onClick={() => openKeypad(tag.name)}
-                                  className="inline-flex items-center min-h-[44px] min-w-[120px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white text-left hover:border-blue-500 active:scale-95 transition-all"
+                                  className="inline-flex items-center min-h-[48px] min-w-[120px] bg-slate-700 border border-slate-600 rounded-md px-3 py-3 text-base text-white text-left hover:border-blue-500 active:scale-95 transition-all"
                                 >
                                   {editVal != null && editVal !== '' ? (
                                     <span>{String(editVal)}</span>
@@ -276,10 +276,10 @@ export function FactoryConfigPage({ user, tagValues }: Props) {
                       // View mode
                       return (
                         <tr key={tag.name} className="border-b border-slate-700/50 last:border-b-0">
-                          <td className="px-4 py-3 text-slate-300 text-sm">
+                          <td className="px-5 py-4 text-slate-300">
                             {tag.display_name || tag.name}
                           </td>
-                          <td className="px-4 py-3 text-right text-sm">
+                          <td className="px-5 py-4 text-right">
                             {isBool ? (
                               <span className={`font-medium ${Boolean(liveValue) ? 'text-green-400' : 'text-slate-500'}`}>
                                 {Boolean(liveValue) ? 'ON' : 'OFF'}
