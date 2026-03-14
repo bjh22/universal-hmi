@@ -220,6 +220,8 @@ export interface ProductionRun {
   quality: number | null;        // good parts / total parts
   oee: number | null;            // overall equipment effectiveness (0.0 to 1.0)
   shift: string | null;
+  start_good_count: number | null;
+  good_count_tag: string | null;
 }
 
 export interface DowntimeEvent {
@@ -236,6 +238,34 @@ export interface DowntimeSummary {
   reason_code: string;
   count: number;
   total_duration: number;
+}
+
+export interface ReasonCode {
+  id: number;
+  code: string;
+  description: string | null;
+  category: string | null;
+  sort_order: number;
+  is_active: boolean;
+}
+
+export interface TimeSeriesPoint {
+  period: string;
+  run_count: number;
+  total_good: number;
+  total_reject: number;
+  avg_oee: number | null;
+  avg_availability: number | null;
+  avg_performance: number | null;
+  avg_quality: number | null;
+  total_downtime_seconds: number;
+  shifts: Record<string, { good: number; reject: number; avg_oee: number | null }>;
+}
+
+export interface ProductionSettings {
+  good_count_tag: string | null;
+  reject_fault_tags: string[];
+  downtime_alarm_tags: string[];
 }
 
 export interface BrowsedTag {

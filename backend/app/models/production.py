@@ -24,6 +24,9 @@ class ProductionRun(Base):
     quality: Mapped[float | None] = mapped_column(Float, nullable=True)
     oee: Mapped[float | None] = mapped_column(Float, nullable=True)
     shift: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Tag-driven production tracking
+    start_good_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    good_count_tag: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
 class DowntimeEvent(Base):

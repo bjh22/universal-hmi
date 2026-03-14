@@ -15,6 +15,7 @@ from app.models.datasource import DataSource, ProtocolType
 from app.models.project import Project  # noqa: F401 — registers 'projects' table for FK resolution
 from app.models.screen import Screen
 from app.models.tag import SimulationBehavior, Tag, TagAccessMode, TagDataType, TagLabel
+from app.models.reason_code import ReasonCode
 from app.models.user import User, UserRole
 
 
@@ -418,6 +419,22 @@ async def seed():
                     hashed_password=hashed_pw,
                     role=role,
                 ))
+
+        # Reason codes
+        existing_rc = await session.execute(select(ReasonCode).limit(1))
+        if existing_rc.scalar_one_or_none() is None:
+            default_codes = [
+                ReasonCode(code="MECHANICAL", description="Mechanical failure or breakdown", category="Equipment", sort_order=0),
+                ReasonCode(code="ELECTRICAL", description="Electrical fault or power issue", category="Equipment", sort_order=1),
+                ReasonCode(code="MATERIAL", description="Raw material issue (jam, empty, defective)", category="Material", sort_order=2),
+                ReasonCode(code="CHANGEOVER", description="Product or format changeover", category="Planned", sort_order=3),
+                ReasonCode(code="OPERATOR", description="Operator-related stoppage", category="Operator", sort_order=4),
+                ReasonCode(code="PLANNED_MAINTENANCE", description="Scheduled preventive maintenance", category="Planned", sort_order=5),
+                ReasonCode(code="QUALITY_HOLD", description="Quality inspection or hold", category="Quality", sort_order=6),
+                ReasonCode(code="OTHER", description="Other or unclassified reason", category="Other", sort_order=7),
+            ]
+            for rc in default_codes:
+                session.add(rc)
 
         # Check if demo resources already exist (skip if so)
         result = await session.execute(

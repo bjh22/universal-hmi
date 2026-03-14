@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import alarms, audit, auth, branding, datasources, integrations, jobs, logs, machine_profiles, preferences, production, projects, screens, scripts, system_update, tags, trends, users
+from app.api import alarms, audit, auth, branding, datasources, integrations, jobs, logs, machine_profiles, preferences, production, production_settings, projects, reason_codes, screens, scripts, system_update, tags, trends, users
 from app.api.websocket import router as ws_router
 from app.core.config import settings
 from app.core.database import async_session, init_db
@@ -26,8 +26,10 @@ from app.drivers.driver_manager import driver_manager
 from app.integrations.manager import IntegrationManager
 from app.models.app_setting import AppSetting  # noqa: F401 — ensure table creation
 from app.models.integration import Integration  # noqa: F401 — ensure table creation
+from app.models.reason_code import ReasonCode  # noqa: F401 — ensure table creation
 from app.services.alarm_service import AlarmService
 from app.services.tag_engine import tag_engine
+from app.services.production_service import ProductionService
 from app.services.trend_service import TrendService
 
 logging.basicConfig(level=logging.INFO if not settings.debug else logging.DEBUG)
@@ -41,6 +43,7 @@ logger = logging.getLogger(__name__)
 
 alarm_service = AlarmService(tag_engine, async_session)
 trend_service = TrendService(tag_engine)
+production_service = ProductionService(tag_engine, alarm_service, async_session)
 
 
 # FastAPI's "lifespan" pattern: an async context manager that replaces the older
@@ -73,6 +76,7 @@ async def lifespan(app: FastAPI):
     # Attach services to app.state so route handlers can access them
     app.state.alarm_service = alarm_service
     app.state.trend_service = trend_service
+    app.state.production_service = production_service
 
     # Integration system
     integration_manager = IntegrationManager(tag_engine, async_session)
@@ -85,6 +89,7 @@ async def lifespan(app: FastAPI):
     await tag_engine.start_simulation()
     await alarm_service.start()
     await trend_service.start()
+    await production_service.start()
     logger.info("All services started")
 
     yield  # App is running and serving requests while we "pause" here
@@ -93,6 +98,7 @@ async def lifespan(app: FastAPI):
     # Stop services gracefully so background tasks finish cleanly
     logger.info("Shutting down services")
     await integration_manager.stop_all()
+    await production_service.stop()
     await tag_engine.stop_simulation()
     await alarm_service.stop()
     await trend_service.stop()
@@ -134,6 +140,8 @@ app.include_router(jobs.router)
 app.include_router(screens.router)
 app.include_router(audit.router)
 app.include_router(production.router)
+app.include_router(production_settings.router)
+app.include_router(reason_codes.router)
 app.include_router(scripts.router)
 app.include_router(projects.router)
 app.include_router(machine_profiles.router)
