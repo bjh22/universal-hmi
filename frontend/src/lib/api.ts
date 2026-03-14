@@ -486,6 +486,41 @@ export const api = {
     URL.revokeObjectURL(url);
   },
 
+  // ZPL Preview
+  zplPreviewRender: async (zpl: string, dpi?: number): Promise<Blob> => {
+    const token = localStorage.getItem('hmi_token');
+    const headers: HeadersInit = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${BASE}/zpl-preview/render`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ zpl, dpi: dpi || 203 }),
+    });
+    if (!res.ok) {
+      const b = await res.json().catch(() => ({}));
+      throw new Error(b.detail || `HTTP ${res.status}`);
+    }
+    return res.blob();
+  },
+  zplPreviewRenderFile: async (file: File, dpi?: number): Promise<Blob> => {
+    const token = localStorage.getItem('hmi_token');
+    const headers: HeadersInit = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const form = new FormData();
+    form.append('file', file);
+    if (dpi) form.append('dpi', String(dpi));
+    const res = await fetch(`${BASE}/zpl-preview/render-file`, {
+      method: 'POST',
+      headers,
+      body: form,
+    });
+    if (!res.ok) {
+      const b = await res.json().catch(() => ({}));
+      throw new Error(b.detail || `HTTP ${res.status}`);
+    }
+    return res.blob();
+  },
+
   // Health
   health: () => request<Record<string, unknown>>('/health'),
 };

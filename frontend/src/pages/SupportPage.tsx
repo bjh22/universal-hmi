@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Download, RefreshCw, Pencil, Plus, ToggleLeft, ToggleRight } from 'lucide-react';
 import { api } from '../lib/api';
 import { SystemUpdateTab } from '../components/support/SystemUpdateTab';
+import { ZplPreviewPage } from './ZplPreviewPage';
 import { WidgetRenderer } from '../components/widgets/WidgetRenderer';
 import type { ScreenData, Widget, TagValue, AlarmData, UserData, LogEntry } from '../types';
 
@@ -13,7 +14,7 @@ interface Props {
   userRole?: string;
 }
 
-type SupportTab = 'dashboard' | 'logs' | 'update';
+type SupportTab = 'dashboard' | 'logs' | 'update' | 'zpl-preview';
 
 export function SupportPage({ user, tagValues, alarms, userRole }: Props) {
   const [tab, setTab] = useState<SupportTab>('dashboard');
@@ -23,6 +24,7 @@ export function SupportPage({ user, tagValues, alarms, userRole }: Props) {
     { key: 'dashboard', label: 'Dashboard' },
     { key: 'logs', label: 'Application Logs' },
     { key: 'update', label: 'Software Update' },
+    { key: 'zpl-preview', label: 'ZPL Preview' },
   ];
 
   return (
@@ -48,6 +50,7 @@ export function SupportPage({ user, tagValues, alarms, userRole }: Props) {
       )}
       {tab === 'logs' && <LogsTab />}
       {tab === 'update' && <SystemUpdateTab canManage={canManage} />}
+      {tab === 'zpl-preview' && <ZplPreviewPage />}
     </div>
   );
 }

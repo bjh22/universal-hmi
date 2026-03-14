@@ -586,6 +586,33 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
           </Section>
         )}
 
+        {widget.type === 'zpl_preview' && (
+          <Section title="ZPL Preview">
+            <Field label="Static ZPL">
+              <textarea value={p.staticZpl || ''} onChange={e => setProp('staticZpl', e.target.value)}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white font-mono h-24 resize-y"
+                placeholder="^XA^FO50,50^ADN,36,20^FDHello^FS^XZ" />
+            </Field>
+            <p className="text-[10px] text-slate-500 -mt-1">If a tag is bound, its value is used as ZPL instead.</p>
+            <Field label="DPI">
+              <select value={p.dpi as number || 203} onChange={e => setProp('dpi', Number(e.target.value))}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white">
+                <option value={152}>152</option>
+                <option value={203}>203</option>
+                <option value={300}>300</option>
+                <option value={600}>600</option>
+              </select>
+            </Field>
+            <Field label="Auto Refresh">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={p.refreshOnTagChange !== false} onChange={e => setProp('refreshOnTagChange', e.target.checked)}
+                  className="accent-blue-500" />
+                <span className="text-xs text-slate-300">Re-render when tag changes</span>
+              </label>
+            </Field>
+          </Section>
+        )}
+
         {widget.type === 'qr_code' && (
           <Section title="QR Code">
             <Field label="Static Content">
