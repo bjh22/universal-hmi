@@ -45,6 +45,18 @@ async def _get_tag_ids_by_names(session: AsyncSession, tag_names: list[str]) -> 
     return {name: tid for name, tid in result}
 
 
+async def _get_tag_info_by_names(
+    session: AsyncSession, tag_names: list[str],
+) -> dict[str, dict]:
+    """Return {tag_name: {"id": int, "display_name": str|None}} for given tag names."""
+    if not tag_names:
+        return {}
+    result = await session.execute(
+        select(Tag.name, Tag.id, Tag.display_name).where(Tag.name.in_(tag_names))
+    )
+    return {name: {"id": tid, "display_name": dname} for name, tid, dname in result}
+
+
 def _clamp_interval(
     start: datetime, end: datetime | None,
     frame_start: datetime, frame_end: datetime,
@@ -173,20 +185,22 @@ async def _get_fault_intervals(
             })
 
     # Get currently active alarms that overlap with the timeframe
-    tag_ids = await _get_tag_ids_by_names(session, tag_names)
-    if tag_ids:
+    tag_info = await _get_tag_info_by_names(session, tag_names)
+    if tag_info:
+        tag_id_values = [info["id"] for info in tag_info.values()]
         active_result = await session.execute(
             select(Alarm)
             .where(
-                Alarm.tag_id.in_(tag_ids.values()),
+                Alarm.tag_id.in_(tag_id_values),
                 Alarm.state.in_([AlarmState.ACTIVE_UNACKED, AlarmState.ACTIVE_ACKED]),
                 Alarm.triggered_at < frame_end,
             )
         )
-        # Build reverse lookup: tag_id -> tag_name
-        id_to_name = {v: k for k, v in tag_ids.items()}
+        # Build reverse lookup: tag_id -> {name, display_name}
+        id_to_info = {info["id"]: {"name": name, "display_name": info["display_name"]}
+                      for name, info in tag_info.items()}
         for a in active_result.scalars().all():
-            tag_name = id_to_name.get(a.tag_id, "")
+            info = id_to_info.get(a.tag_id, {"name": "", "display_name": None})
             clamped = _clamp_interval(
                 _normalize_dt(a.triggered_at),
                 None,  # still active
@@ -195,8 +209,8 @@ async def _get_fault_intervals(
             if clamped:
                 intervals.append({
                     "alarm_history_id": None,
-                    "tag_name": tag_name,
-                    "tag_display_name": None,
+                    "tag_name": info["name"],
+                    "tag_display_name": info["display_name"],
                     "start": clamped[0],
                     "end": clamped[1],
                     "original_start": _normalize_dt(a.triggered_at),
@@ -462,16 +476,20 @@ async def get_downtime_periods(
         session, downtime_alarm_tags, frame_start, frame_end,
     )
 
-    # Load annotations matching the fault intervals by alarm_history_id
-    ah_ids = [fi["alarm_history_id"] for fi in fault_intervals if fi["alarm_history_id"]]
-    annotations: dict[int, DowntimeAnnotation] = {}
-    if ah_ids:
-        ann_result = await session.execute(
-            select(DowntimeAnnotation)
-            .where(DowntimeAnnotation.alarm_history_id.in_(ah_ids))
+    # Load annotations matching the fault intervals by (tag_name, start_time)
+    # This works for both historical and active alarms.
+    ann_result = await session.execute(
+        select(DowntimeAnnotation)
+        .where(
+            DowntimeAnnotation.start_time >= frame_start,
+            DowntimeAnnotation.start_time < frame_end,
         )
-        for ann in ann_result.scalars().all():
-            annotations[ann.alarm_history_id] = ann
+    )
+    # Key by (tag_name, start_time_iso) for lookup
+    annotations: dict[tuple[str, str], DowntimeAnnotation] = {}
+    for ann in ann_result.scalars().all():
+        key = (ann.tag_name, ann.start_time.isoformat())
+        annotations[key] = ann
 
     periods: list[dict] = []
     for fi in fault_intervals:
@@ -479,12 +497,14 @@ async def get_downtime_periods(
         is_exception = fi["tag_name"] in exception_tags
         capped_duration = min(duration, EXCEPTION_CAP_SECONDS) if is_exception else duration
 
-        ann = annotations.get(fi["alarm_history_id"]) if fi["alarm_history_id"] else None
+        start_iso = fi["original_start"].isoformat() + ("" if fi["original_start"].tzinfo else "Z")
+        ann_key = (fi["tag_name"], fi["original_start"].isoformat())
+        ann = annotations.get(ann_key)
         periods.append({
             "alarm_history_id": fi["alarm_history_id"],
             "tag_name": fi["tag_name"],
             "tag_display_name": fi["tag_display_name"],
-            "start_time": fi["original_start"].isoformat() + ("" if fi["original_start"].tzinfo else "Z"),
+            "start_time": start_iso,
             "end_time": (
                 fi["original_end"].isoformat() + ("" if fi["original_end"].tzinfo else "Z")
                 if fi["original_end"] else None

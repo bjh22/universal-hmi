@@ -10,7 +10,7 @@ class DowntimeAnnotation(Base):
     __tablename__ = "downtime_annotations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    alarm_history_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    alarm_history_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     tag_name: Mapped[str] = mapped_column(String(300), nullable=False)
     start_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     end_time: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

@@ -75,29 +75,29 @@ async def get_downtime_periods(
 
 
 class AnnotateBody(BaseModel):
+    tag_name: str
+    start_time: str
     reason_code: str | None = None
     reason_text: str | None = None
 
 
-@router.put("/downtime-periods/{alarm_history_id}/annotate")
+@router.put("/downtime-periods/annotate")
 async def annotate_downtime(
-    alarm_history_id: int,
     body: AnnotateBody,
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_role(UserRole.OPERATOR, UserRole.SUPERVISOR, UserRole.ENGINEER, UserRole.DESIGNER)
     ),
 ):
-    # Look up alarm history entry
-    from app.models.alarm import AlarmHistory
-    ah = await session.get(AlarmHistory, alarm_history_id)
-    if not ah:
-        raise HTTPException(status_code=404, detail="Alarm history entry not found")
+    start_dt = _parse_iso(body.start_time)
 
-    # Upsert annotation
+    # Upsert annotation keyed on (tag_name, start_time)
     result = await session.execute(
         select(DowntimeAnnotation)
-        .where(DowntimeAnnotation.alarm_history_id == alarm_history_id)
+        .where(
+            DowntimeAnnotation.tag_name == body.tag_name,
+            DowntimeAnnotation.start_time == start_dt,
+        )
     )
     existing = result.scalar_one_or_none()
 
@@ -109,10 +109,8 @@ async def annotate_downtime(
         existing.annotated_at = now
     else:
         annotation = DowntimeAnnotation(
-            alarm_history_id=alarm_history_id,
-            tag_name=ah.tag_name,
-            start_time=ah.triggered_at,
-            end_time=ah.cleared_at,
+            tag_name=body.tag_name,
+            start_time=start_dt,
             reason_code=body.reason_code,
             reason_text=body.reason_text,
             annotated_by=current_user.username,
@@ -121,7 +119,7 @@ async def annotate_downtime(
         session.add(annotation)
 
     await session.commit()
-    return {"status": "ok", "alarm_history_id": alarm_history_id}
+    return {"status": "ok"}
 
 
 @router.get("/downtime-summary")

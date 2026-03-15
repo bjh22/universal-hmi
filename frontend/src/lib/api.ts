@@ -36,6 +36,7 @@ import type {
   IntegrationType,
   IntegrationData,
   LogEntry,
+  ServiceConfig,
 } from '../types/index';
 
 // Using a relative URL (no "http://...") means requests go to the same host that
@@ -297,8 +298,8 @@ export const api = {
     const q = qs.toString();
     return request<DowntimePeriod[]>(`/reporting/downtime-periods${q ? `?${q}` : ''}`);
   },
-  annotateDowntimePeriod: (alarmHistoryId: number, data: { reason_code?: string; reason_text?: string }) =>
-    request(`/reporting/downtime-periods/${alarmHistoryId}/annotate`, {
+  annotateDowntimePeriod: (data: { tag_name: string; start_time: string; reason_code?: string; reason_text?: string }) =>
+    request('/reporting/downtime-periods/annotate', {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
