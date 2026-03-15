@@ -296,7 +296,7 @@ export function TrendsPage() {
             </ResponsiveContainer>
           ) : (
             <div className="flex items-center justify-center h-96 text-slate-500">
-              Select tags to view trends
+              {selectedTags.length > 0 ? 'No trend data available for selected time range' : 'Select tags to view trends'}
             </div>
           )}
         </div>
