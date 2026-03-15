@@ -296,7 +296,10 @@ class ProductionService:
             event = await session.get(DowntimeEvent, event_id)
             if event and event.production_run_id == run.id and not event.end_time:
                 event.end_time = now
-                event.duration_seconds = (event.end_time - event.start_time).total_seconds()
+                start = event.start_time
+                if start.tzinfo is None:
+                    start = start.replace(tzinfo=timezone.utc)
+                event.duration_seconds = (now - start).total_seconds()
                 logger.info("Run #%d: closed open downtime event #%d for %s",
                             run.id, event_id, tag_name)
             self._open_downtime.pop(tag_name, None)
@@ -366,8 +369,13 @@ class ProductionService:
                     if event_id:
                         event = await session.get(DowntimeEvent, event_id)
                         if event and not event.end_time:
-                            event.end_time = datetime.now(timezone.utc)
-                            event.duration_seconds = (event.end_time - event.start_time).total_seconds()
+                            now = datetime.now(timezone.utc)
+                            event.end_time = now
+                            # Ensure both datetimes have matching tz-awareness for subtraction
+                            start = event.start_time
+                            if start.tzinfo is None:
+                                start = start.replace(tzinfo=timezone.utc)
+                            event.duration_seconds = (now - start).total_seconds()
                             await session.commit()
                             logger.info("Run #%d: closed downtime event #%d for %s (%.0fs)",
                                         active_run.id, event_id, tag_name, event.duration_seconds)
