@@ -69,6 +69,106 @@ function formatValue(tag: Tag, value: unknown): string {
   return formatted;
 }
 
+function applyTagOrder(tags: Tag[], order: string[] | undefined): Tag[] {
+  if (!order || order.length === 0) return tags;
+  const orderMap = new Map(order.map((name, idx) => [name, idx]));
+  return [...tags].sort((a, b) => (orderMap.get(a.name) ?? 999) - (orderMap.get(b.name) ?? 999));
+}
+
+interface IOPanelProps {
+  label: string;
+  emptyLabel: string;
+  tags: Tag[];
+  tagValues: Record<string, TagValue>;
+  editMode?: boolean;
+  onMove?: (tagName: string, direction: -1 | 1) => void;
+}
+
+function IOPanel({ label, emptyLabel, tags, tagValues, editMode, onMove }: IOPanelProps) {
+  const boolTags = tags.filter(t => t.data_type === 'bool');
+  const analogTags = tags.filter(t => t.data_type !== 'bool');
+
+  return (
+    <div>
+      <h3 className="text-sm font-medium text-slate-400 mb-2 uppercase tracking-wider">{label}</h3>
+      {tags.length === 0 ? (
+        <div className="bg-slate-900 rounded-lg border border-slate-700 px-5 py-6 text-center text-sm text-slate-500">
+          No tags labelled &quot;{emptyLabel}&quot;
+        </div>
+      ) : editMode ? (
+        <div className="bg-slate-900 rounded-lg border border-slate-700 overflow-hidden">
+          <table className="w-full text-base">
+            <tbody>
+              {tags.map((tag, idx) => (
+                <tr key={tag.name} className="border-b border-slate-700/50 last:border-b-0">
+                  <td className="px-4 py-2 text-slate-300">
+                    {tag.display_name || tag.name}
+                    <span className="text-slate-500 ml-2 text-sm">{tag.data_type}</span>
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        type="button"
+                        onClick={() => onMove?.(tag.name, -1)}
+                        disabled={idx === 0}
+                        className="p-1.5 rounded hover:bg-slate-700 disabled:opacity-30 transition-colors"
+                      >
+                        <ArrowUp size={16} className="text-slate-400" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onMove?.(tag.name, 1)}
+                        disabled={idx === tags.length - 1}
+                        className="p-1.5 rounded hover:bg-slate-700 disabled:opacity-30 transition-colors"
+                      >
+                        <ArrowDown size={16} className="text-slate-400" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="bg-slate-900 rounded-lg border border-slate-700 overflow-hidden">
+          {boolTags.length > 0 && (
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] px-2 py-1.5 gap-x-1 gap-y-0.5">
+              {boolTags.map(tag => {
+                const on = Boolean(tagValues[tag.name]?.value);
+                return (
+                  <div key={tag.name} className="flex items-center gap-1.5 px-1.5 py-0.5">
+                    <span className={`inline-block w-2.5 h-2.5 rounded-full flex-shrink-0 ${on ? 'bg-green-400 shadow-[0_0_4px_rgba(74,222,128,0.5)]' : 'bg-slate-600'}`} />
+                    <span className="text-base text-slate-300 truncate">{tag.display_name || tag.name}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {analogTags.length > 0 && (
+            <>
+              {boolTags.length > 0 && <div className="border-t border-slate-700/50" />}
+              <table className="w-full text-base">
+                <tbody>
+                  {analogTags.map(tag => {
+                    const value = tagValues[tag.name]?.value;
+                    return (
+                      <tr key={tag.name} className="border-b border-slate-700/50 last:border-b-0">
+                        <td className="px-3 py-1 text-slate-300">{tag.display_name || tag.name}</td>
+                        <td className="px-3 py-1 text-right text-slate-200">{formatValue(tag, value)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ServicePage({ user, tagValues }: Props) {
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -122,6 +222,9 @@ export function ServicePage({ user, tagValues }: Props) {
 
   const activeOrder = editMode ? editOrder : serviceConfig.order;
   const serviceGroups = useMemo(() => groupServiceTags(serviceTags, activeOrder), [serviceTags, activeOrder]);
+
+  const orderedInputTags = useMemo(() => applyTagOrder(inputTags, activeOrder['_io_inputs']), [inputTags, activeOrder]);
+  const orderedOutputTags = useMemo(() => applyTagOrder(outputTags, activeOrder['_io_outputs']), [outputTags, activeOrder]);
 
   const getMode = useCallback((tagName: string): 'momentary' | 'toggle' => {
     if (editMode) {
@@ -185,6 +288,19 @@ export function ServicePage({ user, tagValues }: Props) {
       return { ...prev, [groupName]: next };
     });
   }, [serviceGroups]);
+
+  const moveIOTag = useCallback((orderKey: string, tags: Tag[], tagName: string, direction: -1 | 1) => {
+    setEditOrder(prev => {
+      const current = prev[orderKey] || tags.map(t => t.name);
+      const idx = current.indexOf(tagName);
+      if (idx < 0) return prev;
+      const newIdx = idx + direction;
+      if (newIdx < 0 || newIdx >= current.length) return prev;
+      const next = [...current];
+      [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
+      return { ...prev, [orderKey]: next };
+    });
+  }, []);
 
   const toggleGroup = useCallback((group: string) => {
     setCollapsed(prev => {
@@ -281,7 +397,7 @@ export function ServicePage({ user, tagValues }: Props) {
       </div>
 
       {/* I/O Monitor */}
-      <div className="mb-8">
+      <div className="mb-8 sticky top-0 z-10 bg-slate-800 pb-2 -mx-6 px-6 -mt-2 pt-2">
         <h2 className="text-lg font-medium text-slate-300 mb-3">I/O Monitor</h2>
         {inputTags.length === 0 && outputTags.length === 0 ? (
           <div className="text-center py-10">
@@ -293,74 +409,11 @@ export function ServicePage({ user, tagValues }: Props) {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Inputs */}
-            <div>
-              <h3 className="text-sm font-medium text-slate-400 mb-2 uppercase tracking-wider">Inputs</h3>
-              {inputTags.length === 0 ? (
-                <div className="bg-slate-900 rounded-lg border border-slate-700 px-5 py-6 text-center text-sm text-slate-500">
-                  No tags labelled &quot;{INPUT_LABEL}&quot;
-                </div>
-              ) : (
-                <div className="bg-slate-900 rounded-lg border border-slate-700 overflow-hidden">
-                  <table className="w-full text-sm">
-                    <tbody>
-                      {inputTags.map(tag => {
-                        const value = tagValues[tag.name]?.value;
-                        const isBool = tag.data_type === 'bool';
-                        return (
-                          <tr key={tag.name} className="border-b border-slate-700/50 last:border-b-0">
-                            <td className="px-4 py-2.5 text-slate-300">{tag.display_name || tag.name}</td>
-                            <td className="px-4 py-2.5 text-right">
-                              {isBool ? (
-                                <span className={`font-medium ${Boolean(value) ? 'text-green-400' : 'text-slate-500'}`}>
-                                  {Boolean(value) ? 'ON' : 'OFF'}
-                                </span>
-                              ) : (
-                                <span className="text-slate-200">{formatValue(tag, value)}</span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
+            <IOPanel label="Inputs" emptyLabel={INPUT_LABEL} tags={orderedInputTags} tagValues={tagValues}
+              editMode={editMode} onMove={(name, dir) => moveIOTag('_io_inputs', orderedInputTags, name, dir)} />
             {/* Outputs */}
-            <div>
-              <h3 className="text-sm font-medium text-slate-400 mb-2 uppercase tracking-wider">Outputs</h3>
-              {outputTags.length === 0 ? (
-                <div className="bg-slate-900 rounded-lg border border-slate-700 px-5 py-6 text-center text-sm text-slate-500">
-                  No tags labelled &quot;{OUTPUT_LABEL}&quot;
-                </div>
-              ) : (
-                <div className="bg-slate-900 rounded-lg border border-slate-700 overflow-hidden">
-                  <table className="w-full text-sm">
-                    <tbody>
-                      {outputTags.map(tag => {
-                        const value = tagValues[tag.name]?.value;
-                        const isBool = tag.data_type === 'bool';
-                        return (
-                          <tr key={tag.name} className="border-b border-slate-700/50 last:border-b-0">
-                            <td className="px-4 py-2.5 text-slate-300">{tag.display_name || tag.name}</td>
-                            <td className="px-4 py-2.5 text-right">
-                              {isBool ? (
-                                <span className={`font-medium ${Boolean(value) ? 'text-green-400' : 'text-slate-500'}`}>
-                                  {Boolean(value) ? 'ON' : 'OFF'}
-                                </span>
-                              ) : (
-                                <span className="text-slate-200">{formatValue(tag, value)}</span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+            <IOPanel label="Outputs" emptyLabel={OUTPUT_LABEL} tags={orderedOutputTags} tagValues={tagValues}
+              editMode={editMode} onMove={(name, dir) => moveIOTag('_io_outputs', orderedOutputTags, name, dir)} />
           </div>
         )}
       </div>
@@ -376,7 +429,7 @@ export function ServicePage({ user, tagValues }: Props) {
             </p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
             {serviceGroups.map(({ group, tags: groupTags }) => (
               <div key={group}>
                 <button
@@ -388,130 +441,125 @@ export function ServicePage({ user, tagValues }: Props) {
                   <span className="text-slate-500 ml-1">({groupTags.length})</span>
                 </button>
                 {!collapsed.has(group) && (
-                  <div className="bg-slate-900 rounded-lg border border-slate-700 overflow-hidden">
-                    <table className="w-full text-base">
-                      <tbody>
-                        {groupTags.map((tag, tagIdx) => {
-                          const liveValue = tagValues[tag.name]?.value;
-                          const isBool = tag.data_type === 'bool';
-                          const isWritable = tag.access_mode === 'write' || tag.access_mode === 'read_write';
-                          const mode = getMode(tag.name);
+                  <div className="space-y-2">
+                    {groupTags.map((tag, tagIdx) => {
+                      const liveValue = tagValues[tag.name]?.value;
+                      const isBool = tag.data_type === 'bool';
+                      const isWritable = tag.access_mode === 'write' || tag.access_mode === 'read_write';
+                      const mode = getMode(tag.name);
 
-                          // Enum mapping
-                          let enumMap: Record<string, string> | null = null;
-                          if (tag.enum_mapping) {
-                            try { enumMap = typeof tag.enum_mapping === 'string' ? JSON.parse(tag.enum_mapping) : tag.enum_mapping; } catch { /* ignore */ }
-                          }
-                          const hasEnum = enumMap && Object.keys(enumMap).length > 0;
+                      // Enum mapping
+                      let enumMap: Record<string, string> | null = null;
+                      if (tag.enum_mapping) {
+                        try { enumMap = typeof tag.enum_mapping === 'string' ? JSON.parse(tag.enum_mapping) : tag.enum_mapping; } catch { /* ignore */ }
+                      }
+                      const hasEnum = enumMap && Object.keys(enumMap).length > 0;
 
-                          return (
-                            <tr key={tag.name} className="border-b border-slate-700/50 last:border-b-0">
-                              <td className="px-5 py-4 text-slate-300">
-                                {tag.display_name || tag.name}
-                                {tag.engineering_units && (
-                                  <span className="text-slate-500 ml-1">({tag.engineering_units})</span>
-                                )}
-                              </td>
-                              <td className="px-5 py-4 text-right">
-                                {editMode ? (
-                                  /* Edit mode: show mode selector and reorder buttons */
-                                  <div className="flex items-center justify-end gap-2">
-                                    {isBool && isWritable && (
-                                      <select
-                                        value={mode}
-                                        onChange={e => setTagMode(tag.name, e.target.value as 'momentary' | 'toggle')}
-                                        className="bg-slate-700 border border-slate-600 rounded-md px-2 py-1.5 text-sm text-white"
-                                      >
-                                        <option value="momentary">Momentary</option>
-                                        <option value="toggle">Toggle</option>
-                                      </select>
-                                    )}
-                                    {!isBool && (
-                                      <span className="text-sm text-slate-500 mr-2">
-                                        {tag.data_type}
-                                      </span>
-                                    )}
-                                    <button
-                                      type="button"
-                                      onClick={() => moveTag(group, tag.name, -1)}
-                                      disabled={tagIdx === 0}
-                                      className="p-1.5 rounded hover:bg-slate-700 disabled:opacity-30 transition-colors"
-                                    >
-                                      <ArrowUp size={16} className="text-slate-400" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => moveTag(group, tag.name, 1)}
-                                      disabled={tagIdx === groupTags.length - 1}
-                                      className="p-1.5 rounded hover:bg-slate-700 disabled:opacity-30 transition-colors"
-                                    >
-                                      <ArrowDown size={16} className="text-slate-400" />
-                                    </button>
-                                  </div>
-                                ) : isBool && isWritable && mode === 'toggle' ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleToggle(tag.name, liveValue)}
-                                    className="inline-flex items-center gap-3 min-h-[48px] px-3 py-2"
-                                  >
-                                    <div className={`w-12 h-6 rounded-full transition-colors relative flex-shrink-0 ${Boolean(liveValue) ? 'bg-green-500' : 'bg-slate-600'}`}>
-                                      <span className="absolute top-0.5 w-5 h-5 bg-white rounded-full transition-transform shadow-sm"
-                                        style={{ left: Boolean(liveValue) ? '1.5rem' : '0.125rem' }} />
-                                    </div>
-                                    <span className={`text-sm font-medium ${Boolean(liveValue) ? 'text-green-400' : 'text-slate-500'}`}>
-                                      {Boolean(liveValue) ? 'ON' : 'OFF'}
-                                    </span>
-                                  </button>
-                                ) : isBool && isWritable ? (
-                                  <button
-                                    type="button"
-                                    onPointerDown={() => handleMomentaryPress(tag.name)}
-                                    onPointerUp={() => handleMomentaryRelease(tag.name)}
-                                    onPointerLeave={() => { if (Boolean(liveValue)) handleMomentaryRelease(tag.name); }}
-                                    className={`inline-flex items-center justify-center min-h-[48px] min-w-[100px] px-4 py-2 rounded-lg font-medium text-sm transition-all select-none ${
-                                      Boolean(liveValue)
-                                        ? 'bg-green-600 text-white shadow-inner'
-                                        : 'bg-slate-600 text-slate-300 hover:bg-slate-500 active:bg-green-600 active:text-white'
-                                    }`}
-                                  >
-                                    {Boolean(liveValue) ? 'ON' : 'PRESS'}
-                                  </button>
-                                ) : isBool ? (
-                                  <span className={`font-medium ${Boolean(liveValue) ? 'text-green-400' : 'text-slate-500'}`}>
-                                    {Boolean(liveValue) ? 'ON' : 'OFF'}
-                                  </span>
-                                ) : hasEnum && isWritable ? (
+                      return (
+                        <div key={tag.name} className="bg-slate-900 rounded-lg border border-slate-700 flex items-center justify-between px-4 py-2 min-h-[48px] text-base">
+                          <span className="text-slate-300 mr-3">
+                            {tag.display_name || tag.name}
+                            {tag.engineering_units && (
+                              <span className="text-slate-500 ml-1">({tag.engineering_units})</span>
+                            )}
+                          </span>
+                          <div className="flex-shrink-0">
+                            {editMode ? (
+                              <div className="flex items-center gap-2">
+                                {isBool && isWritable && (
                                   <select
-                                    value={String(liveValue ?? '')}
-                                    onChange={e => handleWrite(tag.name, parseTypedValue(e.target.value))}
-                                    className="min-h-[48px] min-w-[120px] bg-slate-700 border border-slate-600 rounded-md px-3 py-3 text-base text-white hover:border-blue-500 transition-all"
+                                    value={mode}
+                                    onChange={e => setTagMode(tag.name, e.target.value as 'momentary' | 'toggle')}
+                                    className="bg-slate-700 border border-slate-600 rounded-md px-2 py-1.5 text-sm text-white"
                                   >
-                                    <option value="">Select…</option>
-                                    {Object.entries(enumMap!).map(([k, label]) => (
-                                      <option key={k} value={k}>{label}</option>
-                                    ))}
+                                    <option value="momentary">Momentary</option>
+                                    <option value="toggle">Toggle</option>
                                   </select>
-                                ) : isWritable ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => openKeypad(tag.name)}
-                                    className="inline-flex items-center min-h-[48px] min-w-[120px] bg-slate-700 border border-slate-600 rounded-md px-3 py-3 text-base text-white text-left hover:border-blue-500 active:scale-95 transition-all"
-                                  >
-                                    {liveValue != null && liveValue !== '' ? (
-                                      <span>{formatValue(tag, liveValue)}</span>
-                                    ) : (
-                                      <span className="text-slate-500">Tap to set</span>
-                                    )}
-                                  </button>
-                                ) : (
-                                  <span className="text-slate-200">{formatValue(tag, liveValue)}</span>
                                 )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                                {!isBool && (
+                                  <span className="text-sm text-slate-500 mr-2">
+                                    {tag.data_type}
+                                  </span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => moveTag(group, tag.name, -1)}
+                                  disabled={tagIdx === 0}
+                                  className="p-1.5 rounded hover:bg-slate-700 disabled:opacity-30 transition-colors"
+                                >
+                                  <ArrowUp size={16} className="text-slate-400" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => moveTag(group, tag.name, 1)}
+                                  disabled={tagIdx === groupTags.length - 1}
+                                  className="p-1.5 rounded hover:bg-slate-700 disabled:opacity-30 transition-colors"
+                                >
+                                  <ArrowDown size={16} className="text-slate-400" />
+                                </button>
+                              </div>
+                            ) : isBool && isWritable && mode === 'toggle' ? (
+                              <button
+                                type="button"
+                                onClick={() => handleToggle(tag.name, liveValue)}
+                                className="inline-flex items-center gap-3 min-h-[48px] px-3 py-2"
+                              >
+                                <div className={`w-12 h-6 rounded-full transition-colors relative flex-shrink-0 ${Boolean(liveValue) ? 'bg-green-500' : 'bg-slate-600'}`}>
+                                  <span className="absolute top-0.5 w-5 h-5 bg-white rounded-full transition-transform shadow-sm"
+                                    style={{ left: Boolean(liveValue) ? '1.5rem' : '0.125rem' }} />
+                                </div>
+                                <span className={`text-sm font-medium ${Boolean(liveValue) ? 'text-green-400' : 'text-slate-500'}`}>
+                                  {Boolean(liveValue) ? 'ON' : 'OFF'}
+                                </span>
+                              </button>
+                            ) : isBool && isWritable ? (
+                              <button
+                                type="button"
+                                onPointerDown={() => handleMomentaryPress(tag.name)}
+                                onPointerUp={() => handleMomentaryRelease(tag.name)}
+                                onPointerLeave={() => { if (Boolean(liveValue)) handleMomentaryRelease(tag.name); }}
+                                className={`inline-flex items-center justify-center min-h-[48px] min-w-[80px] px-4 py-2 rounded-lg font-medium text-sm transition-all select-none ${
+                                  Boolean(liveValue)
+                                    ? 'bg-green-600 text-white shadow-inner'
+                                    : 'bg-slate-600 text-slate-300 hover:bg-slate-500 active:bg-green-600 active:text-white'
+                                }`}
+                              >
+                                {Boolean(liveValue) ? 'ON' : 'PRESS'}
+                              </button>
+                            ) : isBool ? (
+                              <span className={`font-medium ${Boolean(liveValue) ? 'text-green-400' : 'text-slate-500'}`}>
+                                {Boolean(liveValue) ? 'ON' : 'OFF'}
+                              </span>
+                            ) : hasEnum && isWritable ? (
+                              <select
+                                value={String(liveValue ?? '')}
+                                onChange={e => handleWrite(tag.name, parseTypedValue(e.target.value))}
+                                className="min-h-[48px] min-w-[100px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-base text-white hover:border-blue-500 transition-all"
+                              >
+                                <option value="">Select…</option>
+                                {Object.entries(enumMap!).map(([k, label]) => (
+                                  <option key={k} value={k}>{label}</option>
+                                ))}
+                              </select>
+                            ) : isWritable ? (
+                              <button
+                                type="button"
+                                onClick={() => openKeypad(tag.name)}
+                                className="inline-flex items-center min-h-[48px] min-w-[100px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-base text-white text-left hover:border-blue-500 active:scale-95 transition-all"
+                              >
+                                {liveValue != null && liveValue !== '' ? (
+                                  <span>{formatValue(tag, liveValue)}</span>
+                                ) : (
+                                  <span className="text-slate-500">Tap to set</span>
+                                )}
+                              </button>
+                            ) : (
+                              <span className="text-slate-200">{formatValue(tag, liveValue)}</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
