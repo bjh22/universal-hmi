@@ -112,7 +112,7 @@ export function DowntimePeriodsTable({ periods, reasonCodes, onAnnotated }: Prop
                   )}
                 </td>
                 <td className="py-2 pr-3">
-                  {editingId === p.alarm_history_id ? (
+                  {editingId != null && editingId === p.alarm_history_id ? (
                     <select
                       value={editCode}
                       onChange={e => setEditCode(e.target.value)}
@@ -130,7 +130,7 @@ export function DowntimePeriodsTable({ periods, reasonCodes, onAnnotated }: Prop
                   )}
                 </td>
                 <td className="py-2">
-                  {editingId === p.alarm_history_id ? (
+                  {editingId != null && editingId === p.alarm_history_id ? (
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
