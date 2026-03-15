@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -21,12 +21,12 @@ async def get_trend_data(
     session: AsyncSession = Depends(get_db),
 ):
     if start:
-        since = datetime.fromisoformat(start).replace(tzinfo=timezone.utc)
+        since = datetime.fromisoformat(start).replace(tzinfo=None)
     else:
-        since = datetime.now(timezone.utc) - timedelta(hours=hours)
+        since = datetime.utcnow() - timedelta(hours=hours)
     conditions = [TrendData.tag_id == tag_id, TrendData.timestamp >= since]
     if end:
-        until = datetime.fromisoformat(end).replace(tzinfo=timezone.utc)
+        until = datetime.fromisoformat(end).replace(tzinfo=None)
         conditions.append(TrendData.timestamp <= until)
     result = await session.execute(
         select(TrendData)
