@@ -1030,6 +1030,8 @@ Updates can be applied **directly from the HMI web interface** or via the comman
 
 #### What Is Preserved During Updates
 
+**Source-mode installations:**
+
 | Preserved (never overwritten) | Replaced (updated) |
 |-------------------------------|---------------------|
 | `.env` (configuration & secret key) | `app/` (backend source code) |
@@ -1037,25 +1039,35 @@ Updates can be applied **directly from the HMI web interface** or via the comman
 | `venv/` (updated only if new wheels bundled) | `requirements.txt` |
 | systemd service / NSSM config | `run.py`, `start.*`, `seed.*` |
 
+**Compiled-mode installations** (`--compile`):
+
+| Preserved (never overwritten) | Replaced (updated) |
+|-------------------------------|---------------------|
+| `.env` (configuration & secret key) | `hmi-server` binary (or `.exe`) |
+| `data/hmi.db` (database) | `_internal/` (bundled runtime + frontend) |
+| `media/` (uploaded images) | |
+| systemd service / NSSM config | |
+
 The SQLite database contains all your operational data — trend history, job/recipe definitions, screen layouts, alarm history, user accounts, audit logs, and production records. It is stored in the `data/` subdirectory and is **never overwritten or deleted** during an update.
+
+> **Important:** Update packages must match the installation type — a compiled package can only be applied to a compiled installation, and a source package to a source installation. The system validates this automatically and rejects mismatched packages.
 
 #### Method 1: In-HMI Update (Recommended)
 
 The HMI includes a built-in **System Update** feature in the Settings page. This allows engineers and designers to apply updates directly from the running HMI — no command line, SSH, or terminal access required.
 
-1. Build a deployment package on your development machine (`./deploy.sh` or `./deploy.sh --windows`)
+1. Build a deployment package on your development machine (`./deploy.sh` or `./deploy.sh --compile`)
 2. Copy the `.tar.gz` or `.zip` file to the panel PC (USB drive, network share, or any local folder)
-3. In the HMI, navigate to **Settings** > **System Update**
+3. In the HMI, navigate to **Support** > **Software Update**
 4. Click **Select Update Package** and browse to the deployment archive
-5. The package is automatically **validated** — the UI shows what's included (backend, frontend, wheels) and confirms the package structure is correct
+5. The package is automatically **validated** — the UI shows what's included (package type, backend, frontend, wheels) and confirms the package structure is correct
 6. Review the validation results, then click **Apply Update**
-7. Confirm the update in the dialog — the system reminds you that your database, trends, jobs, and screens are preserved
-8. The update is applied and the **system restarts automatically**
-9. The page reloads when the server is back online (typically within a few seconds)
+7. The update is applied and the **system restarts automatically**
+8. The page reloads when the server is back online (typically within a few seconds)
 
-The update is recorded in the **Audit Trail** with the filename, size, and what was updated.
+The update is recorded in the **Audit Trail** with the filename, size, package mode (source/compiled), and what was updated.
 
-> **Note:** The System Update tab also displays current system information (version, platform, uptime, install path) so you can verify what version is running.
+> **Note:** The Software Update tab displays current system information (version, platform, uptime, install type, install path) so you can verify what version is running. The install type shows whether the system is running in source or compiled mode.
 
 #### Method 2: Command-Line Update
 

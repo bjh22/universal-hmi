@@ -178,6 +178,9 @@ Environment variables prefixed with `HMI_` (or `.env` file):
 | GET | `/api/media/{media_id}` | Serve a fault help image |
 | GET | `/api/media/` | List uploaded fault help images |
 | DELETE | `/api/media/{media_id}` | Delete a fault help image |
+| GET | `/api/system/info` | System info (version, platform, install type) |
+| POST | `/api/system/update/validate` | Validate update package (source or compiled) |
+| POST | `/api/system/update/apply` | Apply update package and restart |
 | WS | `/ws` | Real-time tag values + alarms |
 
 **WebSocket messages:** `snapshot` (initial), `tag_update` (deltas), `alarm` (state changes), `keepalive` (30s)
@@ -246,6 +249,7 @@ See `DEVELOPER.md` → "Creating a Plugin Integration" for a full walkthrough wi
 - `backend/app/api/service_config.py` — Service page configuration API
 - `backend/app/api/zpl_preview.py` — ZPL preview rendering API
 - `backend/app/api/media.py` — Fault help image upload/serve/delete API
+- `backend/app/api/system_update.py` — In-app software update (supports source and compiled packages)
 - `backend/app/core/paths.py` — Frozen-aware path helpers for PyInstaller compatibility
 - `backend/app/integrations/base.py` — Integration plugin base class
 - `backend/app/integrations/manager.py` — Plugin discovery and lifecycle management

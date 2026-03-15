@@ -8,11 +8,13 @@ interface SystemInfo {
   python_version: string;
   install_path: string;
   database_path: string;
+  is_compiled: boolean;
   uptime_seconds: number | null;
 }
 
 interface ValidationResult {
   valid: boolean;
+  is_compiled: boolean;
   has_backend: boolean;
   has_frontend: boolean;
   has_wheels: boolean;
@@ -129,6 +131,10 @@ export function SystemUpdateTab({ canManage }: { canManage: boolean }) {
               <span className="text-[var(--hmi-text-muted)]">Python</span>
               <span className="ml-2 text-[var(--hmi-text-primary)] font-mono">{systemInfo.python_version}</span>
             </div>
+            <div>
+              <span className="text-[var(--hmi-text-muted)]">Install Type</span>
+              <span className="ml-2 text-[var(--hmi-text-primary)]">{systemInfo.is_compiled ? 'Compiled' : 'Source'}</span>
+            </div>
             <div className="col-span-2">
               <span className="text-[var(--hmi-text-muted)]">Install Path</span>
               <span className="ml-2 text-[var(--hmi-text-primary)] font-mono text-xs">{systemInfo.install_path}</span>
@@ -206,14 +212,19 @@ export function SystemUpdateTab({ canManage }: { canManage: boolean }) {
               {validation.valid ? (
                 <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs ml-6">
                   <div className="text-[var(--hmi-text-secondary)]">
+                    Package type: <span className="text-[var(--hmi-text-primary)]">{validation.is_compiled ? 'Compiled' : 'Source'}</span>
+                  </div>
+                  <div className="text-[var(--hmi-text-secondary)]">
                     Backend code: <span className={validation.has_backend ? 'text-green-400' : 'text-[var(--hmi-text-muted)]'}>{validation.has_backend ? 'Included' : 'Not included'}</span>
                   </div>
                   <div className="text-[var(--hmi-text-secondary)]">
                     Frontend build: <span className={validation.has_frontend ? 'text-green-400' : 'text-[var(--hmi-text-muted)]'}>{validation.has_frontend ? 'Included' : 'Not included'}</span>
                   </div>
-                  <div className="text-[var(--hmi-text-secondary)]">
-                    Python wheels: <span className={validation.has_wheels ? 'text-green-400' : 'text-[var(--hmi-text-muted)]'}>{validation.has_wheels ? 'Included' : 'Not included'}</span>
-                  </div>
+                  {!validation.is_compiled && (
+                    <div className="text-[var(--hmi-text-secondary)]">
+                      Python wheels: <span className={validation.has_wheels ? 'text-green-400' : 'text-[var(--hmi-text-muted)]'}>{validation.has_wheels ? 'Included' : 'Not included'}</span>
+                    </div>
+                  )}
                   <div className="text-[var(--hmi-text-secondary)]">
                     Files: <span className="text-[var(--hmi-text-secondary)]">{validation.file_count}</span>
                   </div>
@@ -300,9 +311,18 @@ export function SystemUpdateTab({ canManage }: { canManage: boolean }) {
           <div>
             <div className="text-amber-400 font-medium mb-1.5">Replaced (updated)</div>
             <ul className="text-[var(--hmi-text-secondary)] space-y-1">
-              <li>Backend application code</li>
-              <li>Frontend UI assets</li>
-              <li>Python dependencies (if new wheels included)</li>
+              {systemInfo?.is_compiled ? (
+                <>
+                  <li>Application binary and runtime</li>
+                  <li>Frontend UI assets (bundled)</li>
+                </>
+              ) : (
+                <>
+                  <li>Backend application code</li>
+                  <li>Frontend UI assets</li>
+                  <li>Python dependencies (if new wheels included)</li>
+                </>
+              )}
             </ul>
           </div>
         </div>

@@ -1312,6 +1312,16 @@ async with async_session() as session:
 | POST | `/api/zpl-preview/render` | Render ZPL text to PNG (JSON body: `{ zpl, dpi }`) |
 | POST | `/api/zpl-preview/render-file` | Render uploaded ZPL file to PNG (multipart form + DPI) |
 
+### System Update
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/system/info` | System info (version, platform, python version, install type, uptime) |
+| POST | `/api/system/update/validate` | Validate an update package without applying (multipart upload) |
+| POST | `/api/system/update/apply` | Apply an update package and schedule restart (multipart upload) |
+
+The system supports both **source-mode** and **compiled-mode** (PyInstaller) update packages. Source packages contain `backend/app/` with Python source; compiled packages contain `hmi-server/` with the native binary and `_internal/` directory. The package type must match the running installation type — mismatched packages are rejected with a clear error message. The `GET /api/system/info` response includes `is_compiled: true/false` to indicate the current install type.
+
 ### WebSocket
 
 | Path | Description |
