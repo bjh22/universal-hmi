@@ -298,7 +298,7 @@ export const api = {
     const q = qs.toString();
     return request<DowntimePeriod[]>(`/reporting/downtime-periods${q ? `?${q}` : ''}`);
   },
-  annotateDowntimePeriod: (data: { tag_name: string; start_time: string; reason_code?: string; reason_text?: string }) =>
+  annotateDowntimePeriod: (data: { start_time: string; reason_code?: string; reason_text?: string }) =>
     request('/reporting/downtime-periods/annotate', {
       method: 'PUT',
       body: JSON.stringify(data),

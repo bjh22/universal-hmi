@@ -233,16 +233,23 @@ export interface ReportSummary {
   timeframe: { start: string; end: string };
 }
 
-// A downtime period derived from alarm history, with optional reason code annotation.
-export interface DowntimePeriod {
+// An individual fault/alarm that contributed to a downtime period.
+export interface DowntimeFault {
   alarm_history_id: number | null;
   tag_name: string;
   tag_display_name: string | null;
   start_time: string;
   end_time: string | null;
+  is_exception: boolean;
+}
+
+// A merged downtime period (overlapping faults grouped together).
+export interface DowntimePeriod {
+  start_time: string;
+  end_time: string | null;
   duration_seconds: number;
-  is_exception: boolean;         // true if this is a downtime exception fault
-  capped_duration_seconds: number; // after 5-min cap applied
+  capped_duration_seconds: number;
+  faults: DowntimeFault[];
   reason_code: string | null;
   reason_text: string | null;
 }

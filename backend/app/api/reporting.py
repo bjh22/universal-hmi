@@ -75,7 +75,6 @@ async def get_downtime_periods(
 
 
 class AnnotateBody(BaseModel):
-    tag_name: str
     start_time: str
     reason_code: str | None = None
     reason_text: str | None = None
@@ -91,13 +90,10 @@ async def annotate_downtime(
 ):
     start_dt = _parse_iso(body.start_time)
 
-    # Upsert annotation keyed on (tag_name, start_time)
+    # Upsert annotation keyed on start_time (merged downtime period key)
     result = await session.execute(
         select(DowntimeAnnotation)
-        .where(
-            DowntimeAnnotation.tag_name == body.tag_name,
-            DowntimeAnnotation.start_time == start_dt,
-        )
+        .where(DowntimeAnnotation.start_time == start_dt)
     )
     existing = result.scalar_one_or_none()
 
@@ -109,7 +105,7 @@ async def annotate_downtime(
         existing.annotated_at = now
     else:
         annotation = DowntimeAnnotation(
-            tag_name=body.tag_name,
+            tag_name="",
             start_time=start_dt,
             reason_code=body.reason_code,
             reason_text=body.reason_text,

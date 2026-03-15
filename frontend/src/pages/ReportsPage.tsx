@@ -144,10 +144,11 @@ export function ReportsPage() {
       `OEE,${summary.oee != null ? (summary.oee * 100).toFixed(1) + '%' : 'N/A'}`,
       '',
       'Downtime Periods',
-      'Fault,Start,End,Duration,Capped Duration,Reason Code',
-      ...periods.map(p =>
-        `"${p.tag_display_name || p.tag_name}","${p.start_time}","${p.end_time || 'Ongoing'}",${p.duration_seconds},${p.capped_duration_seconds},"${p.reason_code || ''}"`
-      ),
+      'Faults,Start,End,Duration,Capped Duration,Reason Code',
+      ...periods.map(p => {
+        const faultNames = p.faults.map(f => f.tag_display_name || f.tag_name).join('; ');
+        return `"${faultNames}","${p.start_time}","${p.end_time || 'Ongoing'}",${p.duration_seconds},${p.capped_duration_seconds},"${p.reason_code || ''}"`;
+      }),
     ];
     const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);

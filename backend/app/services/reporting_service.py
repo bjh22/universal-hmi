@@ -462,13 +462,83 @@ async def _get_cycling_intervals(
     return _build_intervals_from_trend(samples, frame_start, frame_end)
 
 
+def _merge_fault_intervals(
+    intervals: list[dict],
+    exception_tags: list[str],
+) -> list[dict]:
+    """Merge overlapping fault intervals into downtime periods.
+
+    Each merged period contains a ``faults`` list with all contributing alarms.
+    """
+    if not intervals:
+        return []
+
+    sorted_ivs = sorted(intervals, key=lambda x: x["start"])
+
+    def _make_fault(iv: dict) -> dict:
+        is_exc = iv["tag_name"] in exception_tags
+        return {
+            "alarm_history_id": iv["alarm_history_id"],
+            "tag_name": iv["tag_name"],
+            "tag_display_name": iv["tag_display_name"],
+            "start_time": _iso(iv["original_start"]),
+            "end_time": _iso(iv["original_end"]) if iv["original_end"] else None,
+            "is_exception": is_exc,
+        }
+
+    merged: list[dict] = []
+    cur_start = sorted_ivs[0]["start"]
+    cur_end = sorted_ivs[0]["end"]
+    cur_orig_start = sorted_ivs[0]["original_start"]
+    cur_orig_end = sorted_ivs[0]["original_end"]
+    cur_faults = [_make_fault(sorted_ivs[0])]
+
+    for iv in sorted_ivs[1:]:
+        if iv["start"] <= cur_end:
+            # Overlapping — extend period and add fault
+            if iv["end"] > cur_end:
+                cur_end = iv["end"]
+            if cur_orig_end is None or iv["original_end"] is None:
+                cur_orig_end = None
+            elif iv["original_end"] > cur_orig_end:
+                cur_orig_end = iv["original_end"]
+            cur_faults.append(_make_fault(iv))
+        else:
+            merged.append({
+                "start": cur_start, "end": cur_end,
+                "original_start": cur_orig_start, "original_end": cur_orig_end,
+                "faults": cur_faults,
+            })
+            cur_start = iv["start"]
+            cur_end = iv["end"]
+            cur_orig_start = iv["original_start"]
+            cur_orig_end = iv["original_end"]
+            cur_faults = [_make_fault(iv)]
+
+    merged.append({
+        "start": cur_start, "end": cur_end,
+        "original_start": cur_orig_start, "original_end": cur_orig_end,
+        "faults": cur_faults,
+    })
+    return merged
+
+
+def _iso(dt: datetime) -> str:
+    """Datetime → ISO-8601 string with UTC indicator."""
+    return dt.isoformat() + ("" if dt.tzinfo else "Z")
+
+
 async def get_downtime_periods(
     session: AsyncSession,
     settings: dict,
     frame_start: datetime,
     frame_end: datetime,
 ) -> list[dict]:
-    """Get all downtime periods in the timeframe with annotations."""
+    """Get merged downtime periods in the timeframe with per-period annotations.
+
+    Overlapping fault intervals are merged into single downtime periods.
+    Each period contains a ``faults`` list with all contributing alarms.
+    """
     downtime_alarm_tags: list[str] = settings.get("downtime_alarm_tags", [])
     exception_tags: list[str] = settings.get("downtime_exception_tags", [])
 
@@ -476,8 +546,9 @@ async def get_downtime_periods(
         session, downtime_alarm_tags, frame_start, frame_end,
     )
 
-    # Load annotations matching the fault intervals by (tag_name, start_time)
-    # This works for both historical and active alarms.
+    merged = _merge_fault_intervals(fault_intervals, exception_tags)
+
+    # Load annotations in the timeframe; key by start_time ISO string
     ann_result = await session.execute(
         select(DowntimeAnnotation)
         .where(
@@ -485,33 +556,49 @@ async def get_downtime_periods(
             DowntimeAnnotation.start_time < frame_end,
         )
     )
-    # Key by (tag_name, start_time_iso) for lookup
-    annotations: dict[tuple[str, str], DowntimeAnnotation] = {}
+    annotations: dict[str, DowntimeAnnotation] = {}
     for ann in ann_result.scalars().all():
-        key = (ann.tag_name, ann.start_time.isoformat())
-        annotations[key] = ann
+        annotations[ann.start_time.isoformat()] = ann
 
     periods: list[dict] = []
-    for fi in fault_intervals:
-        duration = (fi["end"] - fi["start"]).total_seconds()
-        is_exception = fi["tag_name"] in exception_tags
-        capped_duration = min(duration, EXCEPTION_CAP_SECONDS) if is_exception else duration
+    for mp in merged:
+        duration = (mp["end"] - mp["start"]).total_seconds()
 
-        start_iso = fi["original_start"].isoformat() + ("" if fi["original_start"].tzinfo else "Z")
-        ann_key = (fi["tag_name"], fi["original_start"].isoformat())
-        ann = annotations.get(ann_key)
+        # Capped duration: sum each fault's capped contribution without
+        # double-counting overlapping time.
+        capped_intervals: list[tuple[datetime, datetime]] = []
+        for fault in mp["faults"]:
+            f_start_dt = datetime.fromisoformat(fault["start_time"].replace("Z", "+00:00"))
+            f_end_dt = (
+                datetime.fromisoformat(fault["end_time"].replace("Z", "+00:00"))
+                if fault["end_time"] else frame_end
+            )
+            # Clamp fault to the merged period boundaries
+            f_start_clamped = max(f_start_dt, mp["start"])
+            f_end_clamped = min(f_end_dt, mp["end"])
+            f_dur = (f_end_clamped - f_start_clamped).total_seconds()
+            if fault["is_exception"] and f_dur > EXCEPTION_CAP_SECONDS:
+                f_end_clamped = f_start_clamped + timedelta(seconds=EXCEPTION_CAP_SECONDS)
+            if f_start_clamped < f_end_clamped:
+                capped_intervals.append((f_start_clamped, f_end_clamped))
+        # Merge capped intervals to avoid double-counting
+        capped_intervals.sort()
+        merged_capped: list[tuple[datetime, datetime]] = []
+        for s, e in capped_intervals:
+            if merged_capped and s <= merged_capped[-1][1]:
+                merged_capped[-1] = (merged_capped[-1][0], max(merged_capped[-1][1], e))
+            else:
+                merged_capped.append((s, e))
+        capped_duration = _total_seconds(merged_capped)
+
+        start_iso = _iso(mp["original_start"])
+        ann = annotations.get(mp["original_start"].isoformat())
         periods.append({
-            "alarm_history_id": fi["alarm_history_id"],
-            "tag_name": fi["tag_name"],
-            "tag_display_name": fi["tag_display_name"],
             "start_time": start_iso,
-            "end_time": (
-                fi["original_end"].isoformat() + ("" if fi["original_end"].tzinfo else "Z")
-                if fi["original_end"] else None
-            ),
+            "end_time": _iso(mp["original_end"]) if mp["original_end"] else None,
             "duration_seconds": round(duration, 1),
-            "is_exception": is_exception,
             "capped_duration_seconds": round(capped_duration, 1),
+            "faults": mp["faults"],
             "reason_code": ann.reason_code if ann else None,
             "reason_text": ann.reason_text if ann else None,
         })

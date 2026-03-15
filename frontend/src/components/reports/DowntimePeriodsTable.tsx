@@ -24,11 +24,6 @@ function formatTime(iso: string): string {
   });
 }
 
-// Stable key for a downtime period: (tag_name, start_time)
-function periodKey(p: DowntimePeriod): string {
-  return `${p.tag_name}::${p.start_time}`;
-}
-
 export function DowntimePeriodsTable({ periods, reasonCodes, onAnnotated }: Props) {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editCode, setEditCode] = useState('');
@@ -37,7 +32,7 @@ export function DowntimePeriodsTable({ periods, reasonCodes, onAnnotated }: Prop
   const [error, setError] = useState('');
 
   const startEdit = useCallback((p: DowntimePeriod) => {
-    setEditingKey(periodKey(p));
+    setEditingKey(p.start_time);
     setEditCode(p.reason_code || '');
     setEditText(p.reason_text || '');
     setError('');
@@ -48,7 +43,6 @@ export function DowntimePeriodsTable({ periods, reasonCodes, onAnnotated }: Prop
     setError('');
     try {
       await api.annotateDowntimePeriod({
-        tag_name: p.tag_name,
         start_time: p.start_time,
         reason_code: editCode || undefined,
         reason_text: editText || undefined,
@@ -87,7 +81,7 @@ export function DowntimePeriodsTable({ periods, reasonCodes, onAnnotated }: Prop
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-slate-400 text-xs border-b border-slate-700">
-              <th className="pb-2 pr-3">Fault</th>
+              <th className="pb-2 pr-3">Faults</th>
               <th className="pb-2 pr-3">Start</th>
               <th className="pb-2 pr-3">End</th>
               <th className="pb-2 pr-3">Duration</th>
@@ -97,23 +91,30 @@ export function DowntimePeriodsTable({ periods, reasonCodes, onAnnotated }: Prop
           </thead>
           <tbody>
             {periods.map((p, i) => {
-              const key = periodKey(p);
-              const isEditing = editingKey === key;
+              const isEditing = editingKey === p.start_time;
+              const hasException = p.faults.some(f => f.is_exception);
               return (
-                <tr key={`${key}-${i}`} className="border-b border-slate-700/50 hover:bg-slate-700/30">
+                <tr key={`${p.start_time}-${i}`} className="border-b border-slate-700/50 hover:bg-slate-700/30 align-top">
                   <td className="py-2 pr-3">
-                    <div className="flex items-center gap-1.5">
-                      {p.is_exception && (
-                        <span title="Exception fault (5-min cap)"><Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" /></span>
-                      )}
-                      <span className="text-slate-200">{p.tag_display_name || p.tag_name}</span>
+                    <div className="flex flex-col gap-0.5">
+                      {p.faults.map((f, fi) => (
+                        <div key={`${f.tag_name}-${fi}`} className="flex items-center gap-1.5">
+                          {f.is_exception && (
+                            <span title="Exception fault (5-min cap)"><Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" /></span>
+                          )}
+                          <span className="text-slate-200 text-xs">{f.tag_display_name || f.tag_name}</span>
+                          {!f.end_time && (
+                            <span className="text-[10px] text-amber-400 font-medium">ACTIVE</span>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   </td>
                   <td className="py-2 pr-3 text-slate-400">{formatTime(p.start_time)}</td>
                   <td className="py-2 pr-3 text-slate-400">{p.end_time ? formatTime(p.end_time) : <span className="text-amber-400">Ongoing</span>}</td>
                   <td className="py-2 pr-3 text-slate-300">
                     {formatDuration(p.capped_duration_seconds)}
-                    {p.is_exception && p.duration_seconds > p.capped_duration_seconds && (
+                    {hasException && p.duration_seconds > p.capped_duration_seconds && (
                       <span className="text-xs text-amber-400 ml-1" title="Capped at 5 minutes">
                         (of {formatDuration(p.duration_seconds)})
                       </span>
