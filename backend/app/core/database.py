@@ -114,6 +114,8 @@ async def init_db():
         await _add_column_if_missing(conn, "alarm_history", "tag_display_name", "VARCHAR(300)")
         # System tags
         await _add_column_if_missing(conn, "tags", "is_system", "BOOLEAN NOT NULL DEFAULT 0")
+        # Internal (nonvolatile) tag value persistence
+        await _add_column_if_missing(conn, "tags", "persisted_value", "TEXT")
         # Production run tag tracking
         await _add_column_if_missing(conn, "production_runs", "start_good_count", "INTEGER")
         await _add_column_if_missing(conn, "production_runs", "good_count_tag", "VARCHAR(200)")

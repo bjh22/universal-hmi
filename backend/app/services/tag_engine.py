@@ -23,8 +23,8 @@ import time
 from collections import defaultdict
 from datetime import datetime, timezone
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models.tag import SimulationBehavior, Tag, TagAccessMode, TagDataType
 
@@ -97,6 +97,7 @@ class TagEngine:
         self._sim_task: asyncio.Task | None = None
         self._poll_task: asyncio.Task | None = None
         self._driver_manager = None
+        self._session_factory: async_sessionmaker[AsyncSession] | None = None
         self._subscribers: list[asyncio.Queue] = []
         self._start_time = time.time()
         self._system_values: dict[str, object] = {}  # mutable system tag values
@@ -154,6 +155,14 @@ class TagEngine:
             if tag.simulation_enabled and tag.simulation_config:
                 self._sim_configs[tag.name] = json.loads(tag.simulation_config)
             initial_value = self._get_initial_value(tag)
+            # Restore persisted value for internal (nonvolatile) tags
+            if self._is_internal_tag(tag) and tag.persisted_value is not None:
+                try:
+                    initial_value = self._deserialize_value(
+                        tag.persisted_value, tag.data_type.value
+                    )
+                except (ValueError, TypeError, json.JSONDecodeError):
+                    pass  # Fall back to default on corrupt data
             self._values[tag.name] = TagValue(
                 tag_id=tag.id, name=tag.name, value=initial_value,
                 data_type=tag.data_type.value, description=tag.description,
@@ -181,6 +190,48 @@ class TagEngine:
 
     def set_driver_manager(self, dm):
         self._driver_manager = dm
+
+    def set_session_factory(self, sf: async_sessionmaker[AsyncSession]):
+        self._session_factory = sf
+
+    @staticmethod
+    def _is_internal_tag(tag: Tag) -> bool:
+        """An internal tag has no data source, no simulation, and is not a system tag."""
+        return tag.data_source_id is None and not tag.simulation_enabled and not tag.is_system
+
+    @staticmethod
+    def _serialize_value(value) -> str:
+        return json.dumps(value)
+
+    @staticmethod
+    def _deserialize_value(raw: str, data_type: str):
+        parsed = json.loads(raw)
+        match data_type:
+            case "bool":
+                return bool(parsed)
+            case "int":
+                return int(parsed)
+            case "float":
+                return float(parsed)
+            case "string":
+                return str(parsed)
+            case _:
+                return parsed
+
+    async def _persist_value(self, tag_id: int, value):
+        """Persist an internal tag's current value to the database (fire-and-forget)."""
+        if not self._session_factory:
+            return
+        try:
+            serialized = self._serialize_value(value)
+            async with self._session_factory() as session:
+                await session.execute(
+                    text("UPDATE tags SET persisted_value = :val WHERE id = :id"),
+                    {"val": serialized, "id": tag_id},
+                )
+                await session.commit()
+        except Exception as e:
+            logger.warning(f"Failed to persist tag value (id={tag_id}): {e}")
 
     def get_tag(self, tag_name: str) -> Tag | None:
         return self._tags.get(tag_name)
@@ -315,7 +366,11 @@ class TagEngine:
             value = self._coerce_value(value, tag.data_type.value)
         except (ValueError, TypeError):
             pass
-        return self.set_value(tag_name, value)
+        result = self.set_value(tag_name, value)
+        # Persist for internal (nonvolatile) tags — fire-and-forget async task
+        if result and self._is_internal_tag(tag):
+            asyncio.create_task(self._persist_value(tag.id, value))
+        return result
 
     def _notify_change(self, tag_name: str, tv: TagValue):
         msg = {"type": "tag_update", "data": {tag_name: tv.to_dict()}}
