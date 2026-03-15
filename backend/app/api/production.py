@@ -428,9 +428,11 @@ async def update_downtime(
     if body.reason_text is not None:
         event.reason_text = body.reason_text
 
-    # Recalculate duration
+    # Recalculate duration (normalise tz-awareness; SQLite returns naive datetimes)
     if event.end_time and event.start_time:
-        event.duration_seconds = (event.end_time - event.start_time).total_seconds()
+        end = event.end_time if event.end_time.tzinfo else event.end_time.replace(tzinfo=timezone.utc)
+        start = event.start_time if event.start_time.tzinfo else event.start_time.replace(tzinfo=timezone.utc)
+        event.duration_seconds = (end - start).total_seconds()
 
     await session.commit()
     return _downtime_out(event)
