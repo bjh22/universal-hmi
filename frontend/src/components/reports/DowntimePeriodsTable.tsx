@@ -29,17 +29,20 @@ export function DowntimePeriodsTable({ periods, reasonCodes, onAnnotated }: Prop
   const [editCode, setEditCode] = useState('');
   const [editText, setEditText] = useState('');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   const startEdit = useCallback((p: DowntimePeriod) => {
     if (!p.alarm_history_id) return;
     setEditingId(p.alarm_history_id);
     setEditCode(p.reason_code || '');
     setEditText(p.reason_text || '');
+    setError('');
   }, []);
 
   const saveAnnotation = useCallback(async () => {
     if (editingId == null) return;
     setSaving(true);
+    setError('');
     try {
       await api.annotateDowntimePeriod(editingId, {
         reason_code: editCode || undefined,
@@ -47,8 +50,8 @@ export function DowntimePeriodsTable({ periods, reasonCodes, onAnnotated }: Prop
       });
       setEditingId(null);
       onAnnotated();
-    } catch {
-      // silently fail
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save');
     } finally {
       setSaving(false);
     }
@@ -127,7 +130,7 @@ export function DowntimePeriodsTable({ periods, reasonCodes, onAnnotated }: Prop
                 </td>
                 <td className="py-2">
                   {editingId === p.alarm_history_id ? (
-                    <div className="flex gap-1">
+                    <div className="flex items-center gap-1">
                       <button
                         onClick={saveAnnotation}
                         disabled={saving}
@@ -141,6 +144,7 @@ export function DowntimePeriodsTable({ periods, reasonCodes, onAnnotated }: Prop
                       >
                         Cancel
                       </button>
+                      {error && <span className="text-xs text-red-400 ml-1">{error}</span>}
                     </div>
                   ) : (
                     p.alarm_history_id && (

@@ -462,20 +462,15 @@ async def get_downtime_periods(
         session, downtime_alarm_tags, frame_start, frame_end,
     )
 
-    # Load annotations for this timeframe
-    ann_result = await session.execute(
-        select(DowntimeAnnotation)
-        .where(
-            DowntimeAnnotation.start_time < frame_end,
-            or_(
-                DowntimeAnnotation.end_time.is_(None),
-                DowntimeAnnotation.end_time > frame_start,
-            ),
-        )
-    )
+    # Load annotations matching the fault intervals by alarm_history_id
+    ah_ids = [fi["alarm_history_id"] for fi in fault_intervals if fi["alarm_history_id"]]
     annotations: dict[int, DowntimeAnnotation] = {}
-    for ann in ann_result.scalars().all():
-        if ann.alarm_history_id:
+    if ah_ids:
+        ann_result = await session.execute(
+            select(DowntimeAnnotation)
+            .where(DowntimeAnnotation.alarm_history_id.in_(ah_ids))
+        )
+        for ann in ann_result.scalars().all():
             annotations[ann.alarm_history_id] = ann
 
     periods: list[dict] = []
