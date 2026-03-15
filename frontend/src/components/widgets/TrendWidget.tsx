@@ -97,14 +97,15 @@ export function TrendWidget({ title, tags: tagConfigs = [], hours = 24, refreshS
     .filter((r): r is { config: TrendTagConfig; tag: Tag } => r.tag != null);
 
   // Format tooltip values using each tag's display_format (e.g. "0.00" → 2 decimal places)
-  const formatTooltipValue = useCallback((value: number, name: string) => {
-    const tag = allTags.find(t => (t.display_name || t.name) === name || t.name === name);
-    if (tag?.display_format && typeof value === 'number') {
+  const formatTooltipValue = useCallback((value: number | undefined, name: string | undefined) => {
+    if (value == null) return '';
+    const tag = name ? allTags.find(t => (t.display_name || t.name) === name || t.name === name) : undefined;
+    if (tag?.display_format) {
       const dot = tag.display_format.indexOf('.');
       const places = dot < 0 ? 0 : tag.display_format.length - dot - 1;
       return value.toFixed(places);
     }
-    return typeof value === 'number' ? value.toFixed(1) : value;
+    return value.toFixed(1);
   }, [allTags]);
 
   return (
