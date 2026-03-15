@@ -33,16 +33,22 @@ export function DowntimePareto({ data }: Props) {
   return (
     <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
       <h3 className="text-sm font-medium text-slate-300 mb-3">Downtime Pareto Analysis</h3>
-      <ResponsiveContainer width="100%" height={300}>
-        <ComposedChart data={paretoData}>
+      <ResponsiveContainer width="100%" height={320}>
+        <ComposedChart data={paretoData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-          <XAxis dataKey="reason_code" stroke="#64748b" tick={{ fontSize: 10 }} angle={-20} textAnchor="end" height={60} />
+          <XAxis dataKey="reason_code" stroke="#64748b" tick={{ fontSize: 11 }} angle={-30} textAnchor="end" height={65} />
           <YAxis yAxisId="duration" stroke="#64748b" tick={{ fontSize: 11 }} label={{ value: 'Minutes', angle: -90, position: 'insideLeft', style: { fill: '#64748b', fontSize: 11 } }} />
-          <YAxis yAxisId="cumPct" orientation="right" stroke="#64748b" tick={{ fontSize: 11 }} domain={[0, 100]} label={{ value: '%', angle: 90, position: 'insideRight', style: { fill: '#64748b', fontSize: 11 } }} />
-          <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} />
-          <Legend />
-          <Bar yAxisId="duration" dataKey="duration_minutes" fill="#f59e0b" name="Duration (min)" />
-          <Line yAxisId="cumPct" dataKey="cumulative_pct" stroke="#3b82f6" name="Cumulative %" dot={false} strokeWidth={2} />
+          <YAxis yAxisId="cumPct" orientation="right" stroke="#64748b" tick={{ fontSize: 11 }} domain={[0, 100]} unit="%" label={{ value: 'Cumulative', angle: 90, position: 'insideRight', style: { fill: '#64748b', fontSize: 11 } }} />
+          <Tooltip
+            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+            formatter={(value: number, name: string) => {
+              if (name === 'Cumulative %') return [`${value}%`, name];
+              return [`${value} min`, name];
+            }}
+          />
+          <Legend wrapperStyle={{ fontSize: 11 }} />
+          <Bar yAxisId="duration" dataKey="duration_minutes" fill="#f59e0b" name="Duration (min)" radius={[2, 2, 0, 0]} />
+          <Line yAxisId="cumPct" dataKey="cumulative_pct" stroke="#3b82f6" name="Cumulative %" dot={{ r: 3 }} strokeWidth={2} />
         </ComposedChart>
       </ResponsiveContainer>
     </div>

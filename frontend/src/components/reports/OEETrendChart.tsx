@@ -1,7 +1,8 @@
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Legend,
 } from 'recharts';
 import type { TimeSeriesPoint } from '../../types';
+import { formatPeriodLabel } from './formatPeriod';
 
 interface Props {
   data: TimeSeriesPoint[];
@@ -28,12 +29,17 @@ export function OEETrendChart({ data }: Props) {
   return (
     <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
       <h3 className="text-sm font-medium text-slate-300 mb-3">OEE Trend (%)</h3>
-      <ResponsiveContainer width="100%" height={280}>
-        <LineChart data={chartData}>
+      <ResponsiveContainer width="100%" height={320}>
+        <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-          <XAxis dataKey="period" stroke="#64748b" tick={{ fontSize: 10 }} angle={-20} textAnchor="end" height={50} />
-          <YAxis stroke="#64748b" tick={{ fontSize: 11 }} domain={[0, 100]} />
-          <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} />
+          <XAxis dataKey="period" stroke="#64748b" tick={{ fontSize: 11 }} tickFormatter={formatPeriodLabel} angle={-30} textAnchor="end" height={55} />
+          <YAxis stroke="#64748b" tick={{ fontSize: 11 }} domain={[0, 100]} unit="%" />
+          <Tooltip
+            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+            labelFormatter={formatPeriodLabel}
+            formatter={(value: number) => [`${value}%`]}
+          />
+          <Legend wrapperStyle={{ fontSize: 11 }} />
           <ReferenceLine y={85} stroke="#22c55e" strokeDasharray="3 3" label={{ value: '85%', position: 'right', fill: '#22c55e', fontSize: 10 }} />
           <Line type="monotone" dataKey="oee" stroke="#3b82f6" strokeWidth={2} name="OEE" dot={{ r: 3 }} connectNulls />
           <Line type="monotone" dataKey="availability" stroke="#22c55e" strokeWidth={1.5} name="Availability" dot={false} connectNulls strokeDasharray="4 2" />

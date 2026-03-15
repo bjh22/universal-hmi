@@ -25,10 +25,10 @@ function computeRate(count: number, startTime: string, endTime: string | null): 
 }
 
 const DATE_PRESETS: { label: string; getRange: () => { start?: string; end?: string } }[] = [
-  { label: 'Today', getRange: () => { const d = new Date(); d.setHours(0, 0, 0, 0); return { start: d.toISOString() }; } },
-  { label: 'This Week', getRange: () => { const d = new Date(); d.setDate(d.getDate() - d.getDay() + 1); d.setHours(0, 0, 0, 0); return { start: d.toISOString() }; } },
-  { label: 'Last 7 Days', getRange: () => { const d = new Date(); d.setDate(d.getDate() - 7); d.setHours(0, 0, 0, 0); return { start: d.toISOString() }; } },
-  { label: 'This Month', getRange: () => { const d = new Date(); d.setDate(1); d.setHours(0, 0, 0, 0); return { start: d.toISOString() }; } },
+  { label: 'Today', getRange: () => { const d = new Date(); d.setUTCHours(0, 0, 0, 0); return { start: d.toISOString() }; } },
+  { label: 'This Week', getRange: () => { const d = new Date(); d.setUTCDate(d.getUTCDate() - d.getUTCDay() + 1); d.setUTCHours(0, 0, 0, 0); return { start: d.toISOString() }; } },
+  { label: 'Last 7 Days', getRange: () => { const d = new Date(); d.setUTCDate(d.getUTCDate() - 7); d.setUTCHours(0, 0, 0, 0); return { start: d.toISOString() }; } },
+  { label: 'This Month', getRange: () => { const d = new Date(); d.setUTCDate(1); d.setUTCHours(0, 0, 0, 0); return { start: d.toISOString() }; } },
   { label: 'All', getRange: () => ({}) },
 ];
 
@@ -67,6 +67,7 @@ export function ReportsPage({ user }: Props) {
   // Analytics data
   const [timeSeries, setTimeSeries] = useState<TimeSeriesPoint[]>([]);
   const [downtimeSummary, setDowntimeSummary] = useState<DowntimeSummary[]>([]);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
 
   // Reference data
   const [reasonCodes, setReasonCodes] = useState<ReasonCode[]>([]);
@@ -97,12 +98,13 @@ export function ReportsPage({ user }: Props) {
   }, [dateStart, dateEnd]);
 
   const loadAnalytics = useCallback(() => {
+    setAnalyticsError(null);
     api.getProductionTimeSeries({ start: dateStart, end: dateEnd, granularity })
       .then(setTimeSeries)
-      .catch(() => {});
+      .catch(() => setAnalyticsError('Failed to load analytics data'));
     api.getDowntimeSummary({ start: dateStart, end: dateEnd })
       .then(setDowntimeSummary)
-      .catch(() => {});
+      .catch(() => setAnalyticsError('Failed to load downtime data'));
   }, [dateStart, dateEnd, granularity]);
 
   useEffect(() => { loadRuns(); loadAnalytics(); }, [loadRuns, loadAnalytics]);
@@ -540,8 +542,17 @@ export function ReportsPage({ user }: Props) {
         </div>
       )}
 
+      {/* Analytics error */}
+      {analyticsError && (
+        <div className="mb-4 px-4 py-3 bg-red-900/30 border border-red-700/50 rounded-xl text-sm text-red-300 flex items-center gap-2">
+          <AlertTriangle size={16} className="flex-shrink-0" />
+          {analyticsError}
+          <button onClick={loadAnalytics} className="ml-auto text-red-400 hover:text-red-200 underline text-xs">Retry</button>
+        </div>
+      )}
+
       {/* Time-series charts */}
-      <div className="grid grid-cols-2 gap-4 mb-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         <OEETrendChart data={timeSeries} />
         <ProductionTrendChart data={timeSeries} displayMode={displayMode} />
       </div>

@@ -95,8 +95,9 @@ async def _run_out(r: ProductionRun, session: AsyncSession) -> dict:
         quality = good_count / total_parts if total_parts > 0 else None
         # Availability
         if r.start_time:
-            start = r.start_time.replace(tzinfo=None) if r.start_time.tzinfo else r.start_time
-            run_duration = (datetime.utcnow() - start).total_seconds()
+            now = datetime.now(timezone.utc)
+            start = r.start_time if r.start_time.tzinfo else r.start_time.replace(tzinfo=timezone.utc)
+            run_duration = (now - start).total_seconds()
             if run_duration > 0:
                 dt_result = await session.execute(
                     select(func.coalesce(func.sum(DowntimeEvent.duration_seconds), 0))
@@ -498,18 +499,18 @@ def _compute_oee_from_aggregates(
         max(0, (total_duration - total_downtime) / total_duration)
         if total_duration > 0 else None
     )
-    performance = (
+    performance: float | None = (
         min(total_parts / total_target, 1.0)
-        if total_target > 0 and total_parts > 0 else 1.0
+        if total_target > 0 and total_parts > 0 else None
     )
-    if quality is not None and availability is not None:
+    if quality is not None and availability is not None and performance is not None:
         oee = availability * performance * quality
     else:
         oee = None
     return {
         "oee": round(oee, 4) if oee is not None else None,
         "availability": round(availability, 4) if availability is not None else None,
-        "performance": round(performance, 4),
+        "performance": round(performance, 4) if performance is not None else None,
         "quality": round(quality, 4) if quality is not None else None,
     }
 
@@ -634,9 +635,44 @@ async def time_series(
             "avg_oee": s_oee["oee"],
         }
 
+    # Compute live good-count deltas for active runs with tag-driven tracking.
+    # The SQL aggregates use the stored good_count (which stays at 0 for active
+    # runs until they stop).  We adjust by querying active runs and reading the
+    # current tag value from the tag engine.
+    live_delta_by_period: dict[str, int] = {}
+    active_q = (
+        select(
+            func.strftime(fmt, ProductionRun.start_time).label("period"),
+            ProductionRun.good_count,
+            ProductionRun.good_count_tag,
+            ProductionRun.start_good_count,
+        )
+        .where(ProductionRun.end_time.is_(None))
+        .where(ProductionRun.good_count_tag.isnot(None))
+        .where(ProductionRun.start_good_count.isnot(None))
+    )
+    if start:
+        active_q = active_q.where(ProductionRun.start_time >= _parse_iso(start))
+    if end:
+        active_q = active_q.where(ProductionRun.start_time <= _parse_iso(end))
+    active_result = await session.execute(active_q)
+    from app.services.production_service import production_service
+    for ar in active_result:
+        if production_service and ar.good_count_tag:
+            tv = production_service._tag_engine.get_value(ar.good_count_tag)
+            if tv:
+                try:
+                    live_good = max(0, int(tv.value) - ar.start_good_count)
+                    # Delta between live count and what's stored in the DB
+                    delta = live_good - ar.good_count
+                    if delta > 0:
+                        live_delta_by_period[ar.period] = live_delta_by_period.get(ar.period, 0) + delta
+                except (ValueError, TypeError):
+                    pass
+
     result_list = []
     for r in rows:
-        good = int(r.total_good)
+        good = int(r.total_good) + live_delta_by_period.get(r.period, 0)
         reject = int(r.total_reject)
         target = int(r.total_target)
         duration = int(r.total_duration_seconds)
