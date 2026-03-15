@@ -292,7 +292,24 @@ async def create_project(
     project = Project(**body.model_dump())
     session.add(project)
     await session.flush()
-    return project
+
+    # Save an empty snapshot so the project can be loaded later
+    empty_snapshot = {
+        "format_version": EXPORT_FORMAT_VERSION,
+        "project": {"name": project.name, "description": project.description, "version": project.version},
+        "data_sources": [], "tag_labels": [], "tags": [], "tag_templates": [],
+        "screens": [], "screen_templates": [], "jobs": [],
+    }
+    project.snapshot = json.dumps(empty_snapshot)
+    project.snapshot_saved_at = datetime.now(timezone.utc)
+    await session.flush()
+    _save_snapshot_to_disk(project.name, empty_snapshot)
+
+    return ProjectOut(
+        id=project.id, name=project.name, description=project.description, version=project.version,
+        is_active=project.is_active, has_snapshot=True, snapshot_saved_at=project.snapshot_saved_at,
+        created_at=project.created_at, updated_at=project.updated_at,
+    )
 
 
 @router.get("/{project_id}", response_model=ProjectDetail)
