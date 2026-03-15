@@ -185,6 +185,20 @@ export const api = {
   acknowledgeAlarm: (id: number) =>
     request(`/alarms/${id}/acknowledge`, { method: 'POST' }),
 
+  // Media (fault help images)
+  uploadFaultHelpMedia: async (file: File): Promise<{ media_id: string; url: string }> => {
+    const form = new FormData();
+    form.append('file', file);
+    const token = localStorage.getItem('hmi_token');
+    const headers: HeadersInit = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${BASE}/media/upload`, { method: 'POST', headers, body: form });
+    if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.detail || `HTTP ${res.status}`); }
+    return res.json();
+  },
+  deleteFaultHelpMedia: (mediaId: string) =>
+    request(`/media/${encodeURIComponent(mediaId)}`, { method: 'DELETE' }),
+
   // Screens
   getScreens: () => request<ScreenData[]>('/screens/'),
   getScreenBySlug: (slug: string) => request<ScreenData>(`/screens/by-slug/${slug}`),

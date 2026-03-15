@@ -51,6 +51,7 @@ class AlarmService:
         # This avoids redundant work when most tags are stable most of the time.
         self._last_eval_values: dict[int, object] = {}  # tag_id -> last evaluated value
         self._alarm_callbacks: list = []  # External callbacks for alarm state changes
+        self._help_cache: dict[int, dict] = {}  # tag_id -> {help_image, help_text, help_enabled}
 
     def add_alarm_callback(self, callback) -> None:
         """Register a callback to be notified of alarm state changes."""
@@ -91,6 +92,16 @@ class AlarmService:
                 new_configs.append(config)
                 new_tag_lookup[tag.id] = {"name": tag.name, "display_name": tag.display_name}
 
+        # Build help cache for fault help dialog data
+        new_help_cache: dict[int, dict] = {}
+        for config in new_configs:
+            if config.get("help_enabled"):
+                new_help_cache[config["tag_id"]] = {
+                    "help_image": config.get("help_image"),
+                    "help_text": config.get("help_text"),
+                    "help_enabled": True,
+                }
+
         # Restore active alarms from DB (survive restarts)
         result = await session.execute(
             select(Alarm).where(Alarm.state.in_([
@@ -108,6 +119,7 @@ class AlarmService:
         self._alarm_configs = new_configs
         self._tag_lookup = new_tag_lookup
         self._active_alarms = new_active_alarms
+        self._help_cache = new_help_cache
         self._last_eval_values = {}
 
     async def reload_alarm_configs(self):
@@ -189,6 +201,7 @@ class AlarmService:
         for alarm in self._active_alarms.values():
             tag_name = self._get_tag_name(alarm.tag_id)
             tag_display_name = self._get_tag_display_name(alarm.tag_id)
+            help_info = self._help_cache.get(alarm.tag_id, {})
             alarms.append({
                 "id": alarm.id,
                 "tag_id": alarm.tag_id,
@@ -204,6 +217,9 @@ class AlarmService:
                 ),
                 "acknowledged_by": alarm.acknowledged_by,
                 "trigger_value": alarm.trigger_value,
+                "help_image": help_info.get("help_image"),
+                "help_text": help_info.get("help_text"),
+                "help_enabled": help_info.get("help_enabled", False),
             })
         msg = {"type": "alarms_snapshot", "data": alarms}
         for q in self._tag_engine._subscribers:
@@ -480,6 +496,7 @@ class AlarmService:
             tag_name = self._get_tag_name(alarm.tag_id)
         if tag_display_name is None:
             tag_display_name = self._get_tag_display_name(alarm.tag_id)
+        help_info = self._help_cache.get(alarm.tag_id, {})
         msg = {
             "type": "alarm",
             "data": {
@@ -497,6 +514,9 @@ class AlarmService:
                 ),
                 "acknowledged_by": alarm.acknowledged_by,
                 "trigger_value": alarm.trigger_value,
+                "help_image": help_info.get("help_image"),
+                "help_text": help_info.get("help_text"),
+                "help_enabled": help_info.get("help_enabled", False),
             },
         }
         for q in self._tag_engine._subscribers:

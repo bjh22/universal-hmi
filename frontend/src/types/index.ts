@@ -103,6 +103,9 @@ export interface AlarmData {
   acknowledged_at: string | null;   // null until an operator acknowledges
   acknowledged_by: string | null;   // username of who acknowledged
   trigger_value: string | null;
+  help_image?: string | null;
+  help_text?: string | null;
+  help_enabled?: boolean;
 }
 
 export type LayoutMode = 'grid' | 'absolute';

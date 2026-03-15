@@ -10,11 +10,13 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
+import { FaultHelpDialog } from './components/FaultHelpDialog';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useAuthState } from './hooks/useAuth';
 import { LoginPage } from './pages/LoginPage';
 import { api } from './lib/api';
 import { applyTheme } from './lib/theme';
+import type { AlarmData } from './types';
 
 // lazy() enables "code splitting" — instead of bundling every page into one large
 // JavaScript file, each page is downloaded only when the user navigates to it.
@@ -84,6 +86,44 @@ export default function App() {
   const [activeProjectName, setActiveProjectName] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  // Fault help dialog auto-popup state
+  const [helpAlarm, setHelpAlarm] = useState<AlarmData | null>(null);
+  const shownHelpIds = useRef<Set<number>>(new Set());
+
+  // Auto-show fault help dialog when a new alarm triggers with help enabled
+  useEffect(() => {
+    if (helpAlarm) return; // already showing one
+    // Find unshown help-enabled alarms, prioritize by severity
+    const severityOrder: Record<string, number> = { critical: 0, warning: 1, info: 2 };
+    const candidates = alarms
+      .filter(a =>
+        a.state === 'active_unacked' &&
+        a.help_enabled &&
+        a.help_image &&
+        !shownHelpIds.current.has(a.id)
+      )
+      .sort((a, b) => (severityOrder[a.severity] ?? 2) - (severityOrder[b.severity] ?? 2));
+
+    if (candidates.length > 0) {
+      const alarm = candidates[0];
+      shownHelpIds.current.add(alarm.id);
+      setHelpAlarm(alarm);
+    }
+
+    // Clean up IDs for alarms that are no longer in the list
+    const currentIds = new Set(alarms.map(a => a.id));
+    for (const id of shownHelpIds.current) {
+      if (!currentIds.has(id)) shownHelpIds.current.delete(id);
+    }
+  }, [alarms, helpAlarm]);
+
+  const handleHelpDismiss = useCallback(() => setHelpAlarm(null), []);
+  const handleHelpAcknowledge = useCallback(async () => {
+    if (!helpAlarm) return;
+    await api.acknowledgeAlarm(helpAlarm.id);
+    setHelpAlarm(null);
+  }, [helpAlarm]);
+
   // Poll /api/health until the backend responds, then load branding + active project.
   const checkHealth = useCallback(async () => {
     try {
@@ -113,6 +153,14 @@ export default function App() {
   // renders different page components WITHOUT a full page reload from the server.
   // This makes navigation feel instant compared to traditional multi-page websites.
   return (
+    <>
+    {helpAlarm && (
+      <FaultHelpDialog
+        alarm={helpAlarm}
+        onAcknowledge={handleHelpAcknowledge}
+        onDismiss={handleHelpDismiss}
+      />
+    )}
     <BrowserRouter>
       <Routes>
         {/* Login page is outside AppShell so it renders without sidebar/header */}
@@ -156,5 +204,6 @@ export default function App() {
         />
       </Routes>
     </BrowserRouter>
+    </>
   );
 }
