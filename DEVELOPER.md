@@ -12,6 +12,7 @@ This guide covers the common development tasks you'll encounter when extending t
 - [Production & Reporting System](#production--reporting-system)
 - [Internal Nonvolatile Tags](#internal-nonvolatile-tags)
 - [Service Page](#service-page)
+- [Fault Help Dialog](#fault-help-dialog)
 - [ZPL Label Preview](#zpl-label-preview)
 - [Frontend Patterns](#frontend-patterns)
 - [Backend Patterns](#backend-patterns)
@@ -925,6 +926,64 @@ Assign labels in Settings > Tags (bulk operations supported).
 
 ---
 
+## Fault Help Dialog
+
+The fault help dialog provides contextual troubleshooting guidance when alarms trigger. Engineers can attach images or animated GIFs (e.g., wiring diagrams, adjustment procedures) and text instructions to individual alarm tags. When the alarm fires, operators see an auto-popup dialog with the visual guide and steps to resolve the fault.
+
+### Architecture
+
+The feature spans the full stack:
+
+**Backend:**
+- **Media API** (`backend/app/api/media.py`) — File upload/serve/delete endpoints at `/api/media`. Images are stored on disk in `backend/media/fault_help/` with UUID filenames. Supports PNG, JPG, GIF (including animated), and WEBP up to 10 MB. Upload/delete requires Engineer or Designer role; serving is unauthenticated so operators can view images.
+- **AlarmService** (`backend/app/services/alarm_service.py`) — Maintains a `_help_cache` (tag_id → help config) populated during `load_alarm_configs()`. The `_broadcast_alarm()` and `broadcast_alarms_snapshot()` methods include `help_image`, `help_text`, and `help_enabled` fields in WebSocket alarm messages.
+
+**Frontend:**
+- **FaultHelpDialog** (`frontend/src/components/FaultHelpDialog.tsx`) — Dialog component displaying the alarm severity/message, help image, troubleshooting text, and Acknowledge/Dismiss buttons. Uses the existing `Dialog` component in wide mode.
+- **Auto-popup logic** (`frontend/src/App.tsx`) — A `useEffect` watches the `alarms` array from `useWebSocket`. When a new `active_unacked` alarm appears with `help_enabled=true` and `help_image` set, the dialog auto-opens. Tracks shown alarm IDs to prevent re-popping the same alarm. Shows highest-severity alarm first when multiple trigger simultaneously.
+- **Configuration UI** (`frontend/src/pages/SettingsPage.tsx`) — The `FaultHelpConfig` component appears in the alarm section of the tag editor when alarms are enabled. Provides a checkbox to enable the help dialog, a file upload button with image preview, and a textarea for help instructions.
+
+### Configuration data flow
+
+The help configuration is stored in the tag's `alarm_config` JSON field (no database migration required):
+
+```json
+{
+  "type": "boolean",
+  "trigger_on": true,
+  "severity": "warning",
+  "message": "Motor 1 Overtemp",
+  "help_image": "a1b2c3d4e5f6.gif",
+  "help_text": "1. Check coolant level\n2. Verify fan is running\n3. Reset overtemp relay",
+  "help_enabled": true
+}
+```
+
+- `help_image` — The `media_id` returned from the upload API (filename on disk). The frontend constructs the full URL as `/api/media/{media_id}`.
+- `help_text` — Plain text instructions displayed below the image. Supports newlines for multi-step formatting.
+- `help_enabled` — Boolean flag to enable/disable the auto-popup without removing the image/text configuration.
+
+### Adding fault help to an alarm tag
+
+1. Go to **Settings** > **Tags** and click a boolean tag with alarms enabled.
+2. Check **Show help dialog on fault**.
+3. Click **Upload Image** and select a GIF, PNG, JPG, or WEBP file (max 10 MB).
+4. Enter troubleshooting instructions in the **Help Instructions** textarea.
+5. Save the tag.
+
+### Key files
+
+| File | Purpose |
+|------|---------|
+| `backend/app/api/media.py` | Media upload/serve/list/delete API |
+| `backend/media/fault_help/` | On-disk image storage directory |
+| `backend/app/services/alarm_service.py` | Help cache + WebSocket broadcast of help fields |
+| `frontend/src/components/FaultHelpDialog.tsx` | Dialog UI component |
+| `frontend/src/App.tsx` | Auto-popup detection logic |
+| `frontend/src/pages/SettingsPage.tsx` | `FaultHelpConfig` component in tag editor |
+
+---
+
 ## ZPL Label Preview
 
 The ZPL preview system renders Zebra Programming Language (ZPL) label templates as PNG images entirely offline using Pillow. It includes both a standalone preview page and a designer widget.
@@ -1237,6 +1296,15 @@ async with async_session() as session:
 | GET | `/api/service/config/` | Get service page configuration (control modes, ordering) |
 | PUT | `/api/service/config/` | Update service page configuration |
 
+### Media (Fault Help Images)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/media/upload` | Upload a fault help image (multipart form, max 10 MB) |
+| GET | `/api/media/` | List all uploaded fault help images |
+| GET | `/api/media/{media_id}` | Serve a fault help image (no auth required) |
+| DELETE | `/api/media/{media_id}` | Delete a fault help image |
+
 ### ZPL Preview
 
 | Method | Path | Description |
@@ -1250,4 +1318,6 @@ async with async_session() as session:
 |------|-------------|
 | `/ws` | Real-time tag values and alarm updates |
 
-**Message types:** `snapshot` (initial state), `tag_update` (value deltas), `alarm` (state changes), `keepalive` (every 30s)
+**Message types:** `snapshot` (initial state), `tag_update` (value deltas), `alarm` (state changes), `alarms_snapshot` (full alarm list on reconnect/reload), `keepalive` (every 30s)
+
+Alarm messages include optional fault help fields: `help_image` (media ID), `help_text` (instructions), `help_enabled` (boolean). These are populated from the tag's `alarm_config` JSON and used by the frontend to auto-show the fault help dialog.
