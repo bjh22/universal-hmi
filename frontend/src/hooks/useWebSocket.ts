@@ -85,10 +85,15 @@ export function useWebSocket() {
         setTagValues((prev) => {
           // Snapshots replace the entire state
           if (msg.type === 'snapshot') return { ...prev, ...data };
-          // For deltas, check if any value actually differs
+          // For deltas, compare actual values (not object references — JSON.parse
+          // always creates new objects so reference equality always fails).
           let changed = false;
           for (const key in data) {
-            if (prev[key] !== data[key]) { changed = true; break; }
+            const oldVal = prev[key];
+            const newVal = data[key];
+            if (!oldVal || oldVal.value !== newVal.value || oldVal.quality !== newVal.quality) {
+              changed = true; break;
+            }
           }
           if (!changed) return prev;
           return { ...prev, ...data };
