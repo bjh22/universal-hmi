@@ -6,6 +6,7 @@ set -euo pipefail
 #
 # Usage:
 #   ./deploy.sh                       # Build for Linux x86_64 (with bundled Python)
+#   ./deploy.sh --compile             # Compile backend with PyInstaller (no .py source)
 #   ./deploy.sh --windows             # Also include Windows x86_64
 #   ./deploy.sh --arm                 # Also include Linux aarch64 (ARM)
 #   ./deploy.sh --no-bundle-python    # Skip bundling Python (target must have Python)
@@ -25,6 +26,7 @@ RELEASE_DIR="$DIST_DIR/hmi-release"
 BUILD_WINDOWS=false
 BUILD_ARM=false
 BUNDLE_PYTHON=true
+COMPILE=false
 PYTHON_VERSION="3.11.13"
 # python-build-standalone release tag (date-based)
 PBS_RELEASE="20250828"
@@ -33,6 +35,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --windows) BUILD_WINDOWS=true ;;
         --arm) BUILD_ARM=true ;;
+        --compile) COMPILE=true ;;
         --no-bundle-python) BUNDLE_PYTHON=false ;;
         --python-version)
             shift
@@ -40,7 +43,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: ./deploy.sh [--windows] [--arm] [--no-bundle-python] [--python-version X.Y.Z]"
+            echo "Usage: ./deploy.sh [--compile] [--windows] [--arm] [--no-bundle-python] [--python-version X.Y.Z]"
             exit 1
             ;;
     esac
@@ -57,7 +60,9 @@ echo -n "  Targets: Linux x86_64"
 $BUILD_ARM && echo -n " + Linux aarch64"
 $BUILD_WINDOWS && echo -n " + Windows x86_64"
 echo
-if $BUNDLE_PYTHON; then
+if $COMPILE; then
+echo "  Backend: compiled (PyInstaller) — no .py source in output"
+elif $BUNDLE_PYTHON; then
 echo "  Python:  $PYTHON_VERSION (bundled)"
 else
 echo "  Python:  not bundled (target must have Python $PYTHON_MAJOR_MINOR+)"
@@ -86,22 +91,41 @@ npm run build
 echo "    Frontend built successfully."
 
 # ──────────────────────────────────────────────
-# 2. Copy backend source
+# 2. Package backend (source copy or PyInstaller compile)
 # ──────────────────────────────────────────────
 STEP=$((STEP + 1))
-echo "==> [$STEP/$STEP_TOTAL] Copying backend..."
-mkdir -p "$RELEASE_DIR/backend"
-cp -r "$ROOT_DIR/backend/app" "$RELEASE_DIR/backend/app"
-cp "$ROOT_DIR/backend/run.py" "$RELEASE_DIR/backend/"
-cp "$ROOT_DIR/backend/requirements.txt" "$RELEASE_DIR/backend/"
+if $COMPILE; then
+    echo "==> [$STEP/$STEP_TOTAL] Compiling backend with PyInstaller..."
 
-# Copy built frontend into backend/static for production serving
-cp -r "$ROOT_DIR/frontend/dist" "$RELEASE_DIR/backend/static"
-echo "    Backend and static files copied."
+    # Copy frontend build into backend/static so PyInstaller bundles it
+    rm -rf "$ROOT_DIR/backend/static"
+    cp -r "$ROOT_DIR/frontend/dist" "$ROOT_DIR/backend/static"
+
+    cd "$ROOT_DIR/backend"
+    pyinstaller hmi-server.spec --distpath "$RELEASE_DIR" --workpath "/tmp/hmi-pyinstaller-build" --noconfirm
+    echo "    Backend compiled successfully."
+
+    # Clean up the temporary static dir from backend/
+    rm -rf "$ROOT_DIR/backend/static"
+else
+    echo "==> [$STEP/$STEP_TOTAL] Copying backend..."
+    mkdir -p "$RELEASE_DIR/backend"
+    cp -r "$ROOT_DIR/backend/app" "$RELEASE_DIR/backend/app"
+    cp "$ROOT_DIR/backend/run.py" "$RELEASE_DIR/backend/"
+    cp "$ROOT_DIR/backend/requirements.txt" "$RELEASE_DIR/backend/"
+
+    # Copy built frontend into backend/static for production serving
+    cp -r "$ROOT_DIR/frontend/dist" "$RELEASE_DIR/backend/static"
+    echo "    Backend and static files copied."
+fi
 
 # ──────────────────────────────────────────────
 # 3. Download Linux Python wheels for offline install
+#    (skipped when --compile: dependencies are inside the executable)
 # ──────────────────────────────────────────────
+if $COMPILE; then
+    echo "    Skipping wheel download (compiled mode)."
+elif true; then
 STEP=$((STEP + 1))
 echo "==> [$STEP/$STEP_TOTAL] Downloading Linux Python dependencies (wheels)..."
 mkdir -p "$RELEASE_DIR/wheels"
@@ -158,11 +182,15 @@ if $BUILD_WINDOWS; then
         echo "    are cross-platform, but native extensions may not work)."
     fi
 fi
+fi  # end of: if $COMPILE ... elif true
 
 # ──────────────────────────────────────────────
 # 4. Bundle standalone Python interpreter (if enabled)
+#    (skipped when --compile: Python is inside the executable)
 # ──────────────────────────────────────────────
-if $BUNDLE_PYTHON; then
+if $COMPILE; then
+    echo "    Skipping Python bundling (compiled mode)."
+elif $BUNDLE_PYTHON; then
     STEP=$((STEP + 1))
     echo "==> [$STEP/$STEP_TOTAL] Bundling standalone Python $PYTHON_VERSION..."
 
@@ -222,6 +250,213 @@ fi
 # ──────────────────────────────────────────────
 STEP=$((STEP + 1))
 echo "==> [$STEP/$STEP_TOTAL] Generating install scripts..."
+
+if $COMPILE; then
+
+# ── Compiled-mode Linux install script ──
+cat > "$RELEASE_DIR/install.sh" << 'INSTALL_EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+#
+# install.sh — Install compiled HMI on an offline Linux panel PC
+#
+# No prerequisites — Python and all dependencies are compiled into the binary.
+#
+# Usage:
+#   sudo ./install.sh              # Install to /opt/hmi (default)
+#   sudo ./install.sh /custom/path # Install to custom location
+#
+
+INSTALL_DIR="${1:-/opt/hmi}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+echo "============================================"
+echo "  HMI Installer (Linux — compiled)"
+echo "  Target: $INSTALL_DIR"
+echo "============================================"
+echo
+
+# Create install directory
+mkdir -p "$INSTALL_DIR"
+
+# Copy compiled application
+echo "==> Installing compiled application..."
+cp -r "$SCRIPT_DIR/hmi-server/"* "$INSTALL_DIR/"
+chmod +x "$INSTALL_DIR/hmi-server"
+
+# Create data directories
+mkdir -p "$INSTALL_DIR/data"
+mkdir -p "$INSTALL_DIR/media/fault_help"
+
+# Create environment file
+if [ ! -f "$INSTALL_DIR/.env" ]; then
+    SECRET_KEY=$(head -c 32 /dev/urandom | xxd -p)
+    cat > "$INSTALL_DIR/.env" << ENV_EOF
+HMI_DATABASE_URL=sqlite+aiosqlite:///$INSTALL_DIR/data/hmi.db
+HMI_SECRET_KEY=$SECRET_KEY
+HMI_HOST=0.0.0.0
+HMI_PORT=8080
+HMI_DEBUG=false
+ENV_EOF
+    echo "    Created .env with generated secret key."
+else
+    echo "    Existing .env preserved."
+fi
+
+# Create systemd service
+if [ -d /etc/systemd/system ]; then
+    cat > /etc/systemd/system/hmi.service << SERVICE_EOF
+[Unit]
+Description=Industrial HMI Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=$INSTALL_DIR
+EnvironmentFile=$INSTALL_DIR/.env
+ExecStart=$INSTALL_DIR/hmi-server
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+SERVICE_EOF
+    echo "    Created systemd service: hmi.service"
+fi
+
+# Create convenience start script
+cat > "$INSTALL_DIR/start.sh" << 'START_EOF'
+#!/usr/bin/env bash
+cd "$(dirname "$0")"
+./hmi-server
+START_EOF
+chmod +x "$INSTALL_DIR/start.sh"
+
+echo
+echo "============================================"
+echo "  Installation complete!"
+echo "============================================"
+echo
+echo "  Install location: $INSTALL_DIR"
+echo "  Database:         $INSTALL_DIR/data/hmi.db"
+echo "  Config:           $INSTALL_DIR/.env"
+echo
+echo "  Start manually:   $INSTALL_DIR/start.sh"
+echo "  Start as service: systemctl enable --now hmi"
+echo
+echo "  Default login:    admin / admin"
+echo "  URL:              http://localhost:8080"
+echo
+INSTALL_EOF
+chmod +x "$RELEASE_DIR/install.sh"
+
+# ── Compiled-mode Windows install script ──
+cat > "$RELEASE_DIR/install.bat" << 'WININSTALL_EOF'
+@echo off
+setlocal enabledelayedexpansion
+
+::
+:: install.bat — Install compiled HMI on an offline Windows panel PC
+::
+:: No prerequisites — Python and all dependencies are compiled into the binary.
+::
+:: Usage:
+::   install.bat                    Install to C:\hmi (default)
+::   install.bat D:\hmi             Install to custom location
+::
+:: Run as Administrator for firewall configuration.
+::
+
+set "INSTALL_DIR=%~1"
+if "%INSTALL_DIR%"=="" set "INSTALL_DIR=C:\hmi"
+set "SCRIPT_DIR=%~dp0"
+
+echo ============================================
+echo   HMI Installer (Windows — compiled)
+echo   Target: %INSTALL_DIR%
+echo ============================================
+echo.
+
+:: Create install directory
+if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
+
+:: Copy compiled application
+echo ==^> Installing compiled application...
+xcopy /E /I /Y "%SCRIPT_DIR%hmi-server\*" "%INSTALL_DIR%\" >nul
+
+:: Create data directories
+if not exist "%INSTALL_DIR%\data" mkdir "%INSTALL_DIR%\data"
+if not exist "%INSTALL_DIR%\media\fault_help" mkdir "%INSTALL_DIR%\media\fault_help"
+
+:: Create environment file
+if not exist "%INSTALL_DIR%\.env" (
+    for /f "tokens=*" %%k in ('powershell -Command "[System.Guid]::NewGuid().ToString('N') + [System.Guid]::NewGuid().ToString('N')"') do set "SECRET_KEY=%%k"
+    (
+        echo HMI_DATABASE_URL=sqlite+aiosqlite:///%INSTALL_DIR:\=/%/data/hmi.db
+        echo HMI_SECRET_KEY=!SECRET_KEY!
+        echo HMI_HOST=0.0.0.0
+        echo HMI_PORT=8080
+        echo HMI_DEBUG=false
+    ) > "%INSTALL_DIR%\.env"
+    echo     Created .env with generated secret key.
+) else (
+    echo     Existing .env preserved.
+)
+
+:: Create convenience scripts
+(
+    echo @echo off
+    echo cd /d "%%~dp0"
+    echo hmi-server.exe
+) > "%INSTALL_DIR%\start.bat"
+
+:: Windows Service setup
+echo.
+echo     NOTE: To run as a Windows Service, use NSSM (recommended):
+echo       nssm install HMI_Server "%INSTALL_DIR%\hmi-server.exe"
+echo       nssm set HMI_Server AppDirectory "%INSTALL_DIR%"
+echo       nssm start HMI_Server
+echo.
+echo     Or use Task Scheduler to run start.bat at logon.
+
+:: Configure Windows Firewall rule
+echo ==^> Configuring firewall...
+netsh advfirewall firewall show rule name="HMI Server" >nul 2>&1
+if errorlevel 1 (
+    netsh advfirewall firewall add rule name="HMI Server" dir=in action=allow protocol=tcp localport=8080 >nul 2>&1
+    if not errorlevel 1 (
+        echo     Firewall rule added for port 8080.
+    ) else (
+        echo     Could not add firewall rule. Run as Administrator or add manually.
+    )
+) else (
+    echo     Firewall rule already exists.
+)
+
+echo.
+echo ============================================
+echo   Installation complete!
+echo ============================================
+echo.
+echo   Install location: %INSTALL_DIR%
+echo   Database:         %INSTALL_DIR%\data\hmi.db
+echo   Config:           %INSTALL_DIR%\.env
+echo.
+echo   Start manually:   %INSTALL_DIR%\start.bat
+echo.
+echo   Default login:    admin / admin
+echo   URL:              http://localhost:8080
+echo.
+pause
+WININSTALL_EOF
+echo "    Compiled install scripts created."
+
+else
+# ── Source-mode install scripts (original) ──
 
 # --- Linux install script ---
 cat > "$RELEASE_DIR/install.sh" << 'INSTALL_EOF'
@@ -589,6 +824,7 @@ echo.
 pause
 WININSTALL_EOF
 echo "    Linux and Windows install scripts created."
+fi  # end of: if $COMPILE ... else
 
 # ──────────────────────────────────────────────
 # 6. Create archives
@@ -625,7 +861,9 @@ if $BUILD_WINDOWS; then
 fi
 
 echo
-if $BUNDLE_PYTHON; then
+if $COMPILE; then
+echo "  Backend compiled with PyInstaller — no Python or .py source on target machine."
+elif $BUNDLE_PYTHON; then
 echo "  Python $PYTHON_VERSION is bundled — no prerequisites on target machine."
 else
 echo "  Python NOT bundled — target must have Python ${PYTHON_MAJOR_MINOR}+ installed."

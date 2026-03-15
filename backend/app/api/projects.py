@@ -136,7 +136,8 @@ class ImportResultResponse(BaseModel):
 # ─── Helpers ───
 
 # Repo-root projects directory for auto-saved snapshots
-_PROJECTS_DIR = Path(__file__).resolve().parents[3] / "projects"
+from app.core.paths import data_dir
+_PROJECTS_DIR = data_dir() / "projects"
 
 
 def _save_snapshot_to_disk(project_name: str, snapshot_data: dict) -> None:

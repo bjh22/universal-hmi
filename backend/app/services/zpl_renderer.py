@@ -116,7 +116,8 @@ def _split_params(params: str) -> list[str]:
     return params.split(",") if params else []
 
 
-_BUNDLED_FONT_DIR = pathlib.Path(__file__).parent / "fonts"
+from app.core.paths import bundle_dir
+_BUNDLED_FONT_DIR = bundle_dir() / "app" / "services" / "fonts"
 
 _FONT_SEARCH_PATHS = [
     # Zebra Font 0 is CG Triumvirate Condensed Bold — a condensed, bold,

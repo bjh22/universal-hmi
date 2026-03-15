@@ -172,7 +172,8 @@ async def health():
 # --- Static file serving for production ---
 # In production, `npm run build` compiles the React app into static HTML/JS/CSS
 # files. The backend serves these directly so you only need one server.
-_static_dir = Path(__file__).resolve().parent.parent / "static"
+from app.core.paths import bundle_dir
+_static_dir = bundle_dir() / "static"
 if _static_dir.is_dir():
     # Serve JS/CSS bundles from /assets (Vite's default output directory)
     app.mount("/assets", StaticFiles(directory=_static_dir / "assets"), name="assets")

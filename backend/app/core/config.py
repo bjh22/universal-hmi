@@ -8,7 +8,8 @@ needed. This is a 12-factor app best practice: keep config in the environment.
 
 import logging
 from pydantic_settings import BaseSettings
-from pathlib import Path
+
+from app.core.paths import data_dir
 
 _logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ class Settings(BaseSettings):
 
     # Database — resolve relative to the backend/ directory so the same DB is used
     # regardless of which directory the server is launched from.
-    database_url: str = f"sqlite+aiosqlite:///{Path(__file__).resolve().parent.parent.parent / 'hmi.db'}"
+    database_url: str = f"sqlite+aiosqlite:///{data_dir() / 'hmi.db'}"
 
     # Authentication
     # IMPORTANT: The default secret_key is only for development convenience.

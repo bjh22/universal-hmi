@@ -20,9 +20,22 @@ import uvicorn
 from app.core.config import settings
 
 if __name__ == "__main__":
-    uvicorn.run(
-        "app.main:app",
-        host=settings.host,
-        port=settings.port,
-        reload=settings.debug,
-    )
+    # PyInstaller frozen mode: import the app object directly because
+    # uvicorn's string-based import ("app.main:app") cannot resolve modules
+    # inside a frozen bundle reliably.  Also disable reload (incompatible
+    # with frozen executables).
+    if getattr(sys, "frozen", False):
+        from app.main import app  # noqa: E402
+
+        uvicorn.run(
+            app,
+            host=settings.host,
+            port=settings.port,
+        )
+    else:
+        uvicorn.run(
+            "app.main:app",
+            host=settings.host,
+            port=settings.port,
+            reload=settings.debug,
+        )

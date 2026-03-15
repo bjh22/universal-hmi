@@ -13,7 +13,8 @@ from app.models.user import UserRole
 
 router = APIRouter(prefix="/api/media", tags=["media"])
 
-MEDIA_DIR = Path(__file__).resolve().parent.parent.parent / "media" / "fault_help"
+from app.core.paths import data_dir
+MEDIA_DIR = data_dir() / "media" / "fault_help"
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
