@@ -9,12 +9,12 @@ Full-stack industrial HMI (Human-Machine Interface) for monitoring and controlli
 ```
 backend/               Python FastAPI application
   app/
-    api/               Route handlers (alarms, auth, screens, tags, production, reason_codes, production_settings, websocket, etc.)
+    api/               Route handlers (alarms, auth, screens, tags, production, reason_codes, production_settings, service_config, zpl_preview, websocket, etc.)
     core/              Config (pydantic-settings), database (async SQLAlchemy), security (JWT)
     drivers/           Protocol drivers (opcua, modbus, ethernet_ip, mqtt) + base.py + driver_manager.py
     integrations/      Plugin system for external equipment (base.py, manager.py, zebra_printer/, cognex_dataman/, ftp_hot_folder/)
     models/            SQLAlchemy 2.0 models (user, tag, alarm, screen, job, trend, audit, production, reason_code, datasource, integration)
-    services/          Business logic (tag_engine, alarm_service, trend_service, production_service, script_engine, audit_service)
+    services/          Business logic (tag_engine, alarm_service, trend_service, production_service, script_engine, audit_service, zpl_renderer)
     main.py            FastAPI app with lifespan, CORS, static file serving
     seed.py            Database seeder with default users and demo tags
   run.py               Entry point (uvicorn on port 8080)
@@ -24,20 +24,20 @@ frontend/              React SPA (Vite + TypeScript)
   src/
     components/
       designer/        Screen designer (DesignCanvas, PropertyPanel, WidgetPalette, EditorToolbar)
-      widgets/         Runtime widgets (StatusIndicator, Gauge, Toggle, CommandButton, etc.)
+      widgets/         Runtime widgets (StatusIndicator, Gauge, Toggle, CommandButton, TrendWidget, ZplPreviewWidget, etc.)
       reports/         Production report components (StartRunDialog, StopRunDialog, DowntimeDialog, OEETrendChart, ProductionTrendChart, DowntimePareto)
       settings/        Settings tab components (ReasonCodesSettings, ProductionSettings)
       layout/          AppShell (sidebar nav, header)
     hooks/             useDesignMode, useWebSocket, useAuth
     lib/               api.ts (fetch wrapper), textStyle.ts
-    pages/             Dashboard, Alarms, Trends, Jobs, Reports, Settings, Login
+    pages/             Dashboard, Alarms, Trends, Jobs, Reports, Settings, Service, Login
     types/index.ts     All TypeScript interfaces
   vite.config.ts       Vite config with /api and /ws proxy to backend
 ```
 
 ## Tech Stack
 
-**Backend:** FastAPI, SQLAlchemy 2.0 (async), SQLite (aiosqlite), Alembic, Pydantic v2, python-jose (JWT/HS256), passlib+bcrypt, asyncua, pycomm3, pymodbus, aiomqtt
+**Backend:** FastAPI, SQLAlchemy 2.0 (async), SQLite (aiosqlite), Alembic, Pydantic v2, python-jose (JWT/HS256), passlib+bcrypt, asyncua, pycomm3, pymodbus, aiomqtt, Pillow, python-barcode, qrcode
 
 **Frontend:** React 19, TypeScript 5.9, Vite 7, Shadcn/ui, Tailwind CSS 4, React Router 7, Recharts, Lucide icons, clsx
 
@@ -166,6 +166,10 @@ Environment variables prefixed with `HMI_` (or `.env` file):
 | GET | `/api/production/analytics/time-series` | Aggregated production analytics (day/week/month) |
 | GET | `/api/production/settings/` | Get production settings (tag bindings + shift schedule) |
 | PUT | `/api/production/settings/` | Update production settings (tag bindings + shift schedule) |
+| GET | `/api/service/config/` | Get service page configuration |
+| PUT | `/api/service/config/` | Update service page configuration |
+| POST | `/api/zpl-preview/render` | Render ZPL text to PNG |
+| POST | `/api/zpl-preview/render-file` | Render uploaded ZPL file to PNG |
 | GET | `/api/reason-codes/` | List downtime reason codes |
 | POST | `/api/reason-codes/` | Create a reason code |
 | PUT | `/api/reason-codes/{id}` | Update a reason code |
@@ -176,18 +180,19 @@ Environment variables prefixed with `HMI_` (or `.env` file):
 
 ## Key Backend Services
 
-- **TagEngine** (`services/tag_engine.py`): In-memory tag store, simulation engine (sine/ramp/random/toggle/enum_cycle), 500ms update cycle, publishes to WebSocket subscribers
+- **TagEngine** (`services/tag_engine.py`): In-memory tag store, simulation engine (sine/ramp/random/toggle/enum_cycle), 500ms update cycle, publishes to WebSocket subscribers. Internal tags (no data source, no simulation) are nonvolatile — values are persisted to the database via `persisted_value` column and restored on startup
 - **AlarmService** (`services/alarm_service.py`): Boolean alarm evaluation — each alarm-enabled tag is compared against its `trigger_on` value (default `true`). Analog threshold alarming is handled on the PLC side and reported to the HMI as boolean fault flags. State machine with four states: `active_unacked`, `active_acked`, `inactive_unacked` (alarm clears before acknowledgment), `inactive` (cleared). History recording. Supports external callbacks (e.g., ProductionService) via `add_alarm_callback()`.
 - **ProductionService** (`services/production_service.py`): Monitors active production runs against live machine data. On run start, captures counter tag value; on run stop, computes good count delta. Listens for alarm events via AlarmService callbacks to auto-increment reject counts (from configurable fault tags) and auto-create/close downtime events (from configurable downtime alarm tags). Includes an optional shift scheduler that auto-starts/stops runs at configured shift boundaries (30s polling loop, handles overnight shifts). Production settings (tag bindings, shift schedule) stored in `app_settings` table.
 - **TrendService** (`services/trend_service.py`): Time-series sampling, 90-day retention
 - **ScriptEngine** (`services/script_engine.py`): Sandboxed Python execution for button actions (5s timeout, restricted builtins)
+- **ZplRenderer** (`services/zpl_renderer.py`): Offline ZPL-to-PNG rendering using Pillow. Supports text, barcodes (Code 128, Code 39), QR codes, graphics, rotation, reverse fields, and compressed graphic fields
 
 ## Key Frontend Patterns
 
 - **API client:** `lib/api.ts` — centralized fetch wrapper with JWT Bearer headers
 - **WebSocket:** `useWebSocket` hook — auto-reconnect, maintains `tagValues` and `alarms` state
 - **Screen designer:** `useDesignMode` hook — full editor state machine (widgets, selection, undo/redo with useState for reactivity, clipboard, z-order, alignment/distribute, locking, zoom 0.5x-2x)
-- **Widget system:** `WidgetRenderer` dispatches by `widget.type`. Types: `status_indicator`, `gauge`, `counter`, `toggle`, `command_button`, `parameter_input`, `text_label`, `text_value`, `alarm_summary`, `multi_value`, `dropdown_select`, `oee`
+- **Widget system:** `WidgetRenderer` dispatches by `widget.type`. Types: `status_indicator`, `gauge`, `counter`, `toggle`, `command_button`, `parameter_input`, `text_label`, `text_value`, `alarm_summary`, `multi_value`, `dropdown_select`, `oee`, `trend`, `zpl_preview`
 - **Tag binding:** Widgets bind to tags by name. `TagPicker` component provides searchable dropdown
 - **Visibility/Enabled:** Widgets support `visible`, `visibleTag`, `visibleRoles`, `enabled`, `enabledTag`, `enabledRoles` for conditional runtime rendering. Conditions can be combined — tag-based and role-based conditions on the same property are AND-ed.
 - **Screen management:** Create/delete screens via modal dialog, screen tabs for navigation
@@ -233,6 +238,9 @@ See `DEVELOPER.md` → "Creating a Plugin Integration" for a full walkthrough wi
 - `backend/app/services/production_service.py` — Live production run monitoring (counts, rejects, downtime)
 - `backend/app/api/production_settings.py` — Production tag binding configuration API
 - `backend/app/api/reason_codes.py` — Downtime reason codes CRUD API
+- `backend/app/services/zpl_renderer.py` — Offline ZPL-to-PNG rendering engine
+- `backend/app/api/service_config.py` — Service page configuration API
+- `backend/app/api/zpl_preview.py` — ZPL preview rendering API
 - `backend/app/integrations/base.py` — Integration plugin base class
 - `backend/app/integrations/manager.py` — Plugin discovery and lifecycle management
 
