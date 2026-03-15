@@ -32,7 +32,7 @@ interface AppShellProps {
   alarms: AlarmData[];
   onLogout: () => void;
   navTitle?: string;
-  activeProjectName?: string | null;
+  activeJobName?: string | null;
   datasourceStatuses?: DatasourceStatus[];
 }
 
@@ -65,7 +65,7 @@ function SeverityIcon({ severity }: { severity: AlarmData['severity'] }) {
   }
 }
 
-export function AppShell({ children, user, wsConnected, alarms, onLogout, navTitle = 'HMI', activeProjectName, datasourceStatuses = [] }: AppShellProps) {
+export function AppShell({ children, user, wsConnected, alarms, onLogout, navTitle = 'HMI', activeJobName, datasourceStatuses = [] }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [ackingAll, setAckingAll] = useState(false);
   const location = useLocation();
@@ -186,14 +186,14 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
             </Link>
           )}
 
-          {/* Active project */}
-          {activeProjectName && (
+          {/* Active job */}
+          {activeJobName && (
             <Link
-              to="/projects"
+              to="/jobs"
               className="flex items-center gap-1.5 text-sm text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)] px-3 py-2 min-h-[44px] rounded border border-[var(--hmi-border-subtle)] hover:border-[var(--hmi-text-muted)] transition-colors"
             >
-              <FolderOpen size={14} />
-              {activeProjectName}
+              <ClipboardList size={14} />
+              {activeJobName}
             </Link>
           )}
 

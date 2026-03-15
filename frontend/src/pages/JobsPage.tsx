@@ -165,11 +165,14 @@ function SetpointEditor({ value, onChange, tags }: {
     });
   };
 
-  // Group tag options for <select> by label (excluding "Job Setpoint")
-  const writableTags = tags.filter(t => t.access_mode !== 'read' && !t.name.startsWith('$'));
+  // Only show writable tags labeled "Job Setpoint", grouped by other labels
+  const jobSetpointTags = tags.filter(t =>
+    t.access_mode !== 'read' && !t.name.startsWith('$') &&
+    t.labels?.some(l => l.name === 'Job Setpoint')
+  );
   const tagGroups = useMemo(() => {
     const groups = new Map<string, Tag[]>();
-    for (const t of writableTags) {
+    for (const t of jobSetpointTags) {
       const labelNames = t.labels?.filter(l => l.name !== 'Job Setpoint').map(l => l.name).sort() || [];
       const g = labelNames.length > 0 ? labelNames.join(', ') : 'Other';
       if (!groups.has(g)) groups.set(g, []);
@@ -177,7 +180,7 @@ function SetpointEditor({ value, onChange, tags }: {
     }
     return Array.from(groups.entries())
       .sort(([a], [b]) => a === 'Other' ? 1 : b === 'Other' ? -1 : a.localeCompare(b));
-  }, [writableTags]);
+  }, [jobSetpointTags]);
 
   const grouped = groupEntries(entries, tags);
 
@@ -214,7 +217,7 @@ function SetpointEditor({ value, onChange, tags }: {
                 <select
                   value={key}
                   onChange={e => updateKey(key, e.target.value, idx)}
-                  className={inputCls + ' text-xs'}
+                  className={inputCls}
                 >
                   <option value="">Select tag…</option>
                   {tagGroups.map(([gName, gTags]) => (
@@ -406,7 +409,7 @@ function ConditionsEditor({ value, onChange, tags }: {
             <select
               value={g.tag}
               onChange={e => updateGuard(idx, 'tag', e.target.value)}
-              className={inputCls + ' text-xs'}
+              className={inputCls}
             >
               <option value="">Select tag…</option>
               {tags.filter(t => !t.name.startsWith('$')).map(t => (

@@ -83,7 +83,8 @@ export default function App() {
   const [backendReady, setBackendReady] = useState(false);
   const [siteTitle, setSiteTitle] = useState('Industrial HMI');
   const [navTitle, setNavTitle] = useState('HMI');
-  const [activeProjectName, setActiveProjectName] = useState<string | null>(null);
+  const activeJobRaw = tagValues['$ACTIVE_JOB']?.value;
+  const activeJobName = activeJobRaw && activeJobRaw !== 'None' ? String(activeJobRaw) : null;
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Fault help dialog auto-popup state
@@ -135,7 +136,6 @@ export default function App() {
         setNavTitle(b.nav_title);
         applyBranding(b);
       }).catch(() => {});
-      api.getActiveProject().then(p => setActiveProjectName(p.name)).catch(() => {});
     } catch {
       timerRef.current = setTimeout(checkHealth, 1500);
     }
@@ -179,7 +179,7 @@ export default function App() {
               alarms={alarms}
               onLogout={auth.logout}
               navTitle={navTitle}
-              activeProjectName={activeProjectName}
+              activeJobName={activeJobName}
               datasourceStatuses={datasourceStatuses}
             >
               {/* Suspense wraps lazy-loaded pages. While a page's code is downloading,
