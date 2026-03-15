@@ -73,7 +73,7 @@ function applyBranding(branding: { site_title: string; has_favicon: boolean; the
 export default function App() {
   // useWebSocket opens a persistent connection to the server, receiving live tag values
   // and alarm updates in real time (instead of polling the server repeatedly).
-  const { tagValues, alarms, connected } = useWebSocket();
+  const { tagValues, alarms, connected, datasourceStatuses } = useWebSocket();
 
   // useAuthState manages login/logout and stores the current user (role, username, etc.)
   const auth = useAuthState();
@@ -132,6 +132,7 @@ export default function App() {
               onLogout={auth.logout}
               navTitle={navTitle}
               activeProjectName={activeProjectName}
+              datasourceStatuses={datasourceStatuses}
             >
               {/* Suspense wraps lazy-loaded pages. While a page's code is downloading,
                   React shows the <PageLoader /> fallback instead of a blank screen. */}

@@ -29,6 +29,11 @@ async def websocket_endpoint(websocket: WebSocket):
         all_values = tag_engine.get_all_values()
         await websocket.send_json({"type": "snapshot", "data": all_values})
 
+        # Send initial datasource connection statuses
+        ds_statuses = tag_engine.get_datasource_statuses()
+        if ds_statuses:
+            await websocket.send_json({"type": "datasource_status", "data": ds_statuses})
+
         # Stream updates as they occur, indefinitely
         while True:
             try:

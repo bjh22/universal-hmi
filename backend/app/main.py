@@ -76,6 +76,8 @@ async def lifespan(app: FastAPI):
         await driver_manager.load_and_connect(session)
 
     tag_engine.set_driver_manager(driver_manager)
+    async with async_session() as session:
+        await tag_engine.load_datasource_meta(session)
     # Attach services to app.state so route handlers can access them
     app.state.alarm_service = alarm_service
     app.state.trend_service = trend_service
