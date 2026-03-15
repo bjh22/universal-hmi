@@ -41,10 +41,10 @@ export function OEETrendChart({ data }: Props) {
           />
           <Legend wrapperStyle={{ fontSize: 11 }} />
           <ReferenceLine y={85} stroke="#22c55e" strokeDasharray="3 3" label={{ value: '85%', position: 'right', fill: '#22c55e', fontSize: 10 }} />
-          <Line type="monotone" dataKey="oee" stroke="#3b82f6" strokeWidth={2} name="OEE" dot={{ r: 3 }} connectNulls />
-          <Line type="monotone" dataKey="availability" stroke="#22c55e" strokeWidth={1.5} name="Availability" dot={false} connectNulls strokeDasharray="4 2" />
-          <Line type="monotone" dataKey="performance" stroke="#f59e0b" strokeWidth={1.5} name="Performance" dot={false} connectNulls strokeDasharray="4 2" />
-          <Line type="monotone" dataKey="quality" stroke="#8b5cf6" strokeWidth={1.5} name="Quality" dot={false} connectNulls strokeDasharray="4 2" />
+          <Line type="monotone" dataKey="oee" stroke="#3b82f6" strokeWidth={2} name="OEE" dot={{ r: 3 }} connectNulls isAnimationActive={false} />
+          <Line type="monotone" dataKey="availability" stroke="#22c55e" strokeWidth={1.5} name="Availability" dot={false} connectNulls strokeDasharray="4 2" isAnimationActive={false} />
+          <Line type="monotone" dataKey="performance" stroke="#f59e0b" strokeWidth={1.5} name="Performance" dot={false} connectNulls strokeDasharray="4 2" isAnimationActive={false} />
+          <Line type="monotone" dataKey="quality" stroke="#8b5cf6" strokeWidth={1.5} name="Quality" dot={false} connectNulls strokeDasharray="4 2" isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>

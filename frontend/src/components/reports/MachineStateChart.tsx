@@ -39,9 +39,9 @@ export function MachineStateChart({ data }: Props) {
             formatter={(value) => [`${value} hrs`]}
           />
           <Legend wrapperStyle={{ fontSize: 11 }} />
-          <Area type="monotone" dataKey="uptime" stackId="1" stroke="#22c55e" fill="#22c55e" fillOpacity={0.6} name="Uptime" />
-          <Area type="monotone" dataKey="downtime" stackId="1" stroke="#ef4444" fill="#ef4444" fillOpacity={0.6} name="Downtime" />
-          <Area type="monotone" dataKey="idle" stackId="1" stroke="#64748b" fill="#64748b" fillOpacity={0.4} name="Idle" />
+          <Area type="monotone" dataKey="uptime" stackId="1" stroke="#22c55e" fill="#22c55e" fillOpacity={0.6} name="Uptime" isAnimationActive={false} />
+          <Area type="monotone" dataKey="downtime" stackId="1" stroke="#ef4444" fill="#ef4444" fillOpacity={0.6} name="Downtime" isAnimationActive={false} />
+          <Area type="monotone" dataKey="idle" stackId="1" stroke="#64748b" fill="#64748b" fillOpacity={0.4} name="Idle" isAnimationActive={false} />
         </AreaChart>
       </ResponsiveContainer>
     </div>

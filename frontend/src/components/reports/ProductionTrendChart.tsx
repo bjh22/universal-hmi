@@ -39,8 +39,8 @@ export function ProductionTrendChart({ data }: Props) {
             formatter={(value) => [Number(value).toLocaleString()]}
           />
           <Legend wrapperStyle={{ fontSize: 11 }} />
-          <Bar dataKey="good" fill="#22c55e" name="Good" stackId="a" radius={[2, 2, 0, 0]} />
-          <Bar dataKey="reject" fill="#ef4444" name="Reject" stackId="a" radius={[2, 2, 0, 0]} />
+          <Bar dataKey="good" fill="#22c55e" name="Good" stackId="a" radius={[2, 2, 0, 0]} isAnimationActive={false} />
+          <Bar dataKey="reject" fill="#ef4444" name="Reject" stackId="a" radius={[2, 2, 0, 0]} isAnimationActive={false} />
         </BarChart>
       </ResponsiveContainer>
     </div>
