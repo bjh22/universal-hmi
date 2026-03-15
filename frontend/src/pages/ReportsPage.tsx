@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   BarChart3, Download, Clock, Activity, AlertTriangle, Gauge, Package, Zap,
 } from 'lucide-react';
@@ -63,6 +63,12 @@ export function ReportsPage() {
   // Shared
   const [reasonCodes, setReasonCodes] = useState<ReasonCode[]>([]);
 
+  // Guards against overlapping fetch calls. If the API takes longer than the
+  // polling interval (5s), requests pile up — each pending Promise holds response
+  // data in memory, causing unbounded growth on slow backends.
+  const liveFetchingRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
+
   // Load reason codes once
   useEffect(() => {
     api.getReasonCodes(true).then(setReasonCodes).catch(() => {});
@@ -70,6 +76,9 @@ export function ReportsPage() {
 
   // Live tab: auto-refresh every 5 seconds
   const fetchLive = useCallback(async () => {
+    // Skip if a previous fetch is still in-flight
+    if (liveFetchingRef.current) return;
+    liveFetchingRef.current = true;
     try {
       const [summary, periods] = await Promise.all([
         api.getReportSummary(),
@@ -79,6 +88,8 @@ export function ReportsPage() {
       setLiveDowntime(periods);
     } catch {
       // silently ignore
+    } finally {
+      liveFetchingRef.current = false;
     }
   }, []);
 
@@ -91,6 +102,10 @@ export function ReportsPage() {
 
   // Historical tab: fetch on range/granularity change
   const fetchHistorical = useCallback(async () => {
+    // Abort any previous in-flight historical fetch to prevent accumulation
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
       const params = { start: dateStart, end: dateEnd };
       const [summary, timeSeries, periods, dtSummary] = await Promise.all([
@@ -99,18 +114,20 @@ export function ReportsPage() {
         api.getDowntimePeriods(params),
         api.getDowntimeSummary(params),
       ]);
+      if (controller.signal.aborted) return;
       setHistSummary(summary);
       setHistTimeSeries(timeSeries);
       setHistDowntime(periods);
       setHistDowntimeSummary(dtSummary);
     } catch {
-      // silently ignore
+      // silently ignore (including abort errors)
     }
   }, [dateStart, dateEnd, granularity]);
 
   useEffect(() => {
     if (tab !== 'historical') return;
     fetchHistorical(); // eslint-disable-line react-hooks/set-state-in-effect
+    return () => { abortRef.current?.abort(); };
   }, [tab, fetchHistorical]);
 
   const handlePreset = useCallback((getRange: () => { start: string; end?: string }) => {

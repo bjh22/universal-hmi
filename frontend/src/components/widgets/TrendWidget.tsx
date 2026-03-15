@@ -6,6 +6,23 @@ import { getContainerClasses, shouldShowTitle, getTitleClasses } from '../../lib
 
 const COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#f97316'];
 
+// Cap chart data points to avoid massive SVG DOM trees that consume browser memory.
+// With 500ms sampling over 24h, a single tag generates ~172,800 points — far more
+// than a chart can meaningfully display. Downsampling to 500 points is visually
+// indistinguishable but uses ~99.7% less memory.
+const MAX_CHART_POINTS = 500;
+
+function downsample<T>(data: T[], maxPoints: number): T[] {
+  if (data.length <= maxPoints) return data;
+  const step = data.length / maxPoints;
+  const result: T[] = [data[0]];
+  for (let i = 1; i < maxPoints - 1; i++) {
+    result.push(data[Math.round(i * step)]);
+  }
+  result.push(data[data.length - 1]);
+  return result;
+}
+
 interface TrendTagConfig {
   tag: string;
   color?: string;
@@ -65,7 +82,7 @@ export function TrendWidget({ title, tags: tagConfigs = [], hours = 24, refreshS
         const sorted = Object.values(merged).sort(
           (a, b) => new Date(String(a.fullTime)).getTime() - new Date(String(b.fullTime)).getTime()
         );
-        setChartData(sorted);
+        setChartData(downsample(sorted, MAX_CHART_POINTS));
         setLoading(false);
       })
       .catch(() => {

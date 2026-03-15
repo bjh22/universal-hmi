@@ -5,6 +5,19 @@ import { api } from '../lib/api';
 import type { Tag, TrendDataPoint } from '../types';
 
 const COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#f97316'];
+
+const MAX_CHART_POINTS = 500;
+
+function downsample<T>(data: T[], maxPoints: number): T[] {
+  if (data.length <= maxPoints) return data;
+  const step = data.length / maxPoints;
+  const result: T[] = [data[0]];
+  for (let i = 1; i < maxPoints - 1; i++) {
+    result.push(data[Math.round(i * step)]);
+  }
+  result.push(data[data.length - 1]);
+  return result;
+}
 const TIME_RANGES = [
   { label: '1h', hours: 1 },
   { label: '8h', hours: 8 },
@@ -62,7 +75,7 @@ export function TrendsPage() {
         const sorted = Object.values(merged).sort((a, b) =>
           new Date(String(a.fullTime)).getTime() - new Date(String(b.fullTime)).getTime()
         );
-        setChartData(sorted);
+        setChartData(downsample(sorted, MAX_CHART_POINTS));
       })
       .catch(() => {});
   }, [selectedTags, timeRange, useCustomRange, customStart, customEnd, tags]);
@@ -314,6 +327,7 @@ export function TrendsPage() {
                       strokeWidth={2}
                       connectNulls
                       yAxisId={id}
+                      isAnimationActive={false}
                     />
                   );
                 })}

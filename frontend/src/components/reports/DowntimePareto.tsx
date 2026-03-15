@@ -47,8 +47,8 @@ export function DowntimePareto({ data }: Props) {
             }}
           />
           <Legend wrapperStyle={{ fontSize: 11 }} />
-          <Bar yAxisId="duration" dataKey="duration_minutes" fill="#f59e0b" name="Duration (min)" radius={[2, 2, 0, 0]} />
-          <Line yAxisId="cumPct" dataKey="cumulative_pct" stroke="#3b82f6" name="Cumulative %" dot={{ r: 3 }} strokeWidth={2} />
+          <Bar yAxisId="duration" dataKey="duration_minutes" fill="#f59e0b" name="Duration (min)" radius={[2, 2, 0, 0]} isAnimationActive={false} />
+          <Line yAxisId="cumPct" dataKey="cumulative_pct" stroke="#3b82f6" name="Cumulative %" dot={{ r: 3 }} strokeWidth={2} isAnimationActive={false} />
         </ComposedChart>
       </ResponsiveContainer>
     </div>
