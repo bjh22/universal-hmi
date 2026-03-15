@@ -246,8 +246,11 @@ See `DEVELOPER.md` → "Creating a Plugin Integration" for a full walkthrough wi
 - `backend/app/api/service_config.py` — Service page configuration API
 - `backend/app/api/zpl_preview.py` — ZPL preview rendering API
 - `backend/app/api/media.py` — Fault help image upload/serve/delete API
+- `backend/app/core/paths.py` — Frozen-aware path helpers for PyInstaller compatibility
 - `backend/app/integrations/base.py` — Integration plugin base class
 - `backend/app/integrations/manager.py` — Plugin discovery and lifecycle management
+- `backend/hmi-server.spec` — PyInstaller spec file for compiling backend into native executable
+- `deploy.sh` — Deployment packager (`--compile` flag for PyInstaller build)
 - `frontend/src/components/FaultHelpDialog.tsx` — Auto-popup dialog for fault troubleshooting with image/GIF
 
 ## Database Tables

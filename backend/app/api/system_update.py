@@ -36,13 +36,14 @@ from app.core.database import get_db
 from app.models.user import User, UserRole
 from app.services.audit_service import log_audit
 from app.models.audit import AuditAction
+from app.core.paths import data_dir
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
-# The install root is the directory containing run.py (one level above app/)
-_app_root = Path(__file__).resolve().parent.parent.parent  # backend/
+# The install root — working directory in production, backend/ dir in dev
+_app_root = data_dir()
 
 
 class SystemInfoResponse(BaseModel):
