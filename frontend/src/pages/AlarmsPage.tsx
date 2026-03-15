@@ -35,7 +35,7 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
   // Merge realtime alarms and deduplicate by id
   const deduped = useMemo(() => {
     const rawAlarms = tab === 'active'
-      ? [...realtimeAlarms.filter(a => a.state !== 'inactive'), ...activeAlarms]
+      ? [...realtimeAlarms.filter(a => a.state !== 'inactive'), ...activeAlarms.filter(a => a.state !== 'inactive')]
       : historyAlarms;
     const map = new Map<number, AlarmData>();
     for (const a of rawAlarms) {
@@ -82,10 +82,13 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
 
   const handleAck = async (id: number) => {
     await api.acknowledgeAlarm(id);
-    setActiveAlarms(prev => prev.map(a => {
-      if (a.id !== id) return a;
-      return { ...a, state: a.state === 'inactive_unacked' ? 'inactive' as const : 'active_acked' as const };
-    }));
+    setActiveAlarms(prev => prev.reduce<AlarmData[]>((acc, a) => {
+      if (a.id !== id) { acc.push(a); return acc; }
+      // inactive_unacked → inactive: remove from active list entirely
+      if (a.state === 'inactive_unacked') return acc;
+      acc.push({ ...a, state: 'active_acked' as const });
+      return acc;
+    }, []));
   };
 
   const handleAckAll = useCallback(async () => {
@@ -93,11 +96,12 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
     if (unacked.length === 0) return;
     if (!window.confirm(`Acknowledge all ${unacked.length} unacknowledged alarm(s)?`)) return;
     await Promise.all(unacked.map(a => api.acknowledgeAlarm(a.id)));
-    setActiveAlarms(prev => prev.map(a => {
-      if (a.state === 'active_unacked') return { ...a, state: 'active_acked' as const };
-      if (a.state === 'inactive_unacked') return { ...a, state: 'inactive' as const };
-      return a;
-    }));
+    setActiveAlarms(prev => prev.reduce<AlarmData[]>((acc, a) => {
+      if (a.state === 'active_unacked') { acc.push({ ...a, state: 'active_acked' as const }); return acc; }
+      if (a.state === 'inactive_unacked') return acc; // remove from active list
+      acc.push(a);
+      return acc;
+    }, []));
   }, [displayAlarms]);
 
   const handleSort = (field: SortField) => {
