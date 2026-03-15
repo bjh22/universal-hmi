@@ -101,7 +101,7 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
           {sidebarOpen && <span className="font-bold text-[var(--hmi-accent-text)] text-lg">{navTitle}</span>}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="ml-auto p-1.5 rounded-md hover:bg-[var(--hmi-bg-elevated)] text-[var(--hmi-text-secondary)]"
+            className="ml-auto p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-md hover:bg-[var(--hmi-bg-elevated)] text-[var(--hmi-text-secondary)]"
           >
             {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
@@ -117,7 +117,7 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
               <Link
                 key={item.to}
                 to={item.to}
-                className={`relative flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg transition-colors ${
+                className={`relative flex items-center gap-3 px-4 py-3 mx-2 rounded-lg transition-colors ${
                   active
                     ? 'bg-[var(--hmi-accent-bg)] text-[var(--hmi-accent-text)]'
                     : 'text-[var(--hmi-text-secondary)] hover:bg-[var(--hmi-bg-elevated)] hover:text-[var(--hmi-text-primary)]'
@@ -141,7 +141,7 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="h-14 bg-[var(--hmi-bg-surface)] border-b border-[var(--hmi-border)] flex items-center px-4 gap-4 shrink-0">
+        <header className="h-16 bg-[var(--hmi-bg-surface)] border-b border-[var(--hmi-border)] flex items-center px-4 gap-4 shrink-0">
           {/* Data source connection status */}
           {datasourceStatuses.length > 0 ? (
             <div className="flex items-center gap-2">
@@ -168,20 +168,20 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
 
           {/* Alarm badges by severity */}
           {criticalCount > 0 && (
-            <Link to="/alarms" className="flex items-center gap-1.5 bg-red-500/20 text-red-400 px-2.5 py-1 rounded-md text-xs font-medium">
-              <AlertCircle size={14} />
+            <Link to="/alarms" className="flex items-center gap-1.5 bg-red-500/20 text-red-400 px-3 py-2 min-h-[44px] rounded-md text-xs font-medium">
+              <AlertCircle size={16} />
               {criticalCount} Alarm{criticalCount !== 1 ? 's' : ''}
             </Link>
           )}
           {warningCount > 0 && (
-            <Link to="/alarms" className="flex items-center gap-1.5 bg-yellow-500/20 text-yellow-400 px-2.5 py-1 rounded-md text-xs font-medium">
-              <AlertTriangle size={14} />
+            <Link to="/alarms" className="flex items-center gap-1.5 bg-yellow-500/20 text-yellow-400 px-3 py-2 min-h-[44px] rounded-md text-xs font-medium">
+              <AlertTriangle size={16} />
               {warningCount} Warning{warningCount !== 1 ? 's' : ''}
             </Link>
           )}
           {infoCount > 0 && (
-            <Link to="/alarms" className="flex items-center gap-1.5 bg-blue-500/20 text-blue-400 px-2.5 py-1 rounded-md text-xs font-medium">
-              <Info size={14} />
+            <Link to="/alarms" className="flex items-center gap-1.5 bg-blue-500/20 text-blue-400 px-3 py-2 min-h-[44px] rounded-md text-xs font-medium">
+              <Info size={16} />
               {infoCount} Info
             </Link>
           )}
@@ -190,7 +190,7 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
           {activeProjectName && (
             <Link
               to="/projects"
-              className="flex items-center gap-1.5 text-sm text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)] px-2 py-1 rounded border border-[var(--hmi-border-subtle)] hover:border-[var(--hmi-text-muted)] transition-colors"
+              className="flex items-center gap-1.5 text-sm text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)] px-3 py-2 min-h-[44px] rounded border border-[var(--hmi-border-subtle)] hover:border-[var(--hmi-text-muted)] transition-colors"
             >
               <FolderOpen size={14} />
               {activeProjectName}
@@ -208,7 +208,7 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
               </div>
               <button
                 onClick={onLogout}
-                className="text-xs text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)] px-2 py-1 rounded border border-[var(--hmi-border-subtle)] hover:border-[var(--hmi-text-muted)]"
+                className="text-xs text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)] px-3 py-2 min-h-[44px] flex items-center rounded border border-[var(--hmi-border-subtle)] hover:border-[var(--hmi-text-muted)]"
               >
                 Logout
               </button>
@@ -216,7 +216,7 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
           ) : (
             <Link
               to="/login"
-              className="flex items-center gap-1 text-sm text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)]"
+              className="flex items-center gap-1 text-sm text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)] py-2 min-h-[44px]"
             >
               <User size={16} />
               Login
@@ -233,7 +233,7 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
                 <Link
                   key={alarm.id}
                   to="/alarms"
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-sm font-medium whitespace-nowrap shrink-0 transition-colors ${
+                  className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded text-sm font-medium whitespace-nowrap shrink-0 transition-colors ${
                     alarm.state === 'active_unacked'
                       ? alarm.severity === 'critical'
                         ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
@@ -260,9 +260,9 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
               <button
                 onClick={handleAcknowledgeAll}
                 disabled={ackingAll || unackedAlarms.length === 0}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
+                className="flex items-center gap-1.5 px-4 py-2.5 min-h-[44px] rounded bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
               >
-                <CheckCheck size={14} />
+                <CheckCheck size={16} />
                 {ackingAll ? 'Acknowledging...' : 'Ack All'}
               </button>
             </div>

@@ -2226,12 +2226,12 @@ export function SettingsPage({ user, tagValues }: Props) {
     <div>
       <h1 className="text-xl font-bold text-[var(--hmi-text-primary)] mb-4">Settings</h1>
 
-      <div className="flex gap-1 mb-4">
+      <div className="flex gap-2 mb-4 flex-wrap">
         {tabList.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            className={`px-4 py-2.5 min-h-[44px] rounded-lg text-sm font-medium transition-colors ${
               tab === t.key ? 'bg-[var(--hmi-accent)] text-white' : 'bg-[var(--hmi-bg-elevated)] text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)]'
             }`}
           >

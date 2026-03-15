@@ -323,7 +323,7 @@ export function DesignCanvas({
           <span className="text-[10px] text-slate-500 mr-1">Align:</span>
           {(['left', 'center-h', 'right', 'top', 'center-v', 'bottom'] as const).map(dir => (
             <button key={dir} onClick={() => onAlign(dir)}
-              className="px-1.5 py-0.5 rounded text-[10px] text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+              className="px-2 py-1 min-h-[32px] rounded text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800"
               title={`Align ${dir}`}>
               {dir === 'left' ? 'L' : dir === 'right' ? 'R' : dir === 'top' ? 'T' : dir === 'bottom' ? 'B' : dir === 'center-h' ? 'CH' : 'CV'}
             </button>
@@ -331,10 +331,10 @@ export function DesignCanvas({
           <div className="w-px h-4 bg-slate-700 mx-1" />
           <span className="text-[10px] text-slate-500 mr-1">Distribute:</span>
           <button onClick={() => onDistribute('horizontal')}
-            className="px-1.5 py-0.5 rounded text-[10px] text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+            className="px-2 py-1 min-h-[32px] rounded text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800"
             title="Distribute horizontally">H</button>
           <button onClick={() => onDistribute('vertical')}
-            className="px-1.5 py-0.5 rounded text-[10px] text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+            className="px-2 py-1 min-h-[32px] rounded text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800"
             title="Distribute vertically">V</button>
         </div>
       )}
@@ -560,7 +560,7 @@ function ContextMenuItem({ label, shortcut, onClick, danger }: {
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-slate-700 transition-colors ${
+      className={`w-full text-left px-3 py-2 min-h-[36px] text-sm flex items-center justify-between hover:bg-slate-700 transition-colors ${
         danger ? 'text-red-400' : 'text-slate-300'
       }`}
     >

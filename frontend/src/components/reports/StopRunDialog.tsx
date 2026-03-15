@@ -46,20 +46,20 @@ export function StopRunDialog({ run, onClose, onStopped }: Props) {
           <label className="block text-xs text-slate-400 mb-1">
             Good Count {isTagDriven && '(override)'}
           </label>
-          <input type="number" value={goodCount} onChange={e => setGoodCount(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200" />
+          <input type="number" value={goodCount} onChange={e => setGoodCount(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 min-h-[44px] text-sm text-slate-200" />
         </div>
         <div>
           <label className="block text-xs text-slate-400 mb-1">Reject Count</label>
-          <input type="number" value={rejectCount} onChange={e => setRejectCount(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200" />
+          <input type="number" value={rejectCount} onChange={e => setRejectCount(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 min-h-[44px] text-sm text-slate-200" />
         </div>
         <div>
           <label className="block text-xs text-slate-400 mb-1">Target Count (optional)</label>
-          <input type="number" value={targetCount} onChange={e => setTargetCount(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200" />
+          <input type="number" value={targetCount} onChange={e => setTargetCount(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 min-h-[44px] text-sm text-slate-200" />
         </div>
       </div>
       <div className="flex justify-end gap-2 mt-4">
-        <button onClick={onClose} className="px-3 py-1.5 bg-slate-700 text-slate-300 rounded-lg text-sm">Cancel</button>
-        <button onClick={handleSubmit} disabled={submitting} className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm disabled:opacity-50">
+        <button onClick={onClose} className="px-4 py-2.5 min-h-[44px] bg-slate-700 text-slate-300 rounded-lg text-sm">Cancel</button>
+        <button onClick={handleSubmit} disabled={submitting} className="px-4 py-2.5 min-h-[44px] bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm disabled:opacity-50">
           {submitting ? 'Stopping...' : 'Stop Run'}
         </button>
       </div>

@@ -47,7 +47,7 @@ export function WidgetPalette({ onAddWidget, collapsed, onToggleCollapse }: Prop
           <button
             key={wt.type}
             onClick={() => onAddWidget(wt)}
-            className="p-2 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200"
+            className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200"
             title={wt.label}
           >
             <wt.icon size={16} />
@@ -81,9 +81,9 @@ export function WidgetPalette({ onAddWidget, collapsed, onToggleCollapse }: Prop
               <button
                 key={wt.type}
                 onClick={() => onAddWidget(wt)}
-                className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-sm text-slate-300 hover:bg-slate-800 hover:text-slate-100 transition-colors"
+                className="flex items-center gap-2 w-full px-2 py-2.5 min-h-[44px] rounded text-sm text-slate-300 hover:bg-slate-800 hover:text-slate-100 transition-colors"
               >
-                <wt.icon size={14} />
+                <wt.icon size={16} />
                 <span>{wt.label}</span>
               </button>
             ))}

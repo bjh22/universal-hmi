@@ -220,10 +220,10 @@ export function ProductionSettingsTab() {
                   />
                   <button
                     onClick={() => removeShift(i)}
-                    className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-700 rounded transition-colors"
+                    className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-400 hover:text-red-400 hover:bg-slate-700 rounded transition-colors"
                     title="Remove shift"
                   >
-                    <X size={14} />
+                    <X size={16} />
                   </button>
                 </div>
               ))}

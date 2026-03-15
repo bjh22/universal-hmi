@@ -62,11 +62,11 @@ export function DowntimeDialog({ runId, existing, runStart, reasonCodes, onClose
       <div className="space-y-3">
         <div>
           <label className="block text-xs text-slate-400 mb-1">Start Time</label>
-          <input type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200" />
+          <input type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 min-h-[44px] text-sm text-slate-200" />
         </div>
         <div>
           <label className="block text-xs text-slate-400 mb-1">End Time</label>
-          <input type="datetime-local" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200" />
+          <input type="datetime-local" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 min-h-[44px] text-sm text-slate-200" />
         </div>
         <div>
           <label className="block text-xs text-slate-400 mb-1">Reason Code</label>
@@ -74,7 +74,7 @@ export function DowntimeDialog({ runId, existing, runStart, reasonCodes, onClose
             <select
               value={reasonCode}
               onChange={e => setReasonCode(e.target.value)}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200"
+              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 min-h-[44px] text-sm text-slate-200"
             >
               <option value="">Select reason...</option>
               {reasonCodes.map(rc => (
@@ -84,7 +84,7 @@ export function DowntimeDialog({ runId, existing, runStart, reasonCodes, onClose
               ))}
             </select>
           ) : (
-            <input type="text" value={reasonCode} onChange={e => setReasonCode(e.target.value)} placeholder="e.g. MECH_FAIL, MATERIAL, CHANGEOVER" className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200" />
+            <input type="text" value={reasonCode} onChange={e => setReasonCode(e.target.value)} placeholder="e.g. MECH_FAIL, MATERIAL, CHANGEOVER" className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 min-h-[44px] text-sm text-slate-200" />
           )}
         </div>
         <div>
@@ -93,8 +93,8 @@ export function DowntimeDialog({ runId, existing, runStart, reasonCodes, onClose
         </div>
       </div>
       <div className="flex justify-end gap-2 mt-4">
-        <button onClick={onClose} className="px-3 py-1.5 bg-slate-700 text-slate-300 rounded-lg text-sm">Cancel</button>
-        <button onClick={handleSubmit} disabled={submitting} className="px-3 py-1.5 bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-hover)] text-white rounded-lg text-sm disabled:opacity-50">
+        <button onClick={onClose} className="px-4 py-2.5 min-h-[44px] bg-slate-700 text-slate-300 rounded-lg text-sm">Cancel</button>
+        <button onClick={handleSubmit} disabled={submitting} className="px-4 py-2.5 min-h-[44px] bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-hover)] text-white rounded-lg text-sm disabled:opacity-50">
           {submitting ? 'Saving...' : existing ? 'Update' : 'Add'}
         </button>
       </div>

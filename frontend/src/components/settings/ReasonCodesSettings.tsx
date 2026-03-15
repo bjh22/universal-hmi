@@ -114,18 +114,18 @@ export function ReasonCodesSettings() {
                   <td className="px-4 py-3 text-center">
                     <button
                       onClick={() => handleToggleActive(rc)}
-                      className={`text-xs px-2 py-0.5 rounded ${rc.is_active ? 'bg-green-900/50 text-green-400' : 'bg-slate-700 text-slate-500'}`}
+                      className={`text-xs px-3 py-1.5 rounded min-h-[44px] flex items-center justify-center ${rc.is_active ? 'bg-green-900/50 text-green-400' : 'bg-slate-700 text-slate-500'}`}
                     >
                       {rc.is_active ? 'Active' : 'Inactive'}
                     </button>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => openEdit(rc)} className="p-1 text-slate-400 hover:text-white" title="Edit">
-                        <Pencil size={14} />
+                    <div className="flex items-center justify-end gap-2">
+                      <button onClick={() => openEdit(rc)} className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-md text-slate-400 hover:text-white hover:bg-slate-700" title="Edit">
+                        <Pencil size={16} />
                       </button>
-                      <button onClick={() => setConfirmDelete(rc)} className="p-1 text-slate-400 hover:text-red-400" title="Delete">
-                        <Trash2 size={14} />
+                      <button onClick={() => setConfirmDelete(rc)} className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-md text-slate-400 hover:text-red-400 hover:bg-slate-700" title="Delete">
+                        <Trash2 size={16} />
                       </button>
                     </div>
                   </td>

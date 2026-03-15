@@ -408,7 +408,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
       {/* Screen tabs + edit button */}
       <div className="flex items-center gap-2 mb-4">
         {screens.length > 0 && (
-          <div className="flex gap-1 overflow-x-auto pb-1">
+          <div className="flex gap-2 overflow-x-auto pb-1">
             {screens.filter(s => s.slug !== 'support').map((s) => (
               <Link
                 key={s.id}
@@ -432,7 +432,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
                   setDropTargetId(null);
                 }}
                 onDragEnd={() => { setDragTabId(null); setDropTargetId(null); }}
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
+                className={`flex items-center gap-1 px-3 py-2.5 min-h-[44px] rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
                   activeScreen?.id === s.id
                     ? 'bg-[var(--hmi-accent)] text-white'
                     : 'bg-slate-800 text-slate-400 hover:text-slate-200'
@@ -446,30 +446,30 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
         )}
         <div className="flex-1" />
         {isDesigner && (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => { setShowNewScreenDialog(true); setCreateScreenError(null); }}
-              className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
+              className="flex items-center justify-center min-w-[44px] min-h-[44px] p-2.5 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
               title="New screen"
             >
-              <Plus size={14} />
+              <Plus size={16} />
             </button>
             {activeScreen && (
               <button
                 onClick={handleDeleteScreen}
-                className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-red-400 hover:bg-red-600/10 transition-colors"
+                className="flex items-center justify-center min-w-[44px] min-h-[44px] p-2.5 rounded-md text-xs font-medium text-slate-400 hover:text-red-400 hover:bg-red-600/10 transition-colors"
                 title="Delete screen"
               >
-                <Trash2 size={14} />
+                <Trash2 size={16} />
               </button>
             )}
             {activeScreen && (
               <button
                 onClick={handleEnterEdit}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] rounded-md text-xs font-medium bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
                 title="Edit screen (Ctrl+E)"
               >
-                <Pencil size={14} />
+                <Pencil size={16} />
                 Edit
               </button>
             )}
@@ -537,7 +537,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
               onChange={e => setNewScreenName(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleCreateScreen(); if (e.key === 'Escape') setShowNewScreenDialog(false); }}
               placeholder="Screen name"
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500 mb-1"
+              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 min-h-[44px] text-sm text-white outline-none focus:border-blue-500 mb-1"
               autoFocus
             />
             {createScreenError && (
@@ -551,7 +551,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
               <div className="flex gap-2">
                 <button
                   onClick={() => setNewScreenMode('grid')}
-                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  className={`flex-1 px-3 py-2.5 min-h-[44px] rounded-lg text-sm font-medium transition-colors ${
                     newScreenMode === 'grid' ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'
                   }`}
                 >
@@ -559,7 +559,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
                 </button>
                 <button
                   onClick={() => setNewScreenMode('absolute')}
-                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  className={`flex-1 px-3 py-2.5 min-h-[44px] rounded-lg text-sm font-medium transition-colors ${
                     newScreenMode === 'absolute' ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'
                   }`}
                 >
@@ -578,7 +578,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
                 <select
                   value={newScreenResolution}
                   onChange={e => setNewScreenResolution(e.target.value)}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500 mb-2"
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 min-h-[44px] text-sm text-white outline-none focus:border-blue-500 mb-2"
                 >
                   <option value="1920x1080">1920 × 1080 (Full HD)</option>
                   <option value="1366x768">1366 × 768 (HD)</option>
@@ -606,11 +606,11 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
 
             <div className="flex justify-end gap-2">
               <button onClick={() => setShowNewScreenDialog(false)}
-                className="px-4 py-2 rounded-lg text-sm text-slate-400 hover:text-slate-200 transition-colors">
+                className="px-4 py-2.5 min-h-[44px] rounded-lg text-sm text-slate-400 hover:text-slate-200 transition-colors">
                 Cancel
               </button>
               <button onClick={handleCreateScreen} disabled={!newScreenName.trim()}
-                className="px-4 py-2 rounded-lg text-sm bg-[var(--hmi-accent)] text-white hover:bg-[var(--hmi-accent-dark)] disabled:opacity-40 transition-colors">
+                className="px-4 py-2.5 min-h-[44px] rounded-lg text-sm bg-[var(--hmi-accent)] text-white hover:bg-[var(--hmi-accent-dark)] disabled:opacity-40 transition-colors">
                 Create
               </button>
             </div>
