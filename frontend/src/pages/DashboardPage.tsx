@@ -503,7 +503,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
           style={{ gridTemplateColumns: 'repeat(12, 1fr)', gridAutoRows: '80px' }}
         >
           {runtimeWidgets.filter(w => !w.parentId).map((w, index) => (
-            <RuntimeWidget key={w.id} widget={w} index={index} isAbsolute={false} tagValues={tagValues} alarms={alarms} userRole={userRole} allWidgets={runtimeWidgets} collapsedContainerIds={collapsedContainerIds} onToggleContainerCollapsed={toggleContainerCollapsed} />
+            <RuntimeWidget key={w.id} widget={w} index={index} isAbsolute={false} tagValues={tagValues} alarms={alarms} userRole={userRole} widgetMap={widgetMap} collapsedContainerIds={collapsedContainerIds} onToggleContainerCollapsed={toggleContainerCollapsed} />
           ))}
         </div>
       )}
@@ -687,7 +687,7 @@ const RuntimeWidget = memo(function RuntimeWidget({ widget: w, index, isAbsolute
 
   const isContainer = w.type === 'container' || w.type === 'collapsible_container';
   const children = isContainer && !isAbsolute
-    ? allWidgets.filter(c => c.parentId === w.id)
+    ? Array.from(widgetMap.values()).filter((c: Widget) => c.parentId === w.id)
     : [];
 
   return (
@@ -698,8 +698,8 @@ const RuntimeWidget = memo(function RuntimeWidget({ widget: w, index, isAbsolute
       {showInfoBtn && <InfoButton description={infoDesc!} title={(w.props as Record<string, unknown>).title as string} />}
       <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} {...collapsibleProps} />
       {/* Render container children with pixel-based positioning */}
-      {children.map((child, ci) => (
-        <RuntimeWidget key={child.id} widget={child} index={ci} isAbsolute tagValues={tagValues} alarms={alarms} userRole={userRole} allWidgets={allWidgets} collapsedContainerIds={collapsedContainerIds} onToggleContainerCollapsed={onToggleContainerCollapsed} />
+      {children.map((child: Widget, ci: number) => (
+        <RuntimeWidget key={child.id} widget={child} index={ci} isAbsolute tagValues={tagValues} alarms={alarms} userRole={userRole} widgetMap={widgetMap} collapsedContainerIds={collapsedContainerIds} onToggleContainerCollapsed={onToggleContainerCollapsed} />
       ))}
     </div>
   );
