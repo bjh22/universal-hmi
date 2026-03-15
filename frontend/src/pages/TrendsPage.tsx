@@ -40,7 +40,7 @@ export function TrendsPage() {
     api.getTrendViews().then(views => setSavedViews(views as unknown as TrendView[])).catch(() => {});
   }, []);
 
-  useEffect(() => {
+  const fetchTrendData = useCallback(() => {
     if (selectedTags.length === 0) {
       return;
     }
@@ -67,11 +67,34 @@ export function TrendsPage() {
       .catch(() => {});
   }, [selectedTags, timeRange, useCustomRange, customStart, customEnd, tags]);
 
+  // Fetch on mount and when config changes
+  useEffect(() => {
+    fetchTrendData();
+  }, [fetchTrendData]);
+
+  // Auto-refresh every 10 seconds for live updating (skip for custom time ranges)
+  useEffect(() => {
+    if (selectedTags.length === 0 || useCustomRange) return;
+    const interval = setInterval(fetchTrendData, 10_000);
+    return () => clearInterval(interval);
+  }, [fetchTrendData, selectedTags.length, useCustomRange]);
+
   // Clear chart data when no tags are selected
   const displayChartData = useMemo(
     () => selectedTags.length === 0 ? [] : chartData,
     [selectedTags.length, chartData]
   );
+
+  // Format tooltip values using each tag's display_format (e.g. "0.00" → 2 decimal places)
+  const formatTooltipValue = useCallback((value: number, name: string) => {
+    const tag = tags.find(t => (t.display_name || t.name) === name || t.name === name);
+    if (tag?.display_format && typeof value === 'number') {
+      const dot = tag.display_format.indexOf('.');
+      const places = dot < 0 ? 0 : tag.display_format.length - dot - 1;
+      return value.toFixed(places);
+    }
+    return typeof value === 'number' ? value.toFixed(1) : value;
+  }, [tags]);
 
   const toggleTag = (id: number) => {
     setSelectedTags((prev) =>
@@ -274,6 +297,7 @@ export function TrendsPage() {
                 <Tooltip
                   contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
                   labelStyle={{ color: '#94a3b8' }}
+                  formatter={formatTooltipValue}
                 />
                 <Legend />
                 {selectedTags.map((id, i) => {
