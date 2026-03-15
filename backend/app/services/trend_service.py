@@ -107,42 +107,47 @@ class TrendService:
     async def _sample_loop(self):
         ticks_since_flush = 0
         while self._running:
-            if self._trending_tags:
-                now = datetime.now(timezone.utc)
-                for tc in self._trending_tags:
-                    tv = self._tag_engine.get_value(tc["name"])
-                    if tv is None:
-                        continue
-                    # Dual value storage: try to store as a float for efficient
-                    # querying and charting. If the value isn't numeric (e.g., a
-                    # string like "Running" or "Idle"), store it in string_value instead.
-                    try:
-                        numeric_value = float(tv.value) if tv.value is not None else None
-                        string_value = None
-                    except (TypeError, ValueError):
-                        numeric_value = None
-                        string_value = str(tv.value)
-
-                    # Deadband: skip if value hasn't changed enough
-                    tag_id = tc["tag_id"]
-                    deadband = tc.get("deadband")
-                    if deadband and numeric_value is not None and tag_id in self._last_values:
-                        last = self._last_values[tag_id]
-                        if isinstance(last, (int, float)) and abs(numeric_value - last) < deadband:
+            try:
+                if self._trending_tags:
+                    now = datetime.now(timezone.utc)
+                    for tc in self._trending_tags:
+                        tv = self._tag_engine.get_value(tc["name"])
+                        if tv is None:
                             continue
+                        # Dual value storage: try to store as a float for efficient
+                        # querying and charting. If the value isn't numeric (e.g., a
+                        # string like "Running" or "Idle"), store it in string_value instead.
+                        try:
+                            numeric_value = float(tv.value) if tv.value is not None else None
+                            string_value = None
+                        except (TypeError, ValueError):
+                            numeric_value = None
+                            string_value = str(tv.value)
 
-                    self._last_values[tag_id] = numeric_value if numeric_value is not None else string_value
-                    self._buffer.append({
-                        "tag_id": tag_id,
-                        "timestamp": now,
-                        "value": numeric_value,
-                        "string_value": string_value,
-                    })
+                        # Deadband: skip if value hasn't changed enough
+                        tag_id = tc["tag_id"]
+                        deadband = tc.get("deadband")
+                        if deadband and numeric_value is not None and tag_id in self._last_values:
+                            last = self._last_values[tag_id]
+                            if isinstance(last, (int, float)) and abs(numeric_value - last) < deadband:
+                                continue
 
-                ticks_since_flush += 1
-                if ticks_since_flush >= FLUSH_INTERVAL_S:
-                    await self._flush()
-                    ticks_since_flush = 0
+                        self._last_values[tag_id] = numeric_value if numeric_value is not None else string_value
+                        self._buffer.append({
+                            "tag_id": tag_id,
+                            "timestamp": now,
+                            "value": numeric_value,
+                            "string_value": string_value,
+                        })
+
+                    ticks_since_flush += 1
+                    if ticks_since_flush >= FLUSH_INTERVAL_S:
+                        await self._flush()
+                        ticks_since_flush = 0
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("Error in trend sample loop")
 
             await asyncio.sleep(1.0)
 

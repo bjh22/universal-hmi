@@ -96,6 +96,17 @@ export function TrendWidget({ title, tags: tagConfigs = [], hours = 24, refreshS
     .map(tc => ({ config: tc, tag: allTags.find(t => t.name === tc.tag) }))
     .filter((r): r is { config: TrendTagConfig; tag: Tag } => r.tag != null);
 
+  // Format tooltip values using each tag's display_format (e.g. "0.00" → 2 decimal places)
+  const formatTooltipValue = useCallback((value: number, name: string) => {
+    const tag = allTags.find(t => (t.display_name || t.name) === name || t.name === name);
+    if (tag?.display_format && typeof value === 'number') {
+      const dot = tag.display_format.indexOf('.');
+      const places = dot < 0 ? 0 : tag.display_format.length - dot - 1;
+      return value.toFixed(places);
+    }
+    return typeof value === 'number' ? value.toFixed(1) : value;
+  }, [allTags]);
+
   return (
     <div className={`${getContainerClasses(chrome)} h-full flex flex-col`}>
       {shouldShowTitle(chrome) && <div className={getTitleClasses(chrome)}>{title}</div>}
@@ -134,6 +145,7 @@ export function TrendWidget({ title, tags: tagConfigs = [], hours = 24, refreshS
               <Tooltip
                 contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '11px' }}
                 labelStyle={{ color: '#94a3b8' }}
+                formatter={formatTooltipValue}
               />
               {resolved.map((r, i) => {
                 const color = r.config.color || COLORS[i % COLORS.length];
