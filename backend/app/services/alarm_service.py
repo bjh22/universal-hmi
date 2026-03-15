@@ -50,19 +50,7 @@ class AlarmService:
         # hasn't changed since the last check, we skip re-evaluating that alarm condition.
         # This avoids redundant work when most tags are stable most of the time.
         self._last_eval_values: dict[int, object] = {}  # tag_id -> last evaluated value
-        self._alarm_callbacks: list = []  # External callbacks for alarm state changes
         self._help_cache: dict[int, dict] = {}  # tag_id -> {help_image, help_text, help_enabled}
-
-    def add_alarm_callback(self, callback) -> None:
-        """Register a callback to be notified of alarm state changes."""
-        self._alarm_callbacks.append(callback)
-
-    def remove_alarm_callback(self, callback) -> None:
-        """Unregister an alarm state change callback."""
-        try:
-            self._alarm_callbacks.remove(callback)
-        except ValueError:
-            pass
 
     @property
     def active_alarms(self) -> list[Alarm]:
@@ -524,10 +512,3 @@ class AlarmService:
                 q.put_nowait(msg)
             except asyncio.QueueFull:
                 pass
-
-        # Notify external callbacks (e.g. ProductionService)
-        for cb in self._alarm_callbacks:
-            try:
-                cb(msg["data"])
-            except Exception:
-                logger.exception("Error in alarm callback")

@@ -20,11 +20,11 @@ import type {
   DataSourceData,
   TrendDataPoint,
   AuditEntry,
-  ProductionRun,
-  DowntimeEvent,
+  ReportSummary,
+  DowntimePeriod,
   DowntimeSummary,
   ReasonCode,
-  TimeSeriesPoint,
+  ReportBucket,
   ProductionSettings,
   ProjectData,
   ProjectDetail,
@@ -274,49 +274,40 @@ export const api = {
   // Audit
   getAuditLog: (limit = 100) => request<AuditEntry[]>(`/audit/?limit=${limit}`),
 
-  // Production
-  getProductionRuns: (params?: { limit?: number; start?: string; end?: string }) => {
-    const qs = new URLSearchParams();
-    if (params?.limit) qs.set('limit', String(params.limit));
-    if (params?.start) qs.set('start', params.start);
-    if (params?.end) qs.set('end', params.end);
-    const q = qs.toString();
-    return request<ProductionRun[]>(`/production/runs${q ? `?${q}` : ''}`);
-  },
-  getProductionRun: (id: number) => request<ProductionRun>(`/production/runs/${id}`),
-  startProductionRun: (data: { job_name?: string; shift?: string; target_count?: number }) =>
-    request<ProductionRun>('/production/runs', { method: 'POST', body: JSON.stringify(data) }),
-  stopProductionRun: (id: number, data: { good_count: number; reject_count: number; target_count?: number }) =>
-    request<ProductionRun>(`/production/runs/${id}/stop`, { method: 'POST', body: JSON.stringify(data) }),
-  updateProductionRun: (id: number, data: Partial<ProductionRun>) =>
-    request<ProductionRun>(`/production/runs/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteProductionRun: (id: number) =>
-    request(`/production/runs/${id}`, { method: 'DELETE' }),
-
-  // Downtime
-  getDowntimeEvents: (runId: number) => request<DowntimeEvent[]>(`/production/runs/${runId}/downtime`),
-  createDowntimeEvent: (data: { production_run_id: number; start_time: string; end_time?: string; reason_code?: string; reason_text?: string }) =>
-    request<DowntimeEvent>('/production/downtime', { method: 'POST', body: JSON.stringify(data) }),
-  updateDowntimeEvent: (id: number, data: Partial<DowntimeEvent>) =>
-    request<DowntimeEvent>(`/production/downtime/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteDowntimeEvent: (id: number) =>
-    request(`/production/downtime/${id}`, { method: 'DELETE' }),
-  getDowntimeSummary: (params?: { start?: string; end?: string }) => {
+  // Reporting
+  getReportSummary: (params?: { start?: string; end?: string }) => {
     const qs = new URLSearchParams();
     if (params?.start) qs.set('start', params.start);
     if (params?.end) qs.set('end', params.end);
     const q = qs.toString();
-    return request<DowntimeSummary[]>(`/production/downtime/summary${q ? `?${q}` : ''}`);
+    return request<ReportSummary>(`/reporting/summary${q ? `?${q}` : ''}`);
   },
-
-  // Production analytics
-  getProductionTimeSeries: (params?: { start?: string; end?: string; granularity?: string }) => {
+  getReportTimeSeries: (params?: { start?: string; end?: string; granularity?: string }) => {
     const qs = new URLSearchParams();
     if (params?.start) qs.set('start', params.start);
     if (params?.end) qs.set('end', params.end);
     if (params?.granularity) qs.set('granularity', params.granularity);
     const q = qs.toString();
-    return request<TimeSeriesPoint[]>(`/production/analytics/time-series${q ? `?${q}` : ''}`);
+    return request<ReportBucket[]>(`/reporting/time-series${q ? `?${q}` : ''}`);
+  },
+  getDowntimePeriods: (params?: { start?: string; end?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.start) qs.set('start', params.start);
+    if (params?.end) qs.set('end', params.end);
+    const q = qs.toString();
+    return request<DowntimePeriod[]>(`/reporting/downtime-periods${q ? `?${q}` : ''}`);
+  },
+  annotateDowntimePeriod: (alarmHistoryId: number, data: { reason_code?: string; reason_text?: string }) =>
+    request(`/reporting/downtime-periods/${alarmHistoryId}/annotate`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  getDowntimeSummary: (params?: { start?: string; end?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.start) qs.set('start', params.start);
+    if (params?.end) qs.set('end', params.end);
+    const q = qs.toString();
+    return request<DowntimeSummary[]>(`/reporting/downtime-summary${q ? `?${q}` : ''}`);
   },
 
   // Production settings

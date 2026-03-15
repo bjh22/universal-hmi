@@ -9,12 +9,12 @@ Full-stack industrial HMI (Human-Machine Interface) for monitoring and controlli
 ```
 backend/               Python FastAPI application
   app/
-    api/               Route handlers (alarms, auth, screens, tags, production, reason_codes, production_settings, service_config, zpl_preview, websocket, etc.)
+    api/               Route handlers (alarms, auth, screens, tags, reporting, reason_codes, production_settings, service_config, zpl_preview, websocket, etc.)
     core/              Config (pydantic-settings), database (async SQLAlchemy), security (JWT)
     drivers/           Protocol drivers (opcua, modbus, ethernet_ip, mqtt) + base.py + driver_manager.py
     integrations/      Plugin system for external equipment (base.py, manager.py, zebra_printer/, cognex_dataman/, ftp_hot_folder/)
-    models/            SQLAlchemy 2.0 models (user, tag, alarm, screen, job, trend, audit, production, reason_code, datasource, integration)
-    services/          Business logic (tag_engine, alarm_service, trend_service, production_service, script_engine, audit_service, zpl_renderer)
+    models/            SQLAlchemy 2.0 models (user, tag, alarm, screen, job, trend, audit, downtime_annotation, reason_code, datasource, integration)
+    services/          Business logic (tag_engine, alarm_service, trend_service, reporting_service, script_engine, audit_service, zpl_renderer)
     main.py            FastAPI app with lifespan, CORS, static file serving
     seed.py            Database seeder with default users and demo tags
   run.py               Entry point (uvicorn on port 8080)
@@ -25,7 +25,7 @@ frontend/              React SPA (Vite + TypeScript)
     components/
       designer/        Screen designer (DesignCanvas, PropertyPanel, WidgetPalette, EditorToolbar)
       widgets/         Runtime widgets (StatusIndicator, Gauge, Toggle, CommandButton, TrendWidget, ZplPreviewWidget, etc.)
-      reports/         Production report components (StartRunDialog, StopRunDialog, DowntimeDialog, OEETrendChart, ProductionTrendChart, DowntimePareto)
+      reports/         Report components (TimeBreakdownBar, DowntimePeriodsTable, MachineStateChart, OEETrendChart, ProductionTrendChart, DowntimePareto)
       settings/        Settings tab components (ReasonCodesSettings, ProductionSettings)
       layout/          AppShell (sidebar nav, header)
     hooks/             useDesignMode, useWebSocket, useAuth
@@ -160,12 +160,13 @@ Environment variables prefixed with `HMI_` (or `.env` file):
 | GET | `/api/alarms/active` | Active alarms |
 | POST | `/api/alarms/{id}/acknowledge` | Acknowledge alarm |
 | GET | `/api/trends/data/{tag_id}` | Trend data |
-| GET | `/api/production/runs` | List production runs |
-| POST | `/api/production/runs/start` | Start a production run |
-| POST | `/api/production/runs/{id}/stop` | Stop a production run |
-| GET | `/api/production/analytics/time-series` | Aggregated production analytics (day/week/month) |
-| GET | `/api/production/settings/` | Get production settings (tag bindings + shift schedule) |
-| PUT | `/api/production/settings/` | Update production settings (tag bindings + shift schedule) |
+| GET | `/api/reporting/summary` | Compute report metrics for a timeframe |
+| GET | `/api/reporting/time-series` | Bucketed metrics for charts (day/week/month) |
+| GET | `/api/reporting/downtime-periods` | List downtime periods in timeframe |
+| PUT | `/api/reporting/downtime-periods/{id}/annotate` | Tag a downtime period with reason code |
+| GET | `/api/reporting/downtime-summary` | Downtime Pareto analysis by reason code |
+| GET | `/api/production/settings/` | Get production settings (tag bindings + reporting config) |
+| PUT | `/api/production/settings/` | Update production settings (tag bindings + reporting config) |
 | GET | `/api/service/config/` | Get service page configuration |
 | PUT | `/api/service/config/` | Update service page configuration |
 | POST | `/api/zpl-preview/render` | Render ZPL text to PNG |
@@ -189,7 +190,7 @@ Environment variables prefixed with `HMI_` (or `.env` file):
 
 - **TagEngine** (`services/tag_engine.py`): In-memory tag store, simulation engine (sine/ramp/random/toggle/enum_cycle), 500ms update cycle, publishes to WebSocket subscribers. Internal tags (no data source, no simulation) are nonvolatile — values are persisted to the database via `persisted_value` column and restored on startup
 - **AlarmService** (`services/alarm_service.py`): Boolean alarm evaluation — each alarm-enabled tag is compared against its `trigger_on` value (default `true`). Analog threshold alarming is handled on the PLC side and reported to the HMI as boolean fault flags. State machine with four states: `active_unacked`, `active_acked`, `inactive_unacked` (alarm clears before acknowledgment), `inactive` (cleared). History recording. Supports external callbacks (e.g., ProductionService) via `add_alarm_callback()`. Includes a `_help_cache` for fault help dialog data (image/text) broadcast via WebSocket.
-- **ProductionService** (`services/production_service.py`): Monitors active production runs against live machine data. On run start, captures counter tag value; on run stop, computes good count delta. Listens for alarm events via AlarmService callbacks to auto-increment reject counts (from configurable fault tags) and auto-create/close downtime events (from configurable downtime alarm tags). Includes an optional shift scheduler that auto-starts/stops runs at configured shift boundaries (30s polling loop, handles overnight shifts). Production settings (tag bindings, shift schedule) stored in `app_settings` table.
+- **ReportingService** (`services/reporting_service.py`): Stateless on-demand report computation from trend data and alarm history. Computes OEE, rate, count, uptime (machine cycling), downtime (machine faulted), and idle time (neither) for arbitrary timeframes. Supports downtime exception faults with 5-minute cap — time beyond 5 minutes counts as idle. No background loops; all metrics computed at query time from existing trend_data and alarm_history tables. Production settings (tag bindings, cycling tag, exception tags, target rate) stored in `app_settings` table.
 - **TrendService** (`services/trend_service.py`): Time-series sampling, 90-day retention
 - **ScriptEngine** (`services/script_engine.py`): Sandboxed Python execution for button actions (5s timeout, restricted builtins)
 - **ZplRenderer** (`services/zpl_renderer.py`): Offline ZPL-to-PNG rendering using Pillow. Supports text, barcodes (Code 128, Code 39), QR codes, graphics, rotation, reverse fields, and compressed graphic fields
@@ -242,8 +243,10 @@ See `DEVELOPER.md` → "Creating a Plugin Integration" for a full walkthrough wi
 - `backend/app/services/tag_engine.py` — Tag polling, simulation, value store
 - `backend/app/core/config.py` — Settings (env vars with `HMI_` prefix)
 - `backend/app/api/deps.py` — Auth dependencies (`require_role`)
-- `backend/app/services/production_service.py` — Live production run monitoring (counts, rejects, downtime)
-- `backend/app/api/production_settings.py` — Production tag binding configuration API
+- `backend/app/services/reporting_service.py` — On-demand report computation from trend + alarm data
+- `backend/app/api/reporting.py` — Reporting API (summary, time-series, downtime periods, annotations)
+- `backend/app/models/downtime_annotation.py` — Downtime period reason code annotations
+- `backend/app/api/production_settings.py` — Production/reporting configuration API
 - `backend/app/api/reason_codes.py` — Downtime reason codes CRUD API
 - `backend/app/services/zpl_renderer.py` — Offline ZPL-to-PNG rendering engine
 - `backend/app/api/service_config.py` — Service page configuration API
@@ -259,7 +262,7 @@ See `DEVELOPER.md` → "Creating a Plugin Integration" for a full walkthrough wi
 
 ## Database Tables
 
-users, tags, tag_templates, data_sources, alarms, alarm_history, trends, screens, screen_versions, screen_templates, jobs, production_runs, downtime_events, reason_codes, app_settings, audit_logs, integrations
+users, tags, tag_templates, data_sources, alarms, alarm_history, trends, screens, screen_versions, screen_templates, jobs, downtime_annotations, reason_codes, app_settings, audit_logs, integrations
 
 ## Keyboard Shortcuts (Design Mode)
 

@@ -41,9 +41,9 @@ export function DowntimePareto({ data }: Props) {
           <YAxis yAxisId="cumPct" orientation="right" stroke="#64748b" tick={{ fontSize: 11 }} domain={[0, 100]} unit="%" label={{ value: 'Cumulative', angle: 90, position: 'insideRight', style: { fill: '#64748b', fontSize: 11 } }} />
           <Tooltip
             contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
-            formatter={(value: number, name: string) => {
-              if (name === 'Cumulative %') return [`${value}%`, name];
-              return [`${value} min`, name];
+            formatter={(value, name) => {
+              if (name === 'Cumulative %') return [`${value}%`];
+              return [`${value} min`];
             }}
           />
           <Legend wrapperStyle={{ fontSize: 11 }} />

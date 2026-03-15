@@ -216,35 +216,38 @@ export interface TrendDataPoint {
   string_value: string | null;
 }
 
-// ProductionRun tracks a manufacturing run's output and OEE (Overall Equipment Effectiveness).
-// OEE = Availability x Performance x Quality — a standard manufacturing KPI.
-export interface ProductionRun {
-  id: number;
-  job_name: string | null;
-  start_time: string;
-  end_time: string | null;       // null while the run is still in progress
-  good_count: number;
+// ReportSummary contains computed metrics for a timeframe, derived from
+// trend data and alarm history rather than production runs.
+export interface ReportSummary {
+  count: number;
   reject_count: number;
-  target_count: number | null;
-  availability: number | null;   // fraction of planned time the machine was running
-  performance: number | null;    // actual speed vs. ideal speed
-  quality: number | null;        // good parts / total parts
-  oee: number | null;            // overall equipment effectiveness (0.0 to 1.0)
-  shift: string | null;
-  start_good_count: number | null;
-  good_count_tag: string | null;
+  rate: number | null;           // bags/hr
+  target_rate: number | null;
+  uptime_seconds: number;
+  downtime_seconds: number;
+  idle_seconds: number;
+  availability: number | null;
+  performance: number | null;
+  quality: number | null;
+  oee: number | null;
+  timeframe: { start: string; end: string };
 }
 
-export interface DowntimeEvent {
-  id: number;
-  production_run_id: number;
+// A downtime period derived from alarm history, with optional reason code annotation.
+export interface DowntimePeriod {
+  alarm_history_id: number | null;
+  tag_name: string;
+  tag_display_name: string | null;
   start_time: string;
   end_time: string | null;
+  duration_seconds: number;
+  is_exception: boolean;         // true if this is a downtime exception fault
+  capped_duration_seconds: number; // after 5-min cap applied
   reason_code: string | null;
   reason_text: string | null;
-  duration_seconds: number | null;
 }
 
+// Aggregated downtime by reason code for Pareto analysis.
 export interface DowntimeSummary {
   reason_code: string;
   count: number;
@@ -260,33 +263,28 @@ export interface ReasonCode {
   is_active: boolean;
 }
 
-export interface TimeSeriesPoint {
+// Time-series bucket for charting (day/week/month granularity).
+export interface ReportBucket {
   period: string;
-  run_count: number;
-  total_good: number;
-  total_reject: number;
+  count: number;
+  reject_count: number;
+  rate: number | null;
+  uptime_seconds: number;
+  downtime_seconds: number;
+  idle_seconds: number;
   avg_oee: number | null;
   avg_availability: number | null;
   avg_performance: number | null;
   avg_quality: number | null;
-  total_downtime_seconds: number;
-  total_duration_seconds: number;
-  shifts: Record<string, { good: number; reject: number; avg_oee: number | null }>;
-}
-
-export interface ShiftDefinition {
-  name: string;
-  start_time: string;  // "HH:MM"
-  end_time: string;    // "HH:MM"
-  target_count: number | null;
 }
 
 export interface ProductionSettings {
   good_count_tag: string | null;
   reject_fault_tags: string[];
   downtime_alarm_tags: string[];
-  shift_mode: 'manual' | 'automatic';
-  shifts: ShiftDefinition[];
+  cycling_tag: string | null;
+  downtime_exception_tags: string[];
+  target_rate: number | null;
 }
 
 export interface ServiceTagOverride {

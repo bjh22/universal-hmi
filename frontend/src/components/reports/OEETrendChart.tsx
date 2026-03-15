@@ -1,11 +1,11 @@
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Legend,
 } from 'recharts';
-import type { TimeSeriesPoint } from '../../types';
+import type { ReportBucket } from '../../types';
 import { formatPeriodLabel } from './formatPeriod';
 
 interface Props {
-  data: TimeSeriesPoint[];
+  data: ReportBucket[];
 }
 
 export function OEETrendChart({ data }: Props) {
@@ -36,8 +36,8 @@ export function OEETrendChart({ data }: Props) {
           <YAxis stroke="#64748b" tick={{ fontSize: 11 }} domain={[0, 100]} unit="%" />
           <Tooltip
             contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
-            labelFormatter={formatPeriodLabel}
-            formatter={(value: number) => [`${value}%`]}
+            labelFormatter={(label) => formatPeriodLabel(String(label))}
+            formatter={(value) => [`${value}%`]}
           />
           <Legend wrapperStyle={{ fontSize: 11 }} />
           <ReferenceLine y={85} stroke="#22c55e" strokeDasharray="3 3" label={{ value: '85%', position: 'right', fill: '#22c55e', fontSize: 10 }} />
