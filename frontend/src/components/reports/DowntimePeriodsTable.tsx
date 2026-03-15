@@ -39,12 +39,12 @@ export function DowntimePeriodsTable({ periods, reasonCodes, onAnnotated }: Prop
     setError('');
   }, []);
 
-  const saveAnnotation = useCallback(async () => {
-    if (editingId == null) return;
+  // Pass alarm_history_id directly from the row context to avoid stale closure issues
+  const doSave = useCallback(async (alarmHistoryId: number) => {
     setSaving(true);
     setError('');
     try {
-      await api.annotateDowntimePeriod(editingId, {
+      await api.annotateDowntimePeriod(alarmHistoryId, {
         reason_code: editCode || undefined,
         reason_text: editText || undefined,
       });
@@ -55,10 +55,11 @@ export function DowntimePeriodsTable({ periods, reasonCodes, onAnnotated }: Prop
     } finally {
       setSaving(false);
     }
-  }, [editingId, editCode, editText, onAnnotated]);
+  }, [editCode, editText, onAnnotated]);
 
   const cancelEdit = useCallback(() => {
     setEditingId(null);
+    setError('');
   }, []);
 
   if (periods.length === 0) {
@@ -132,13 +133,15 @@ export function DowntimePeriodsTable({ periods, reasonCodes, onAnnotated }: Prop
                   {editingId === p.alarm_history_id ? (
                     <div className="flex items-center gap-1">
                       <button
-                        onClick={saveAnnotation}
+                        type="button"
+                        onClick={() => doSave(p.alarm_history_id!)}
                         disabled={saving}
                         className="px-2 py-0.5 bg-blue-600 hover:bg-blue-500 rounded text-xs text-white disabled:opacity-50"
                       >
                         Save
                       </button>
                       <button
+                        type="button"
                         onClick={cancelEdit}
                         className="px-2 py-0.5 bg-slate-600 hover:bg-slate-500 rounded text-xs text-white"
                       >
@@ -149,6 +152,7 @@ export function DowntimePeriodsTable({ periods, reasonCodes, onAnnotated }: Prop
                   ) : (
                     p.alarm_history_id && (
                       <button
+                        type="button"
                         onClick={() => startEdit(p)}
                         className="flex items-center gap-1 px-2 py-0.5 bg-slate-700 hover:bg-slate-600 rounded text-xs text-slate-300"
                         title="Tag with reason code"
