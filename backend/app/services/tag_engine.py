@@ -107,6 +107,10 @@ class TagEngine:
         # which is wasteful when many clients are connected.
         self._snapshot_cache: dict[str, dict] | None = None
         self._poll_tags: dict[int, list[tuple[str, str]]] | None = None  # cached ds_id -> [(name, addr)]
+        # Tracks last-broadcast datasource connection states for change detection
+        self._last_ds_status: dict[int, bool] = {}
+        # Cache datasource metadata (id -> {name, protocol}) for WS broadcasts
+        self._ds_meta: dict[int, dict[str, str]] = {}
 
     @property
     def values(self) -> dict[str, TagValue]:
@@ -190,6 +194,28 @@ class TagEngine:
 
     def set_driver_manager(self, dm):
         self._driver_manager = dm
+
+    async def load_datasource_meta(self, session):
+        """Cache datasource metadata (name, protocol) for WebSocket status broadcasts."""
+        from app.models.datasource import DataSource
+        result = await session.execute(select(DataSource))
+        for ds in result.scalars().all():
+            self._ds_meta[ds.id] = {"name": ds.name, "protocol": ds.protocol.value}
+
+    def get_datasource_statuses(self) -> list[dict]:
+        """Return current connection status of all datasources with drivers."""
+        if not self._driver_manager:
+            return []
+        statuses = []
+        for ds_id, driver in self._driver_manager.drivers.items():
+            meta = self._ds_meta.get(ds_id, {})
+            statuses.append({
+                "id": ds_id,
+                "name": meta.get("name", driver.name),
+                "protocol": meta.get("protocol", "unknown"),
+                "connected": driver.connected,
+            })
+        return statuses
 
     def set_session_factory(self, sf: async_sessionmaker[AsyncSession]):
         self._session_factory = sf
@@ -577,7 +603,29 @@ class TagEngine:
                 self._invalidate_snapshot()
                 self._broadcast({"type": "tag_update", "data": changed})
 
+            # Broadcast datasource status changes
+            self._check_datasource_status_changes()
+
             await asyncio.sleep(0.5)
+
+    def _check_datasource_status_changes(self):
+        """Detect and broadcast datasource connection state changes."""
+        if not self._driver_manager:
+            return
+        changed_statuses = []
+        for ds_id, driver in self._driver_manager.drivers.items():
+            last = self._last_ds_status.get(ds_id)
+            if last is None or last != driver.connected:
+                self._last_ds_status[ds_id] = driver.connected
+                meta = self._ds_meta.get(ds_id, {})
+                changed_statuses.append({
+                    "id": ds_id,
+                    "name": meta.get("name", driver.name),
+                    "protocol": meta.get("protocol", "unknown"),
+                    "connected": driver.connected,
+                })
+        if changed_statuses:
+            self._broadcast({"type": "datasource_status", "data": changed_statuses})
 
     def unregister_tag(self, tag_name: str):
         """Remove a tag from the in-memory store (e.g. after deletion via API)."""

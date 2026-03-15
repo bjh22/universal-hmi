@@ -11,17 +11,18 @@
  *   - Sidebar navigation with role-based filtering (operators see fewer pages)
  *   - Alarm banner: scrollable horizontal list of active alarms with color-coded
  *     severity and an "Acknowledge All" button
- *   - WebSocket connection indicator: green = live data, red = stale/disconnected
+ *   - Data source connection indicators: per-source green/red dots showing equipment connectivity
  *   - Collapsible sidebar for more screen real estate
  */
 import { useState, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, TrendingUp, Bell, ClipboardList, BarChart3,
-  Settings, User, Menu, X, Wifi, WifiOff, FolderOpen, CheckCheck,
+  Settings, User, Menu, X, FolderOpen, CheckCheck,
   AlertTriangle, AlertCircle, Info, Cog, LifeBuoy, Wrench,
+  Circle,
 } from 'lucide-react';
-import type { UserData, AlarmData } from '../../types';
+import type { UserData, AlarmData, DatasourceStatus } from '../../types';
 import { api } from '../../lib/api';
 
 interface AppShellProps {
@@ -32,6 +33,7 @@ interface AppShellProps {
   onLogout: () => void;
   navTitle?: string;
   activeProjectName?: string | null;
+  datasourceStatuses?: DatasourceStatus[];
 }
 
 // Declarative navigation config — each item defines its URL path, icon, label,
@@ -63,7 +65,7 @@ function SeverityIcon({ severity }: { severity: AlarmData['severity'] }) {
   }
 }
 
-export function AppShell({ children, user, wsConnected, alarms, onLogout, navTitle = 'HMI', activeProjectName }: AppShellProps) {
+export function AppShell({ children, user, wsConnected, alarms, onLogout, navTitle = 'HMI', activeProjectName, datasourceStatuses = [] }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [ackingAll, setAckingAll] = useState(false);
   const location = useLocation();
@@ -140,17 +142,29 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar */}
         <header className="h-14 bg-[var(--hmi-bg-surface)] border-b border-[var(--hmi-border)] flex items-center px-4 gap-4 shrink-0">
-          {/* Connection status */}
-          <div className="flex items-center gap-1.5">
-            {wsConnected ? (
-              <Wifi size={16} className="text-green-400" />
-            ) : (
-              <WifiOff size={16} className="text-red-400" />
-            )}
-            <span className={`text-xs ${wsConnected ? 'text-green-400' : 'text-red-400'}`}>
-              {wsConnected ? 'Connected' : 'Disconnected'}
-            </span>
-          </div>
+          {/* Data source connection status */}
+          {datasourceStatuses.length > 0 ? (
+            <div className="flex items-center gap-2">
+              {datasourceStatuses.map((ds) => (
+                <div
+                  key={ds.id}
+                  className="flex items-center gap-1.5 px-2 py-1 rounded border border-[var(--hmi-border-subtle)]"
+                  title={`${ds.name} (${ds.protocol}) — ${ds.connected ? 'Connected' : 'Disconnected'}`}
+                >
+                  <Circle
+                    size={8}
+                    className={ds.connected ? 'fill-green-400 text-green-400' : 'fill-red-400 text-red-400'}
+                  />
+                  <span className="text-xs text-[var(--hmi-text-secondary)]">{ds.name}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <Circle size={8} className="fill-[var(--hmi-text-muted)] text-[var(--hmi-text-muted)]" />
+              <span className="text-xs text-[var(--hmi-text-muted)]">No data sources</span>
+            </div>
+          )}
 
           {/* Alarm badges by severity */}
           {criticalCount > 0 && (

@@ -7,12 +7,12 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { TagValue, AlarmData } from '../types';
+import type { TagValue, AlarmData, DatasourceStatus } from '../types';
 import { api } from '../lib/api';
 
 interface WSMessage {
-  type: 'snapshot' | 'tag_update' | 'alarm' | 'alarms_snapshot' | 'keepalive';
-  data?: Record<string, TagValue> | AlarmData | AlarmData[];
+  type: 'snapshot' | 'tag_update' | 'alarm' | 'alarms_snapshot' | 'datasource_status' | 'keepalive';
+  data?: Record<string, TagValue> | AlarmData | AlarmData[] | DatasourceStatus[];
 }
 
 // Reconnection with exponential backoff: if the connection drops, we retry with
@@ -30,6 +30,7 @@ export function useWebSocket() {
   const [tagValues, setTagValues] = useState<Record<string, TagValue>>({});
   const [alarms, setAlarms] = useState<AlarmData[]>([]);
   const [connected, setConnected] = useState(false);
+  const [datasourceStatuses, setDatasourceStatuses] = useState<DatasourceStatus[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<number | null>(null);
   const attemptRef = useRef(0);
@@ -110,6 +111,14 @@ export function useWebSocket() {
           }
           return [alarm, ...prev.slice(0, 99)];
         });
+      } else if (msg.type === 'datasource_status') {
+        const incoming = msg.data as DatasourceStatus[];
+        setDatasourceStatuses((prev) => {
+          // Merge incoming statuses into existing list by id
+          const map = new Map(prev.map(s => [s.id, s]));
+          for (const s of incoming) map.set(s.id, s);
+          return Array.from(map.values());
+        });
       }
     };
 
@@ -155,5 +164,5 @@ export function useWebSocket() {
     };
   }, [connect]);
 
-  return { tagValues, alarms, connected };
+  return { tagValues, alarms, connected, datasourceStatuses };
 }

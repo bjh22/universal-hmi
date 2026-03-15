@@ -199,6 +199,14 @@ export interface DataSourceData {
   config?: Record<string, unknown>;
 }
 
+/** Real-time datasource connection status broadcast via WebSocket */
+export interface DatasourceStatus {
+  id: number;
+  name: string;
+  protocol: string;
+  connected: boolean;
+}
+
 export interface TrendDataPoint {
   timestamp: string;
   value: number | null;
