@@ -384,7 +384,7 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
         </Section>
 
         {/* Tag Binding */}
-        {widget.type !== 'text_label' && widget.type !== 'alarm_summary' && widget.type !== 'multi_value' && widget.type !== 'control_group' && widget.type !== 'auto_fill' && widget.type !== 'container' && widget.type !== 'collapsible_container' && widget.type !== 'cognex_viewer' && widget.type !== 'trend' && (
+        {widget.type !== 'text_label' && widget.type !== 'alarm_summary' && widget.type !== 'multi_value' && widget.type !== 'control_group' && widget.type !== 'auto_fill' && widget.type !== 'container' && widget.type !== 'collapsible_container' && widget.type !== 'cognex_viewer' && widget.type !== 'zebra_printer' && widget.type !== 'trend' && (
           <Section title="Tag Binding">
             <Field label="Tag Name">
               <TagPicker value={p.tag || ''} onChange={v => setProp('tag', v)} />
@@ -581,6 +581,31 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
                 <input type="checkbox" checked={!!p.showTrigger} onChange={e => setProp('showTrigger', e.target.checked)}
                   className="accent-blue-500" />
                 <span className="text-xs text-slate-300">Manual trigger button</span>
+              </label>
+            </Field>
+          </Section>
+        )}
+
+        {widget.type === 'zebra_printer' && (
+          <Section title="Zebra Printer">
+            <Field label="Tag Prefix">
+              <input type="text" value={p.tagPrefix || 'zebra'} onChange={e => setProp('tagPrefix', e.target.value)}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+                placeholder="zebra" />
+            </Field>
+            <p className="text-[10px] text-slate-500 -mt-1">Tags: prefix.status, prefix.paper_out, etc.</p>
+            <Field label="Show Faults">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={p.showFaults !== false} onChange={e => setProp('showFaults', e.target.checked)}
+                  className="accent-blue-500" />
+                <span className="text-xs text-slate-300">Display fault indicators</span>
+              </label>
+            </Field>
+            <Field label="Show Controls">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={!!p.showControls} onChange={e => setProp('showControls', e.target.checked)}
+                  className="accent-blue-500" />
+                <span className="text-xs text-slate-300">Speed, darkness & test label</span>
               </label>
             </Field>
           </Section>

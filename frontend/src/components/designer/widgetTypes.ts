@@ -87,6 +87,11 @@ export const WIDGET_TYPES: WidgetTypeInfo[] = [
     defaultProps: { title: 'Cognex', tagPrefix: 'dataman', showImage: true, showTrigger: false },
   },
   {
+    type: 'zebra_printer', label: 'Zebra Printer', icon: Printer, category: 'display',
+    defaultW: 4, defaultH: 4, defaultAbsW: 300, defaultAbsH: 300,
+    defaultProps: { title: 'Zebra Printer', tagPrefix: 'zebra', showControls: false, showFaults: true },
+  },
+  {
     type: 'text_label', label: 'Text Label', icon: Type, category: 'layout',
     defaultW: 4, defaultH: 1, defaultAbsW: 240, defaultAbsH: 50,
     defaultProps: { title: 'Label', text: 'Text' },

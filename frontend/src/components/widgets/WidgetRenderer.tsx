@@ -32,6 +32,7 @@ import { CollapsibleContainerWidget } from './CollapsibleContainerWidget';
 import { LightIndicator } from './LightIndicator';
 import { AutoFillWidget } from './AutoFillWidget';
 import { CognexViewerWidget } from './CognexViewerWidget';
+import { ZebraPrinterWidget } from './ZebraPrinterWidget';
 import { QRCodeWidget } from './QRCodeWidget';
 import { TrendWidget } from './TrendWidget';
 import { ZplPreviewWidget } from './ZplPreviewWidget';
@@ -67,9 +68,14 @@ function getWidgetTagNames(widget: Widget): string[] {
   if (typeof p.qualityTag === 'string' && p.qualityTag) tags.push(p.qualityTag);
   if (typeof p.oeeTag === 'string' && p.oeeTag) tags.push(p.oeeTag);
   // Cognex viewer — prefix-based tags
-  if (typeof p.tagPrefix === 'string' && p.tagPrefix) {
+  if (widget.type === 'cognex_viewer' && typeof p.tagPrefix === 'string' && p.tagPrefix) {
     const pfx = p.tagPrefix;
     tags.push(`${pfx}.status`, `${pfx}.last_result`, `${pfx}.last_result_time`, `${pfx}.total_reads`);
+  }
+  // Zebra printer — prefix-based tags
+  if (widget.type === 'zebra_printer' && typeof p.tagPrefix === 'string' && p.tagPrefix) {
+    const pfx = p.tagPrefix;
+    tags.push(`${pfx}.status`, `${pfx}.labels_in_queue`, `${pfx}.print_speed`, `${pfx}.darkness`, `${pfx}.head_open`, `${pfx}.paper_out`, `${pfx}.ribbon_out`, `${pfx}.paused`);
   }
   // Multi-value / control_group
   if (Array.isArray(p.tags)) {
@@ -130,6 +136,8 @@ export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, 
       return <ControlGroupWidget title={p.title as string} controls={p.controls as ControlItem[] || []} tagValues={tagValues} columns={p.columns as number} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
     case 'cognex_viewer':
       return <CognexViewerWidget title={p.title as string} tagPrefix={p.tagPrefix as string || 'dataman'} showImage={p.showImage as boolean} showTrigger={p.showTrigger as boolean} tagValues={tagValues} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
+    case 'zebra_printer':
+      return <ZebraPrinterWidget title={p.title as string} tagPrefix={p.tagPrefix as string || 'zebra'} showControls={p.showControls as boolean} showFaults={p.showFaults as boolean} tagValues={tagValues} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
     case 'container':
       return <ContainerWidget title={p.title as string} description={p.description as string} titleStyle={p.titleStyle as undefined} chrome={chrome} />;
     case 'collapsible_container':
