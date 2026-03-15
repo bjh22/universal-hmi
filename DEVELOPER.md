@@ -10,6 +10,9 @@ This guide covers the common development tasks you'll encounter when extending t
 - [Adding a Database Model](#adding-a-database-model)
 - [Creating a Plugin Integration](#creating-a-plugin-integration)
 - [Production & Reporting System](#production--reporting-system)
+- [Internal Nonvolatile Tags](#internal-nonvolatile-tags)
+- [Service Page](#service-page)
+- [ZPL Label Preview](#zpl-label-preview)
 - [Frontend Patterns](#frontend-patterns)
 - [Backend Patterns](#backend-patterns)
 
@@ -857,6 +860,117 @@ Report charts are in `frontend/src/components/reports/`:
 | `StartRunDialog` | Dialog for starting a new production run |
 | `StopRunDialog` | Dialog for stopping a run with tag-driven count info |
 | `DowntimeDialog` | Dialog for manual downtime entry with reason code dropdown |
+
+---
+
+## Internal Nonvolatile Tags
+
+Tags without a data source and without simulation enabled are classified as **internal** tags. Unlike simulation tags (which are volatile), internal tags persist their values across application restarts.
+
+### How persistence works
+
+- The `Tag` model has a `persisted_value` column (JSON-serialized string) that stores the last written value.
+- On startup, the `TagEngine` reads `persisted_value` from the database for all internal tags and restores them into memory.
+- On every write to an internal tag, the new value is asynchronously persisted to the database.
+- Serialization supports `bool`, `int`, `float`, and `string` types.
+
+### Frontend display
+
+Internal tags display as **"Internal"** in the Settings > Tags source column and source filter dropdown, distinguishing them from "Simulation" and data-source-bound tags.
+
+### Use cases
+
+- Operator-settable flags and configuration parameters that survive restarts
+- Persistent counters not tied to PLC hardware
+- Recipe or state values managed entirely within the HMI
+
+---
+
+## Service Page
+
+The Service page (`frontend/src/pages/ServicePage.tsx`) provides manual I/O monitoring and equipment actuation for commissioning and maintenance. It requires the Engineer or Designer role.
+
+### Architecture
+
+The page has two sections:
+
+**I/O Monitor** — Live read-only display of all tags with the "Input" or "Output" label. Tags are split into separate Input and Output columns with real-time value updates via WebSocket. Displays engineering units and enum mappings.
+
+**Service Controls** — All tags with the "Service" label, grouped by their additional labels. Each tag is presented as an interactive control with one of three modes:
+
+| Mode | Behavior | Use case |
+|------|----------|----------|
+| `momentary` (default) | Press to send `true`, release to send `false` | Solenoids, valves, cylinders |
+| `toggle` | Click to alternate between `true` and `false` | Pumps, motors |
+| `numeric` / `string` / `enum` | Text input, numeric keypad, or dropdown | Setpoints, parameters |
+
+### Configuration API
+
+Service page settings (per-tag mode overrides and group ordering) are stored in the `app_settings` table under the key `service.config`.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/service/config/` | Get current service page configuration |
+| PUT | `/api/service/config/` | Update configuration (mode overrides, ordering) |
+
+### Adding tags to the Service page
+
+Tags appear on the Service page based on their labels:
+- **"Input"** label → I/O Monitor (Input column)
+- **"Output"** label → I/O Monitor (Output column)
+- **"Service"** label → Service Controls (grouped by additional labels)
+
+Assign labels in Settings > Tags (bulk operations supported).
+
+---
+
+## ZPL Label Preview
+
+The ZPL preview system renders Zebra Programming Language (ZPL) label templates as PNG images entirely offline using Pillow. It includes both a standalone preview page and a designer widget.
+
+### Backend renderer
+
+The renderer (`backend/app/services/zpl_renderer.py`) parses ZPL commands and draws them onto a Pillow `Image`:
+
+| Feature | ZPL Commands |
+|---------|-------------|
+| Text | `^FD`, `^A` (fonts), `^CF` (default font), `^FB` (field blocks), `^FH` (hex escapes) |
+| Barcodes | `^BC` (Code 128), `^B3` (Code 39) with rotation support |
+| QR Codes | `^BQ` |
+| Graphics | `^GB` (boxes), `^GC` (circles), `^GD` (diagonals), `^GF` (graphic fields) |
+| Positioning | `^FO` (field origin), `^FT` (field typeset), `^FW` (rotation) |
+| Effects | `^FR` (field reverse), `^LR` (label reverse with XOR compositing) |
+| Compressed graphics | `:Z64:` and `:B64:` encoded graphic fields (base64+zlib) |
+
+The renderer uses the **CG Triumvirate Condensed Bold** font (bundled as a 45KB TTF) to match real Zebra printers, with Liberation Sans as a cross-platform fallback.
+
+### API endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/zpl-preview/render` | Render ZPL text to PNG (JSON body: `{ zpl, dpi }`) |
+| POST | `/api/zpl-preview/render-file` | Render uploaded ZPL file to PNG (multipart form + DPI) |
+
+Both endpoints return a PNG blob. Supported DPI values: 152, 203, 300, 600.
+
+### Standalone page
+
+`ZplPreviewPage.tsx` is accessible via Support > ZPL Preview. It provides a text editor and file upload (with drag-and-drop) for entering ZPL, a DPI selector, a live preview pane, and a download button for the rendered PNG.
+
+### Designer widget
+
+The `zpl_preview` widget type allows embedding a live ZPL preview in any dashboard screen:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `tag` | string | Tag name for dynamic ZPL content |
+| `staticZpl` | string | Fallback ZPL if no tag is bound |
+| `dpi` | number | Label density (default: 203) |
+| `refreshOnTagChange` | boolean | Auto-refresh when the bound tag value changes |
+
+### Dependencies
+
+The ZPL renderer requires three additional Python packages: `Pillow`, `python-barcode`, and `qrcode` (all listed in `requirements.txt`).
 
 ---
 

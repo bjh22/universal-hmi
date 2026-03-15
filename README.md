@@ -25,7 +25,7 @@ A web-based Human-Machine Interface (HMI) for industrial automation. Connects to
 - Real-time value display via WebSocket (500 ms update cycle)
 - Drag-and-drop screen designer with widget palette, property panel, undo/redo, copy/paste, z-order, and grid snapping
 - Two layout modes: responsive 12-column grid and pixel-perfect absolute positioning (for panel PCs)
-- Widget types: status indicators, gauges, counters, toggles, command buttons, parameter inputs, text labels, OEE display, alarm summary, multi-value groups, dropdown selects
+- Widget types: status indicators, gauges, counters, toggles, command buttons, parameter inputs, text labels, OEE display, alarm summary, multi-value groups, dropdown selects, trend charts, ZPL label previews
 - Per-widget font/style customization (font family, size, weight, color, italic)
 - Per-widget visibility and enabled conditions (tag-based, role-based, or combined)
 - Alarm management with boolean triggers, acknowledgment, filtering, sorting, and history
@@ -38,6 +38,9 @@ A web-based Human-Machine Interface (HMI) for industrial automation. Connects to
 - Role-based access control (Operator, Supervisor, Engineer, Designer)
 - Auto-logout on inactivity (30 minutes)
 - Audit trail for all configuration changes with search and export
+- Internal nonvolatile tags with persistent values that survive restarts (no PLC required)
+- Service page for manual I/O monitoring and equipment actuation (momentary, toggle, numeric modes)
+- Offline ZPL label preview with standalone page and designer widget (Pillow-based rendering)
 - Multi-protocol PLC drivers (OPC UA, Modbus, EtherNet/IP, MQTT, simulation)
 - CSV export on all data pages (alarms, trends, reports, audit)
 - Screen versioning with automatic snapshots on every save
@@ -119,7 +122,8 @@ All platforms have the same commands — just use the script that matches your s
 | Command | Description |
 |---------|-------------|
 | `install` | Install all dependencies (pip + npm; offline if `backend/wheels/` exists) |
-| `dev` | Start backend (:8080) and frontend (:5173) dev servers |
+| `dev` | Start backend (:8080) and frontend (:5173) dev servers (auto-kills existing processes) |
+| `stop` | Stop any running dev servers on ports 8080 and 5173 |
 | `build` | TypeScript check + Vite production build |
 | `lint` | Run ESLint on the frontend |
 | `check` | Run both build and lint |
@@ -175,7 +179,8 @@ The sidebar provides access to all pages. Pages are filtered by role — operato
 | **Projects** | Configuration bundles — export, import, switch | Engineer |
 | **Settings** | Tags, data sources, integrations, users, branding, audit trail | Engineer |
 | **Factory Config** | Touch-friendly parameter editing for commissioning | Operator (view) / Engineer (edit) |
-| **Support** | System info, application logs, software updates | Operator |
+| **Service** | Manual I/O monitoring and equipment actuation | Engineer |
+| **Support** | System info, application logs, ZPL label preview | Operator |
 
 The **Connected** indicator in the header shows real-time WebSocket status. Green means live data is flowing. The alarm banner at the top scrolls active alarms with color-coded severity and an "Acknowledge All" button.
 
@@ -226,6 +231,8 @@ Screens are the main way to visualize and interact with your process. Only users
 | **Display** | Alarm Summary | Embedded list of active alarms |
 | **Display** | Multi-Value | Groups multiple tag values in a single card |
 | **Display** | OEE | Overall Equipment Effectiveness display with availability, performance, quality |
+| **Display** | Trend Chart | Embedded historical trend for selected tags with configurable time range and refresh |
+| **Display** | ZPL Preview | Renders a ZPL label template (from a tag or static text) as a live image preview |
 | **Input** | Toggle | ON/OFF switch bound to a boolean tag |
 | **Input** | Command Button | Executes a Python script action (e.g., start/stop machine, reset counters) |
 | **Input** | Parameter Input | Numeric or text input with validation and range limits |
@@ -380,6 +387,7 @@ For Allen-Bradley SLC 500 / MicroLogix PLCs.
 - Enable **trending** to start recording historical data.
 - Enable **alarms** and set severity, trigger condition, and message.
 - Enable **simulation** for testing without a real PLC (sine, ramp, random, toggle, enum cycle).
+- Tags without a data source or simulation are treated as **internal nonvolatile tags** — their values persist across application restarts and can be used as operator-settable flags, counters, or configuration parameters.
 - Use **bulk operations** to update, label, or delete multiple tags at once.
 
 ---
@@ -615,6 +623,33 @@ The Factory Config page provides a simplified, touch-friendly interface for view
 
 ---
 
+### Service Page
+
+The Service page provides manual I/O monitoring and equipment actuation for commissioning and maintenance. Requires **Engineer** or **Designer** role.
+
+#### I/O Monitor
+
+The top section displays all tags labeled "Input" or "Output" in a live read-only view, split into Input and Output columns. Values update in real time via WebSocket, showing engineering units and enum mappings.
+
+#### Service Controls
+
+Below the I/O monitor, all tags labeled "Service" are grouped by their additional labels and presented as interactive controls:
+
+- **Momentary** (default) — Press and hold to send `true`, release to send `false`. Used for solenoids, valves, and cylinders.
+- **Toggle** — Click to alternate between `true` and `false`. Used for pumps and motors.
+- **Numeric/String/Enum** — Text or numeric input with on-screen keypads for touchscreen use.
+
+#### Configure Mode
+
+Engineers can click **Configure** to enter edit mode, where they can:
+- Override the default control mode for individual tags (momentary vs toggle).
+- Reorder controls within groups using arrow buttons.
+- Settings are persisted server-side.
+
+> **Note:** Only tags with the "Service", "Input", or "Output" labels appear on this page. Assign labels in Settings > Tags.
+
+---
+
 ### Support and Diagnostics
 
 The Support page provides system monitoring, log viewing, and software update management.
@@ -630,6 +665,16 @@ The first tab shows a customizable support dashboard screen. Designers can add w
 3. Filter by log level: **DEBUG**, **INFO**, **WARNING**, **ERROR**, **CRITICAL**.
 4. Search logs by keyword.
 5. Enable **Auto-refresh** to stream new log entries as they arrive.
+
+#### ZPL Label Preview
+
+1. Switch to the **ZPL Preview** tab.
+2. Enter ZPL code in the text editor or upload a `.zpl` file (drag-and-drop supported).
+3. Select a **DPI** (152, 203, 300, or 600) to match your target printer.
+4. The label is rendered as a PNG image in the preview pane using the backend's offline renderer (Pillow-based, no internet required).
+5. Click **Download** to save the rendered image.
+
+The renderer supports text (`^FD`, `^A`, `^FB`), barcodes (Code 128, Code 39), QR codes (`^BQ`), graphics (`^GB`, `^GC`, `^GD`, `^GF`), rotation (`^FW`), reverse fields (`^FR`, `^LR`), hex escapes (`^FH`), and compressed graphic fields (`:Z64:`, `:B64:`).
 
 #### Software Update
 
@@ -1105,7 +1150,7 @@ universal-hmi/
 │   │   ├── drivers/       # PLC protocol drivers (opcua, modbus, ethernet_ip, mqtt) + driver_manager
 │   │   ├── models/        # SQLAlchemy models
 │   │   ├── integrations/  # Plugin integrations (zebra_printer, cognex_dataman, ftp_hot_folder)
-│   │   ├── services/      # Tag engine, alarm service, trend service, script engine
+│   │   ├── services/      # Tag engine, alarm service, trend service, script engine, ZPL renderer
 │   │   ├── main.py        # FastAPI app entry point
 │   │   └── seed.py        # Database seed script
 │   ├── requirements.txt
@@ -1115,6 +1160,7 @@ universal-hmi/
 │   │   ├── components/
 │   │   │   ├── designer/  # Screen editor UI (palette, canvas, toolbar, property panel)
 │   │   │   ├── layout/    # App shell, navigation
+│   │   │   ├── reports/   # Production report components and charts
 │   │   │   └── widgets/   # Runtime widget components
 │   │   ├── hooks/         # useAuth, useWebSocket, useDesignMode
 │   │   ├── lib/           # API client, utilities
@@ -1209,6 +1255,20 @@ universal-hmi/
 | POST | `/api/users/` | Create a user |
 | PUT | `/api/users/{id}` | Update a user |
 | DELETE | `/api/users/{id}` | Delete a user |
+
+### Service Config
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/service/config/` | Get service page configuration (control modes, ordering) |
+| PUT | `/api/service/config/` | Update service page configuration |
+
+### ZPL Preview
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/zpl-preview/render` | Render ZPL text to PNG (JSON body: `{ zpl, dpi }`) |
+| POST | `/api/zpl-preview/render-file` | Render uploaded ZPL file to PNG (multipart form + DPI) |
 
 ### WebSocket
 
