@@ -287,13 +287,105 @@ function EnumMappingEditor({ mapping, onChange }: {
   );
 }
 
-function parseAlarmConfig(raw: unknown): { type: string; trigger_on: boolean; severity: string; message: string } {
-  const defaults = { type: 'boolean', trigger_on: true, severity: 'warning', message: '' };
+function parseAlarmConfig(raw: unknown): { type: string; trigger_on: boolean; severity: string; message: string; help_image: string; help_text: string; help_enabled: boolean } {
+  const defaults = { type: 'boolean', trigger_on: true, severity: 'warning', message: '', help_image: '', help_text: '', help_enabled: false };
   if (!raw) return defaults;
   try {
     const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
     return { ...defaults, ...(parsed as Record<string, unknown>) };
   } catch { return defaults; }
+}
+
+// ─── Fault Help Config (inside alarm section) ───
+function FaultHelpConfig({ alarmConfig, setAlarmField }: {
+  alarmConfig: Record<string, unknown> | null;
+  setAlarmField: (field: string, value: string | boolean) => void;
+}) {
+  const config = parseAlarmConfig(alarmConfig);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const result = await api.uploadFaultHelpMedia(file);
+      setAlarmField('help_image', result.media_id);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  }, [setAlarmField]);
+
+  return (
+    <div className="mt-3 space-y-2">
+      <label className="flex items-center gap-2 text-sm text-[var(--hmi-text-secondary)] cursor-pointer">
+        <input
+          type="checkbox"
+          checked={!!config.help_enabled}
+          onChange={e => setAlarmField('help_enabled', e.target.checked)}
+          className="accent-blue-500"
+        />
+        Show help dialog on fault
+      </label>
+      {config.help_enabled && (
+        <div className="space-y-2 pl-5">
+          <div>
+            <label className="text-xs text-[var(--hmi-text-secondary)] block mb-1">Help Image (GIF, PNG, JPG)</label>
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/png,image/jpeg,image/gif,image/webp"
+                onChange={handleUpload}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={uploading}
+                className="flex items-center gap-1.5 px-3 py-1 text-xs rounded border border-[var(--hmi-border)] text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)] hover:bg-[var(--hmi-bg-base)] disabled:opacity-50"
+              >
+                {uploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                {uploading ? 'Uploading...' : 'Upload Image'}
+              </button>
+              {config.help_image && (
+                <button
+                  type="button"
+                  onClick={() => setAlarmField('help_image', '')}
+                  className="text-xs text-red-400 hover:text-red-300"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+            {config.help_image && (
+              <div className="mt-2 p-1 bg-[var(--hmi-bg-base)] border border-[var(--hmi-border)] rounded inline-block">
+                <img
+                  src={`/api/media/${config.help_image}`}
+                  alt="Help preview"
+                  className="max-w-[200px] max-h-[120px] object-contain rounded"
+                />
+              </div>
+            )}
+          </div>
+          <div>
+            <label className="text-xs text-[var(--hmi-text-secondary)] block mb-1">Help Instructions</label>
+            <textarea
+              value={config.help_text || ''}
+              onChange={e => setAlarmField('help_text', e.target.value)}
+              placeholder="Step-by-step troubleshooting instructions..."
+              rows={3}
+              className="w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded px-2 py-1.5 text-sm text-[var(--hmi-text-primary)] placeholder-[var(--hmi-text-muted)] resize-y"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── Tag Edit Dialog ───
@@ -307,7 +399,7 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
   const [form, setForm] = useState(tag);
   const set = useCallback(<K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm(f => ({ ...f, [k]: v })), []);
-  const setAlarmField = useCallback((field: string, value: string) => {
+  const setAlarmField = useCallback((field: string, value: string | boolean) => {
     setForm(f => {
       const current = parseAlarmConfig(f.alarm_config);
       return { ...f, alarm_config: JSON.stringify({ ...current, [field]: value }) as unknown as Record<string, unknown> | null };
@@ -512,6 +604,9 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
                   </select>
                 </Field>
               </div>
+            )}
+            {form.data_type === 'bool' && form.alarm_enabled && (
+              <FaultHelpConfig alarmConfig={form.alarm_config} setAlarmField={setAlarmField} />
             )}
           </fieldset>
 

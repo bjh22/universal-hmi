@@ -29,6 +29,7 @@ A web-based Human-Machine Interface (HMI) for industrial automation. Connects to
 - Per-widget font/style customization (font family, size, weight, color, italic)
 - Per-widget visibility and enabled conditions (tag-based, role-based, or combined)
 - Alarm management with boolean triggers, acknowledgment, filtering, sorting, and history
+- Fault help dialog — auto-popup with images/animated GIFs and troubleshooting steps when alarms trigger
 - Trend charting with configurable time ranges, saved views, and CSV export
 - Job/recipe management with setpoint editing, download guards, version history, and upload-from-machine
 - Production reporting with tag-driven OEE, time-series analytics, downtime Pareto, managed reason codes, and automatic shift scheduling
@@ -428,6 +429,24 @@ For Allen-Bradley SLC 500 / MicroLogix PLCs.
    - **Message**: Custom alarm text displayed to operators.
 
 > **Note**: Analog threshold alarming (high/low limits) is handled on the PLC side and reported to the HMI as boolean fault flags.
+
+#### Fault Help Dialog
+
+When configured, a help dialog automatically pops up when an alarm triggers, showing an image or animated GIF with troubleshooting instructions to guide the operator.
+
+1. Go to **Settings** > **Tags** and click on a boolean tag with alarms enabled.
+2. In the alarm configuration section, check **Show help dialog on fault**.
+3. Click **Upload Image** to attach a help image (PNG, JPG, GIF, or WEBP, max 10 MB). Animated GIFs are supported for step-by-step visual guides.
+4. Optionally enter **Help Instructions** with text-based troubleshooting steps.
+5. Save the tag.
+
+When the alarm triggers, operators see a dialog with:
+- The alarm severity and message
+- The uploaded help image/GIF
+- The troubleshooting instructions
+- **Acknowledge** and **Dismiss** buttons
+
+The dialog shows once per alarm instance. If multiple alarms trigger simultaneously, the highest-severity alarm is shown first. Dismissing the dialog does not acknowledge the alarm — use the **Acknowledge** button or the Alarms page to acknowledge.
 
 ---
 

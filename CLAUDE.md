@@ -174,6 +174,10 @@ Environment variables prefixed with `HMI_` (or `.env` file):
 | POST | `/api/reason-codes/` | Create a reason code |
 | PUT | `/api/reason-codes/{id}` | Update a reason code |
 | DELETE | `/api/reason-codes/{id}` | Soft-delete a reason code |
+| POST | `/api/media/upload` | Upload fault help image (multipart) |
+| GET | `/api/media/{media_id}` | Serve a fault help image |
+| GET | `/api/media/` | List uploaded fault help images |
+| DELETE | `/api/media/{media_id}` | Delete a fault help image |
 | WS | `/ws` | Real-time tag values + alarms |
 
 **WebSocket messages:** `snapshot` (initial), `tag_update` (deltas), `alarm` (state changes), `keepalive` (30s)
@@ -181,7 +185,7 @@ Environment variables prefixed with `HMI_` (or `.env` file):
 ## Key Backend Services
 
 - **TagEngine** (`services/tag_engine.py`): In-memory tag store, simulation engine (sine/ramp/random/toggle/enum_cycle), 500ms update cycle, publishes to WebSocket subscribers. Internal tags (no data source, no simulation) are nonvolatile — values are persisted to the database via `persisted_value` column and restored on startup
-- **AlarmService** (`services/alarm_service.py`): Boolean alarm evaluation — each alarm-enabled tag is compared against its `trigger_on` value (default `true`). Analog threshold alarming is handled on the PLC side and reported to the HMI as boolean fault flags. State machine with four states: `active_unacked`, `active_acked`, `inactive_unacked` (alarm clears before acknowledgment), `inactive` (cleared). History recording. Supports external callbacks (e.g., ProductionService) via `add_alarm_callback()`.
+- **AlarmService** (`services/alarm_service.py`): Boolean alarm evaluation — each alarm-enabled tag is compared against its `trigger_on` value (default `true`). Analog threshold alarming is handled on the PLC side and reported to the HMI as boolean fault flags. State machine with four states: `active_unacked`, `active_acked`, `inactive_unacked` (alarm clears before acknowledgment), `inactive` (cleared). History recording. Supports external callbacks (e.g., ProductionService) via `add_alarm_callback()`. Includes a `_help_cache` for fault help dialog data (image/text) broadcast via WebSocket.
 - **ProductionService** (`services/production_service.py`): Monitors active production runs against live machine data. On run start, captures counter tag value; on run stop, computes good count delta. Listens for alarm events via AlarmService callbacks to auto-increment reject counts (from configurable fault tags) and auto-create/close downtime events (from configurable downtime alarm tags). Includes an optional shift scheduler that auto-starts/stops runs at configured shift boundaries (30s polling loop, handles overnight shifts). Production settings (tag bindings, shift schedule) stored in `app_settings` table.
 - **TrendService** (`services/trend_service.py`): Time-series sampling, 90-day retention
 - **ScriptEngine** (`services/script_engine.py`): Sandboxed Python execution for button actions (5s timeout, restricted builtins)
@@ -241,8 +245,10 @@ See `DEVELOPER.md` → "Creating a Plugin Integration" for a full walkthrough wi
 - `backend/app/services/zpl_renderer.py` — Offline ZPL-to-PNG rendering engine
 - `backend/app/api/service_config.py` — Service page configuration API
 - `backend/app/api/zpl_preview.py` — ZPL preview rendering API
+- `backend/app/api/media.py` — Fault help image upload/serve/delete API
 - `backend/app/integrations/base.py` — Integration plugin base class
 - `backend/app/integrations/manager.py` — Plugin discovery and lifecycle management
+- `frontend/src/components/FaultHelpDialog.tsx` — Auto-popup dialog for fault troubleshooting with image/GIF
 
 ## Database Tables
 
