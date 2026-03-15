@@ -151,14 +151,14 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
           {tab === 'active' && unackedCount > 0 && (
             <button
               onClick={handleAckAll}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600/20 text-green-400 hover:bg-green-600/30 rounded-lg text-sm font-medium"
+              className="flex items-center gap-1.5 px-4 py-2.5 min-h-[44px] bg-green-600/20 text-green-400 hover:bg-green-600/30 rounded-lg text-sm font-medium"
             >
               <CheckCheck size={16} /> Acknowledge All ({unackedCount})
             </button>
           )}
           <button
             onClick={exportCsv}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm font-medium"
+            className="flex items-center gap-1.5 px-4 py-2.5 min-h-[44px] bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm font-medium"
           >
             <Download size={16} /> Export CSV
           </button>
@@ -166,10 +166,10 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-4">
+      <div className="flex gap-2 mb-4">
         <button
           onClick={() => setTab('active')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+          className={`px-4 py-2.5 min-h-[44px] rounded-lg text-sm font-medium transition-colors ${
             tab === 'active' ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
           }`}
         >
@@ -177,7 +177,7 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
         </button>
         <button
           onClick={() => setTab('history')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+          className={`px-4 py-2.5 min-h-[44px] rounded-lg text-sm font-medium transition-colors ${
             tab === 'history' ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
           }`}
         >
@@ -243,7 +243,7 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
               {(alarm.state === 'active_unacked' || alarm.state === 'inactive_unacked') && (
                 <button
                   onClick={() => alarm.id && handleAck(alarm.id)}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md text-xs text-slate-200"
+                  className="flex items-center gap-1 px-4 py-2.5 min-h-[44px] bg-slate-700 hover:bg-slate-600 rounded-md text-xs text-slate-200"
                 >
                   <Check size={14} /> Acknowledge
                 </button>

@@ -42,16 +42,16 @@ export function ToggleWidget({ title, tag, tagValues, titleStyle, valueStyle, ch
           When value is true, the track turns green; when false, it's gray. */}
       <button
         onClick={handleToggle}
-        className={`w-16 h-8 rounded-full transition-colors relative ${
+        className={`w-20 h-11 rounded-full transition-colors relative ${
           value ? 'bg-green-500' : 'bg-slate-600'
         }`}
       >
         {/* The toggle knob — `transition-transform` animates the position change.
-            When value is true, the knob slides to the right (left-9); when false,
-            it sits on the left (left-1). The browser smoothly animates between these. */}
+            When value is true, the knob slides to the right; when false,
+            it sits on the left. The browser smoothly animates between these. */}
         <span
-          className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-transform shadow-md ${
-            value ? 'left-9' : 'left-1'
+          className={`absolute top-1.5 w-8 h-8 bg-white rounded-full transition-transform shadow-md ${
+            value ? 'left-[2.75rem]' : 'left-1.5'
           }`}
         />
       </button>

@@ -37,7 +37,7 @@ export function DropdownSelectWidget({ title, tag, tagValues, options = [], titl
       <select
         value={currentIdx >= 0 ? currentIdx : ''}
         onChange={handleChange}
-        className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-base text-white outline-none focus:border-blue-500"
+        className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 min-h-[44px] text-base text-white outline-none focus:border-blue-500"
         style={textStyleToCSS(valueStyle)}
       >
         {currentIdx < 0 && <option value="" disabled>{currentValue != null ? String(currentValue) : '—'}</option>}

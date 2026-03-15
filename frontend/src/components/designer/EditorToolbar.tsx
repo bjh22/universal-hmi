@@ -34,7 +34,7 @@ export function EditorToolbar({
   const isAbsolute = layoutMode === 'absolute';
   const gridSizes = isAbsolute ? ABS_GRID_SIZES : GRID_SIZES;
   return (
-    <div className="h-10 bg-slate-900 border-b border-slate-700 flex items-center px-3 gap-2 shrink-0">
+    <div className="h-12 bg-slate-900 border-b border-slate-700 flex items-center px-3 gap-2 shrink-0">
       {/* Screen name + dirty indicator */}
       <div className="flex items-center gap-1.5 mr-3">
         <span className="text-sm font-medium text-slate-300">{screenName}</span>
@@ -54,7 +54,7 @@ export function EditorToolbar({
       <button
         onClick={onSaveAndExit}
         disabled={!dirty}
-        className="px-2 py-1 rounded text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className="px-3 py-1.5 min-h-[36px] rounded text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
       >
         Save & Exit
       </button>
@@ -79,7 +79,7 @@ export function EditorToolbar({
       <select
         value={gridSettings.cellSize}
         onChange={e => onGridSettingsChange({ cellSize: Number(e.target.value) })}
-        className="bg-slate-800 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-slate-300"
+        className="bg-slate-800 border border-slate-600 rounded px-2 py-1 min-h-[36px] text-xs text-slate-300"
         title="Grid cell size"
       >
         {gridSizes.map(s => (
@@ -104,7 +104,7 @@ export function EditorToolbar({
       {/* Discard & Exit */}
       <button
         onClick={onDiscard}
-        className="px-2 py-1 rounded text-xs text-slate-400 hover:text-red-400 hover:bg-red-600/10 transition-colors"
+        className="px-3 py-1.5 min-h-[36px] rounded text-xs text-slate-400 hover:text-red-400 hover:bg-red-600/10 transition-colors"
       >
         Discard
       </button>
@@ -124,7 +124,7 @@ function ToolbarButton({ icon: Icon, title, onClick, disabled, active }: {
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={`p-1.5 rounded transition-colors ${
+      className={`p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded transition-colors ${
         active ? 'bg-blue-600/20 text-blue-400' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
       } disabled:opacity-30 disabled:cursor-not-allowed`}
     >
