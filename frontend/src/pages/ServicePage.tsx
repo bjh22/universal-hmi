@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Wrench, ChevronDown, ChevronRight, Tag as TagIcon, Pencil, Save, X, ArrowUp, ArrowDown } from 'lucide-react';
+import { Wrench, ChevronDown, ChevronRight, Tag as TagIcon, Pencil, Save, X, ArrowUp, ArrowDown, PanelRightOpen, PanelRightClose } from 'lucide-react';
 import { api } from '../lib/api';
 import { getTagDisplayName } from '../lib/tagDisplayName';
 import { NumericKeypad, AlphaKeyboard } from '../components/widgets/TouchInput';
@@ -183,6 +183,20 @@ export function ServicePage({ user, tagValues }: Props) {
   const [editOrder, setEditOrder] = useState<Record<string, string[]>>({});
   const [saving, setSaving] = useState(false);
 
+  // IO sidebar state with localStorage persistence
+  const [ioSidebarOpen, setIoSidebarOpen] = useState<boolean>(() => {
+    const saved = localStorage.getItem('hmi_service_io_sidebar');
+    return saved !== null ? saved === 'true' : true;
+  });
+
+  const toggleIoSidebar = useCallback(() => {
+    setIoSidebarOpen(prev => {
+      const next = !prev;
+      localStorage.setItem('hmi_service_io_sidebar', String(next));
+      return next;
+    });
+  }, []);
+
   const canAccess = ['engineer', 'designer'].includes(user?.role || '');
 
   const loadTags = useCallback(async () => {
@@ -358,217 +372,275 @@ export function ServicePage({ user, tagValues }: Props) {
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <Wrench size={28} className="text-slate-400" />
-        <div className="flex-1">
-          <h1 className="text-2xl font-semibold text-white">Service</h1>
-          <p className="text-sm text-slate-400">Manual actuation and I/O monitoring</p>
-        </div>
-        {!editMode && (
-          <button
-            onClick={enterEditMode}
-            className="flex items-center gap-2 px-4 py-2 text-sm bg-slate-700 text-slate-200 rounded-lg hover:bg-slate-600 transition-colors"
-          >
-            <Pencil size={16} />
-            Configure
-          </button>
-        )}
-        {editMode && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={cancelEdit}
-              className="flex items-center gap-2 px-4 py-2 text-sm bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors"
-            >
-              <X size={16} />
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-50 transition-colors"
-            >
-              <Save size={16} />
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* I/O Monitor */}
-      <div className="mb-8 sticky top-0 z-10 bg-slate-800 pb-2 -mx-6 px-6 -mt-2 pt-2">
-        <h2 className="text-lg font-medium text-slate-300 mb-3">I/O Monitor</h2>
-        {inputTags.length === 0 && outputTags.length === 0 ? (
-          <div className="text-center py-10">
-            <TagIcon size={32} className="mx-auto mb-3 text-slate-600" />
-            <p className="text-sm text-slate-400">
-              No I/O tags found. Add the <span className="text-blue-400 font-medium">{INPUT_LABEL}</span> or <span className="text-blue-400 font-medium">{OUTPUT_LABEL}</span> label to tags in Settings.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Inputs */}
-            <IOPanel label="Inputs" emptyLabel={INPUT_LABEL} tags={orderedInputTags} tagValues={tagValues}
-              editMode={editMode} onMove={(name, dir) => moveIOTag('_io_inputs', orderedInputTags, name, dir)} />
-            {/* Outputs */}
-            <IOPanel label="Outputs" emptyLabel={OUTPUT_LABEL} tags={orderedOutputTags} tagValues={tagValues}
-              editMode={editMode} onMove={(name, dir) => moveIOTag('_io_outputs', orderedOutputTags, name, dir)} />
-          </div>
-        )}
-      </div>
-
-      {/* Service Controls */}
-      <div>
-        <h2 className="text-lg font-medium text-slate-300 mb-3">Service Controls</h2>
-        {serviceTags.length === 0 ? (
-          <div className="text-center py-10">
-            <TagIcon size={32} className="mx-auto mb-3 text-slate-600" />
-            <p className="text-sm text-slate-400">
-              No service controls found. Add the <span className="text-blue-400 font-medium">{SERVICE_LABEL}</span> label to tags in Settings.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-            {serviceGroups.map(({ group, tags: groupTags }) => (
-              <div key={group}>
+    <>
+      <div className="flex h-full -m-4 overflow-hidden relative">
+        {/* Main content area */}
+        <div className="flex-1 overflow-y-auto p-6 min-w-0">
+          <div className="max-w-5xl">
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-6">
+              <Wrench size={28} className="text-slate-400" />
+              <div className="flex-1">
+                <h1 className="text-2xl font-semibold text-white">Service</h1>
+                <p className="text-sm text-slate-400">Manual actuation and I/O monitoring</p>
+              </div>
+              {/* IO sidebar toggle */}
+              <button
+                onClick={toggleIoSidebar}
+                className="flex items-center gap-2 px-3 py-2 min-h-[48px] text-sm bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors"
+                title={ioSidebarOpen ? 'Hide I/O Monitor' : 'Show I/O Monitor'}
+              >
+                {ioSidebarOpen ? <PanelRightClose size={18} /> : <PanelRightOpen size={18} />}
+                <span className="hidden sm:inline">I/O</span>
+              </button>
+              {!editMode && (
                 <button
-                  onClick={() => toggleGroup(group)}
-                  className="flex items-center gap-2 w-full py-3 min-h-[48px] text-sm font-medium text-slate-400 hover:text-slate-200 active:bg-slate-700/50 transition-colors rounded-lg"
+                  onClick={enterEditMode}
+                  className="flex items-center gap-2 px-4 py-2 text-sm bg-slate-700 text-slate-200 rounded-lg hover:bg-slate-600 transition-colors"
                 >
-                  {collapsed.has(group) ? <ChevronRight size={20} /> : <ChevronDown size={20} />}
-                  {group}
-                  <span className="text-slate-500 ml-1">({groupTags.length})</span>
+                  <Pencil size={16} />
+                  Configure
                 </button>
-                {!collapsed.has(group) && (
-                  <div className="space-y-2">
-                    {groupTags.map((tag, tagIdx) => {
-                      const liveValue = tagValues[tag.name]?.value;
-                      const isBool = tag.data_type === 'bool';
-                      const isWritable = tag.access_mode === 'write' || tag.access_mode === 'read_write';
-                      const mode = getMode(tag.name);
+              )}
+              {editMode && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={cancelEdit}
+                    className="flex items-center gap-2 px-4 py-2 text-sm bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors"
+                  >
+                    <X size={16} />
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-50 transition-colors"
+                  >
+                    <Save size={16} />
+                    {saving ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
+              )}
+            </div>
 
-                      // Enum mapping
-                      let enumMap: Record<string, string> | null = null;
-                      if (tag.enum_mapping) {
-                        try { enumMap = typeof tag.enum_mapping === 'string' ? JSON.parse(tag.enum_mapping) : tag.enum_mapping; } catch { /* ignore */ }
-                      }
-                      const hasEnum = enumMap && Object.keys(enumMap).length > 0;
+            {/* Service Controls */}
+            <div>
+              <h2 className="text-lg font-medium text-slate-300 mb-3">Service Controls</h2>
+              {serviceTags.length === 0 ? (
+                <div className="text-center py-10">
+                  <TagIcon size={32} className="mx-auto mb-3 text-slate-600" />
+                  <p className="text-sm text-slate-400">
+                    No service controls found. Add the <span className="text-blue-400 font-medium">{SERVICE_LABEL}</span> label to tags in Settings.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                  {serviceGroups.map(({ group, tags: groupTags }) => (
+                    <div key={group}>
+                      <button
+                        onClick={() => toggleGroup(group)}
+                        className="flex items-center gap-2 w-full py-3 min-h-[48px] text-sm font-medium text-slate-400 hover:text-slate-200 active:bg-slate-700/50 transition-colors rounded-lg"
+                      >
+                        {collapsed.has(group) ? <ChevronRight size={20} /> : <ChevronDown size={20} />}
+                        {group}
+                        <span className="text-slate-500 ml-1">({groupTags.length})</span>
+                      </button>
+                      {!collapsed.has(group) && (
+                        <div className="space-y-2">
+                          {groupTags.map((tag, tagIdx) => {
+                            const liveValue = tagValues[tag.name]?.value;
+                            const isBool = tag.data_type === 'bool';
+                            const isWritable = tag.access_mode === 'write' || tag.access_mode === 'read_write';
+                            const mode = getMode(tag.name);
 
-                      return (
-                        <div key={tag.name} className="bg-slate-900 rounded-lg border border-slate-700 flex items-center justify-between px-4 py-2 min-h-[48px] text-base">
-                          <span className="text-slate-300 mr-3">
-                            {tag.display_name || tag.name}
-                            {tag.engineering_units && (
-                              <span className="text-slate-500 ml-1">({tag.engineering_units})</span>
-                            )}
-                          </span>
-                          <div className="flex-shrink-0">
-                            {editMode ? (
-                              <div className="flex items-center gap-2">
-                                {isBool && isWritable && (
-                                  <select
-                                    value={mode}
-                                    onChange={e => setTagMode(tag.name, e.target.value as 'momentary' | 'toggle')}
-                                    className="bg-slate-700 border border-slate-600 rounded-md px-2 py-1.5 text-sm text-white"
-                                  >
-                                    <option value="momentary">Momentary</option>
-                                    <option value="toggle">Toggle</option>
-                                  </select>
-                                )}
-                                {!isBool && (
-                                  <span className="text-sm text-slate-500 mr-2">
-                                    {tag.data_type}
-                                  </span>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => moveTag(group, tag.name, -1)}
-                                  disabled={tagIdx === 0}
-                                  className="p-1.5 rounded hover:bg-slate-700 disabled:opacity-30 transition-colors"
-                                >
-                                  <ArrowUp size={16} className="text-slate-400" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => moveTag(group, tag.name, 1)}
-                                  disabled={tagIdx === groupTags.length - 1}
-                                  className="p-1.5 rounded hover:bg-slate-700 disabled:opacity-30 transition-colors"
-                                >
-                                  <ArrowDown size={16} className="text-slate-400" />
-                                </button>
-                              </div>
-                            ) : isBool && isWritable && mode === 'toggle' ? (
-                              <button
-                                type="button"
-                                onClick={() => handleToggle(tag.name, liveValue)}
-                                className="inline-flex items-center gap-3 min-h-[48px] px-3 py-2"
-                              >
-                                <div className={`w-12 h-6 rounded-full transition-colors relative flex-shrink-0 ${Boolean(liveValue) ? 'bg-green-500' : 'bg-slate-600'}`}>
-                                  <span className="absolute top-0.5 w-5 h-5 bg-white rounded-full transition-transform shadow-sm"
-                                    style={{ left: Boolean(liveValue) ? '1.5rem' : '0.125rem' }} />
-                                </div>
-                                <span className={`text-sm font-medium ${Boolean(liveValue) ? 'text-green-400' : 'text-slate-500'}`}>
-                                  {Boolean(liveValue) ? 'ON' : 'OFF'}
+                            // Enum mapping
+                            let enumMap: Record<string, string> | null = null;
+                            if (tag.enum_mapping) {
+                              try { enumMap = typeof tag.enum_mapping === 'string' ? JSON.parse(tag.enum_mapping) : tag.enum_mapping; } catch { /* ignore */ }
+                            }
+                            const hasEnum = enumMap && Object.keys(enumMap).length > 0;
+
+                            return (
+                              <div key={tag.name} className="bg-slate-900 rounded-lg border border-slate-700 flex items-center justify-between px-4 py-2 min-h-[48px] text-base">
+                                <span className="text-slate-300 mr-3">
+                                  {tag.display_name || tag.name}
+                                  {tag.engineering_units && (
+                                    <span className="text-slate-500 ml-1">({tag.engineering_units})</span>
+                                  )}
                                 </span>
-                              </button>
-                            ) : isBool && isWritable ? (
-                              <button
-                                type="button"
-                                onPointerDown={() => handleMomentaryPress(tag.name)}
-                                onPointerUp={() => handleMomentaryRelease(tag.name)}
-                                onPointerLeave={() => { if (Boolean(liveValue)) handleMomentaryRelease(tag.name); }}
-                                className={`inline-flex items-center justify-center min-h-[48px] min-w-[80px] px-4 py-2 rounded-lg font-medium text-sm transition-all select-none ${
-                                  Boolean(liveValue)
-                                    ? 'bg-green-600 text-white shadow-inner'
-                                    : 'bg-slate-600 text-slate-300 hover:bg-slate-500 active:bg-green-600 active:text-white'
-                                }`}
-                              >
-                                {Boolean(liveValue) ? 'ON' : 'PRESS'}
-                              </button>
-                            ) : isBool ? (
-                              <span className={`font-medium ${Boolean(liveValue) ? 'text-green-400' : 'text-slate-500'}`}>
-                                {Boolean(liveValue) ? 'ON' : 'OFF'}
-                              </span>
-                            ) : hasEnum && isWritable ? (
-                              <select
-                                value={String(liveValue ?? '')}
-                                onChange={e => handleWrite(tag.name, parseTypedValue(e.target.value))}
-                                className="min-h-[48px] min-w-[100px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-base text-white hover:border-blue-500 transition-all"
-                              >
-                                <option value="">Select…</option>
-                                {Object.entries(enumMap!).map(([k, label]) => (
-                                  <option key={k} value={k}>{label}</option>
-                                ))}
-                              </select>
-                            ) : isWritable ? (
-                              <button
-                                type="button"
-                                onClick={() => openKeypad(tag.name)}
-                                className="inline-flex items-center min-h-[48px] min-w-[100px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-base text-white text-left hover:border-blue-500 active:scale-95 transition-all"
-                              >
-                                {liveValue != null && liveValue !== '' ? (
-                                  <span>{formatValue(tag, liveValue)}</span>
-                                ) : (
-                                  <span className="text-slate-500">Tap to set</span>
-                                )}
-                              </button>
-                            ) : (
-                              <span className="text-slate-200">{formatValue(tag, liveValue)}</span>
-                            )}
-                          </div>
+                                <div className="flex-shrink-0">
+                                  {editMode ? (
+                                    <div className="flex items-center gap-2">
+                                      {isBool && isWritable && (
+                                        <select
+                                          value={mode}
+                                          onChange={e => setTagMode(tag.name, e.target.value as 'momentary' | 'toggle')}
+                                          className="bg-slate-700 border border-slate-600 rounded-md px-2 py-1.5 text-sm text-white"
+                                        >
+                                          <option value="momentary">Momentary</option>
+                                          <option value="toggle">Toggle</option>
+                                        </select>
+                                      )}
+                                      {!isBool && (
+                                        <span className="text-sm text-slate-500 mr-2">
+                                          {tag.data_type}
+                                        </span>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => moveTag(group, tag.name, -1)}
+                                        disabled={tagIdx === 0}
+                                        className="p-1.5 rounded hover:bg-slate-700 disabled:opacity-30 transition-colors"
+                                      >
+                                        <ArrowUp size={16} className="text-slate-400" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => moveTag(group, tag.name, 1)}
+                                        disabled={tagIdx === groupTags.length - 1}
+                                        className="p-1.5 rounded hover:bg-slate-700 disabled:opacity-30 transition-colors"
+                                      >
+                                        <ArrowDown size={16} className="text-slate-400" />
+                                      </button>
+                                    </div>
+                                  ) : isBool && isWritable && mode === 'toggle' ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggle(tag.name, liveValue)}
+                                      className="inline-flex items-center gap-3 min-h-[48px] px-3 py-2"
+                                    >
+                                      <div className={`w-12 h-6 rounded-full transition-colors relative flex-shrink-0 ${Boolean(liveValue) ? 'bg-green-500' : 'bg-slate-600'}`}>
+                                        <span className="absolute top-0.5 w-5 h-5 bg-white rounded-full transition-transform shadow-sm"
+                                          style={{ left: Boolean(liveValue) ? '1.5rem' : '0.125rem' }} />
+                                      </div>
+                                      <span className={`text-sm font-medium ${Boolean(liveValue) ? 'text-green-400' : 'text-slate-500'}`}>
+                                        {Boolean(liveValue) ? 'ON' : 'OFF'}
+                                      </span>
+                                    </button>
+                                  ) : isBool && isWritable ? (
+                                    <button
+                                      type="button"
+                                      onPointerDown={() => handleMomentaryPress(tag.name)}
+                                      onPointerUp={() => handleMomentaryRelease(tag.name)}
+                                      onPointerLeave={() => { if (Boolean(liveValue)) handleMomentaryRelease(tag.name); }}
+                                      className={`inline-flex items-center justify-center min-h-[48px] min-w-[80px] px-4 py-2 rounded-lg font-medium text-sm transition-all select-none ${
+                                        Boolean(liveValue)
+                                          ? 'bg-green-600 text-white shadow-inner'
+                                          : 'bg-slate-600 text-slate-300 hover:bg-slate-500 active:bg-green-600 active:text-white'
+                                      }`}
+                                    >
+                                      {Boolean(liveValue) ? 'ON' : 'PRESS'}
+                                    </button>
+                                  ) : isBool ? (
+                                    <span className={`font-medium ${Boolean(liveValue) ? 'text-green-400' : 'text-slate-500'}`}>
+                                      {Boolean(liveValue) ? 'ON' : 'OFF'}
+                                    </span>
+                                  ) : hasEnum && isWritable ? (
+                                    <select
+                                      value={String(liveValue ?? '')}
+                                      onChange={e => handleWrite(tag.name, parseTypedValue(e.target.value))}
+                                      className="min-h-[48px] min-w-[100px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-base text-white hover:border-blue-500 transition-all"
+                                    >
+                                      <option value="">Select…</option>
+                                      {Object.entries(enumMap!).map(([k, label]) => (
+                                        <option key={k} value={k}>{label}</option>
+                                      ))}
+                                    </select>
+                                  ) : isWritable ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => openKeypad(tag.name)}
+                                      className="inline-flex items-center min-h-[48px] min-w-[100px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-base text-white text-left hover:border-blue-500 active:scale-95 transition-all"
+                                    >
+                                      {liveValue != null && liveValue !== '' ? (
+                                        <span>{formatValue(tag, liveValue)}</span>
+                                      ) : (
+                                        <span className="text-slate-500">Tap to set</span>
+                                      )}
+                                    </button>
+                                  ) : (
+                                    <span className="text-slate-200">{formatValue(tag, liveValue)}</span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })}
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Backdrop for narrow screens when sidebar is open */}
+        {ioSidebarOpen && (
+          <div
+            className="lg:hidden fixed inset-0 bg-black/40 z-10"
+            onClick={toggleIoSidebar}
+          />
+        )}
+
+        {/* I/O Monitor Sidebar */}
+        <aside
+          className={`border-l border-slate-700 bg-slate-800 flex flex-col overflow-hidden transition-all duration-300 ${
+            ioSidebarOpen
+              ? 'w-96 lg:relative absolute right-0 top-0 bottom-0 z-20 lg:z-0'
+              : 'w-0'
+          }`}
+        >
+          {ioSidebarOpen && (
+            <>
+              {/* Sidebar header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 shrink-0">
+                <h2 className="text-lg font-medium text-slate-300">I/O Monitor</h2>
+                <button
+                  onClick={toggleIoSidebar}
+                  className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-slate-700 text-slate-400 transition-colors"
+                  title="Close I/O Monitor"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Scrollable IO content */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                {inputTags.length === 0 && outputTags.length === 0 ? (
+                  <div className="text-center py-10">
+                    <TagIcon size={32} className="mx-auto mb-3 text-slate-600" />
+                    <p className="text-sm text-slate-400">
+                      No I/O tags found. Add the <span className="text-blue-400 font-medium">{INPUT_LABEL}</span> or <span className="text-blue-400 font-medium">{OUTPUT_LABEL}</span> label to tags in Settings.
+                    </p>
                   </div>
+                ) : (
+                  <>
+                    <IOPanel
+                      label="Inputs"
+                      emptyLabel={INPUT_LABEL}
+                      tags={orderedInputTags}
+                      tagValues={tagValues}
+                      editMode={editMode}
+                      onMove={(name, dir) => moveIOTag('_io_inputs', orderedInputTags, name, dir)}
+                    />
+                    <IOPanel
+                      label="Outputs"
+                      emptyLabel={OUTPUT_LABEL}
+                      tags={orderedOutputTags}
+                      tagValues={tagValues}
+                      editMode={editMode}
+                      onMove={(name, dir) => moveIOTag('_io_outputs', orderedOutputTags, name, dir)}
+                    />
+                  </>
                 )}
               </div>
-            ))}
-          </div>
-        )}
+            </>
+          )}
+        </aside>
       </div>
 
-      {/* Keypads */}
+      {/* Keypads — outside flex container for proper z-index stacking */}
       {keypad?.kind === 'numeric' && (
         <NumericKeypad
           value={String(tagValues[keypad.tag]?.value ?? '')}
@@ -585,6 +657,6 @@ export function ServicePage({ user, tagValues }: Props) {
           onClose={() => setKeypad(null)}
         />
       )}
-    </div>
+    </>
   );
 }
