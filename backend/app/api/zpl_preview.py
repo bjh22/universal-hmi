@@ -6,12 +6,10 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from app.api.deps import require_role
-from app.models.user import User, UserRole
 from app.services.zpl_renderer import render_zpl
 
 logger = logging.getLogger(__name__)
@@ -30,7 +28,6 @@ class RenderRequest(BaseModel):
 @router.post("/render")
 async def render_from_text(
     body: RenderRequest,
-    _user: User = Depends(require_role(UserRole.OPERATOR, UserRole.SUPERVISOR, UserRole.ENGINEER, UserRole.DESIGNER)),
 ) -> Response:
     """Render ZPL text to a PNG image."""
     if len(body.zpl) > MAX_ZPL_SIZE:
@@ -52,7 +49,6 @@ async def render_from_file(
     file: UploadFile,
     dpi: int = Form(203),
     width_dots: int | None = Form(None),
-    _user: User = Depends(require_role(UserRole.OPERATOR, UserRole.SUPERVISOR, UserRole.ENGINEER, UserRole.DESIGNER)),
 ) -> Response:
     """Render an uploaded ZPL file to a PNG image."""
     if file.filename and not file.filename.lower().endswith((".zpl", ".txt", ".prn")):
