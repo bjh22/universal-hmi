@@ -5,16 +5,21 @@ Run: python -m app.seed
 
 import asyncio
 import json
+import random
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import async_session, init_db
 from app.core.security import hash_password
+from app.models.alarm import AlarmHistory, AlarmSeverity
+from app.models.app_setting import AppSetting
 from app.models.datasource import DataSource, ProtocolType
 from app.models.project import Project  # noqa: F401 — registers 'projects' table for FK resolution
 from app.models.screen import Screen
 from app.models.tag import SimulationBehavior, Tag, TagAccessMode, TagDataType, TagLabel
+from app.models.trend import TrendData
 from app.models.reason_code import ReasonCode
 from app.models.user import User, UserRole
 
@@ -714,6 +719,110 @@ async def create_demo_resources(session: AsyncSession):
             },
         ]),
     ))
+
+    # --- Production settings ---
+    production_settings = {
+        "production.good_count_tag": "Machine.GoodCount",
+        "production.reject_fault_tags": json.dumps(["Machine.TempAlarm"]),
+        "production.downtime_alarm_tags": json.dumps(["Machine.PressureAlarm"]),
+        "production.cycling_tag": "Machine.Running",
+        "production.downtime_exception_tags": json.dumps([]),
+        "production.target_rate": "120",
+    }
+    for key, value in production_settings.items():
+        session.add(AppSetting(key=key, value=value))
+
+    await session.flush()
+
+    # --- Seed historical reporting data (7 days) ---
+    # Look up tag IDs for trend data
+    good_count_tag = await session.execute(
+        select(Tag).where(Tag.name == "Machine.GoodCount")
+    )
+    good_count_tag = good_count_tag.scalar_one()
+
+    running_tag = await session.execute(
+        select(Tag).where(Tag.name == "Machine.Running")
+    )
+    running_tag = running_tag.scalar_one()
+
+    temp_alarm_tag = await session.execute(
+        select(Tag).where(Tag.name == "Machine.TempAlarm")
+    )
+    temp_alarm_tag = temp_alarm_tag.scalar_one()
+
+    pressure_alarm_tag = await session.execute(
+        select(Tag).where(Tag.name == "Machine.PressureAlarm")
+    )
+    pressure_alarm_tag = pressure_alarm_tag.scalar_one()
+
+    now = datetime.now(timezone.utc)
+    seed_days = 7
+
+    for day_offset in range(seed_days, 0, -1):
+        day_start = (now - timedelta(days=day_offset)).replace(
+            hour=6, minute=0, second=0, microsecond=0
+        )
+
+        # Simulate an 18-hour production shift (06:00–00:00)
+        shift_hours = 18
+        good_count_base = 0
+
+        for minute in range(0, shift_hours * 60, 5):
+            ts = day_start + timedelta(minutes=minute)
+
+            # Good count: ramp ~120 units/hr with some jitter
+            good_count_base += random.randint(8, 12)
+            session.add(TrendData(
+                tag_id=good_count_tag.id,
+                timestamp=ts,
+                value=float(good_count_base),
+            ))
+
+            # Cycling tag: machine running most of the time (90% on)
+            running_value = 0.0 if random.random() < 0.1 else 1.0
+            session.add(TrendData(
+                tag_id=running_tag.id,
+                timestamp=ts,
+                value=running_value,
+            ))
+
+        # Seed 2-4 reject alarms (TempAlarm) per day, short duration
+        num_rejects = random.randint(2, 4)
+        for _ in range(num_rejects):
+            trigger_minute = random.randint(30, shift_hours * 60 - 30)
+            triggered = day_start + timedelta(minutes=trigger_minute)
+            cleared = triggered + timedelta(seconds=random.randint(10, 120))
+            session.add(AlarmHistory(
+                tag_id=temp_alarm_tag.id,
+                tag_name="Machine.TempAlarm",
+                tag_display_name="Temperature alarm flag",
+                message="Sealing bar temperature out of range",
+                severity=AlarmSeverity.WARNING,
+                triggered_at=triggered,
+                cleared_at=cleared,
+                trigger_value="true",
+                clear_value="false",
+            ))
+
+        # Seed 1-2 downtime alarms (PressureAlarm) per day, longer duration
+        num_downtime = random.randint(1, 2)
+        for _ in range(num_downtime):
+            trigger_minute = random.randint(60, shift_hours * 60 - 60)
+            triggered = day_start + timedelta(minutes=trigger_minute)
+            duration_minutes = random.randint(5, 25)
+            cleared = triggered + timedelta(minutes=duration_minutes)
+            session.add(AlarmHistory(
+                tag_id=pressure_alarm_tag.id,
+                tag_name="Machine.PressureAlarm",
+                tag_display_name="Pressure alarm flag",
+                message="Pneumatic pressure out of range",
+                severity=AlarmSeverity.CRITICAL,
+                triggered_at=triggered,
+                cleared_at=cleared,
+                trigger_value="true",
+                clear_value="false",
+            ))
 
     await session.flush()
 
