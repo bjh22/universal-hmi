@@ -560,19 +560,19 @@ async def create_demo_resources(session: AsyncSession):
             db_tag.labels.append(service_label)
             db_tag.labels.append(conveyor_label)
 
-    # Default dashboard screen (absolute mode, 1920x1080)
+    # Default dashboard screen (grid mode, 12-column responsive)
     session.add(Screen(
         name="Dashboard",
         slug="dashboard",
         is_default=True,
         sort_order=0,
-        layout_mode="absolute",
-        target_resolution=json.dumps({"width": 1920, "height": 1080}),
+        layout_mode="grid",
+        target_resolution=None,
         layout=json.dumps([
             {
                 "id": "w1",
                 "type": "status_indicator",
-                "x": 20, "y": 20, "w": 600, "h": 300,
+                "x": 0, "y": 0, "w": 4, "h": 3,
                 "props": {
                     "title": "Machine State",
                     "tag": "Machine.State",
@@ -582,7 +582,7 @@ async def create_demo_resources(session: AsyncSession):
             {
                 "id": "w2",
                 "type": "gauge",
-                "x": 640, "y": 20, "w": 620, "h": 360,
+                "x": 4, "y": 0, "w": 4, "h": 3,
                 "props": {
                     "title": "Speed",
                     "tag": "Machine.Speed",
@@ -594,7 +594,7 @@ async def create_demo_resources(session: AsyncSession):
             {
                 "id": "w3",
                 "type": "gauge",
-                "x": 1280, "y": 20, "w": 620, "h": 360,
+                "x": 8, "y": 0, "w": 4, "h": 3,
                 "props": {
                     "title": "Temperature",
                     "tag": "Machine.Temperature",
@@ -606,19 +606,19 @@ async def create_demo_resources(session: AsyncSession):
             {
                 "id": "w4",
                 "type": "counter",
-                "x": 20, "y": 400, "w": 460, "h": 260,
+                "x": 0, "y": 3, "w": 3, "h": 2,
                 "props": {"title": "Good Count", "tag": "Machine.GoodCount"},
             },
             {
                 "id": "w5",
                 "type": "counter",
-                "x": 500, "y": 400, "w": 460, "h": 260,
+                "x": 3, "y": 3, "w": 3, "h": 2,
                 "props": {"title": "Reject Count", "tag": "Machine.RejectCount"},
             },
             {
                 "id": "w6",
                 "type": "gauge",
-                "x": 980, "y": 400, "w": 460, "h": 340,
+                "x": 6, "y": 3, "w": 3, "h": 3,
                 "props": {
                     "title": "Pressure",
                     "tag": "Machine.Pressure",
@@ -630,24 +630,24 @@ async def create_demo_resources(session: AsyncSession):
             {
                 "id": "w7",
                 "type": "toggle",
-                "x": 1460, "y": 400, "w": 440, "h": 260,
+                "x": 9, "y": 3, "w": 3, "h": 2,
                 "props": {"title": "Machine Running", "tag": "Machine.Running"},
             },
         ]),
     ))
 
-    # Control panel screen (absolute mode, 1920x1080)
+    # Control panel screen (grid mode, 12-column responsive)
     session.add(Screen(
         name="Control Panel",
         slug="controls",
         sort_order=1,
-        layout_mode="absolute",
-        target_resolution=json.dumps({"width": 1920, "height": 1080}),
+        layout_mode="grid",
+        target_resolution=None,
         layout=json.dumps([
             {
                 "id": "c1",
                 "type": "parameter_input",
-                "x": 20, "y": 20, "w": 600, "h": 260,
+                "x": 0, "y": 0, "w": 4, "h": 2,
                 "props": {
                     "title": "Target Speed",
                     "tag": "Machine.TargetSpeed",
@@ -658,7 +658,7 @@ async def create_demo_resources(session: AsyncSession):
             {
                 "id": "c2",
                 "type": "parameter_input",
-                "x": 640, "y": 20, "w": 620, "h": 260,
+                "x": 4, "y": 0, "w": 4, "h": 2,
                 "props": {
                     "title": "Film Width",
                     "tag": "Machine.FilmWidth",
@@ -669,7 +669,7 @@ async def create_demo_resources(session: AsyncSession):
             {
                 "id": "c3",
                 "type": "parameter_input",
-                "x": 1280, "y": 20, "w": 620, "h": 260,
+                "x": 8, "y": 0, "w": 4, "h": 2,
                 "props": {
                     "title": "Seal Temperature",
                     "tag": "Machine.SealTemp",
@@ -680,7 +680,7 @@ async def create_demo_resources(session: AsyncSession):
             {
                 "id": "c4",
                 "type": "command_button",
-                "x": 20, "y": 300, "w": 460, "h": 260,
+                "x": 0, "y": 2, "w": 4, "h": 2,
                 "props": {
                     "title": "Start Machine",
                     "tag": "Machine.Running",
@@ -692,7 +692,7 @@ async def create_demo_resources(session: AsyncSession):
             {
                 "id": "c5",
                 "type": "command_button",
-                "x": 500, "y": 300, "w": 460, "h": 260,
+                "x": 4, "y": 2, "w": 4, "h": 2,
                 "props": {
                     "title": "Stop Machine",
                     "tag": "Machine.Running",
@@ -704,7 +704,7 @@ async def create_demo_resources(session: AsyncSession):
             {
                 "id": "c6",
                 "type": "command_button",
-                "x": 980, "y": 300, "w": 460, "h": 260,
+                "x": 8, "y": 2, "w": 4, "h": 2,
                 "props": {
                     "title": "Reset Counts",
                     "script": "write_tag('Machine.GoodCount', 0)\nwrite_tag('Machine.RejectCount', 0)\nlog('Counts reset')",

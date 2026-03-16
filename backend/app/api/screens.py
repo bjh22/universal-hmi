@@ -28,8 +28,8 @@ class ScreenCreate(BaseModel):
     name: str
     slug: str
     layout: list = []
-    layout_mode: str = "absolute"
-    target_resolution: str | None = '{"width": 1920, "height": 1080}'
+    layout_mode: str = "grid"
+    target_resolution: str | None = None
     is_default: bool = False
     sort_order: int = 0
 
