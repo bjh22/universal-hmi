@@ -128,6 +128,9 @@ All platforms have the same commands — just use the script that matches your s
 | `build` | TypeScript check + Vite production build |
 | `lint` | Run ESLint on the frontend |
 | `check` | Run both build and lint |
+| `test` | Run all tests (backend + frontend) |
+| `test:backend` | Run backend tests only (pytest) |
+| `test:frontend` | Run frontend tests only (Vitest) |
 | `seed` | Seed database with default users, tags, and screens |
 | `doctor` | Check prerequisites and project state |
 
@@ -136,6 +139,30 @@ All platforms have the same commands — just use the script that matches your s
 dev.bat <command>        # Windows CMD
 .\dev.ps1 <command>      # Windows PowerShell
 ```
+
+### Running Tests
+
+The project has 252 automated tests covering backend services, API endpoints, frontend hooks, and widgets. See `DEVELOPER.md` → [Testing](#testing) for full details on test architecture and writing new tests.
+
+```bash
+# Run everything
+./dev.sh test
+
+# Backend only (172 tests — pytest)
+./dev.sh test:backend
+
+# Frontend only (80 tests — Vitest)
+./dev.sh test:frontend
+
+# Backend with coverage
+cd backend && python -m pytest --cov=app tests/
+
+# Single test file
+cd backend && python -m pytest tests/unit/test_alarm_state_machine.py -v
+cd frontend && npx vitest run src/hooks/__tests__/useDesignMode.test.ts
+```
+
+**Test dependencies:** Backend tests require `pip install -r backend/requirements-dev.txt`. Frontend test deps are included in `npm install`.
 
 ### Running Frontend or Backend Independently
 
