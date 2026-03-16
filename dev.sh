@@ -204,6 +204,25 @@ cmd_seed() {
   cd "$ROOT_DIR/backend" && "$PY" -m app.seed
 }
 
+cmd_test() {
+  echo "==> Running all tests..."
+  cmd_test_backend
+  cmd_test_frontend
+  echo "==> All tests passed."
+}
+
+cmd_test_backend() {
+  check_python
+  echo "==> Running backend tests..."
+  cd "$ROOT_DIR/backend" && "$PY" -m pytest tests/ -v
+}
+
+cmd_test_frontend() {
+  check_node
+  echo "==> Running frontend tests..."
+  cd "$ROOT_DIR/frontend" && npx vitest run
+}
+
 cmd_install() {
   check_all
   echo "==> Installing backend dependencies..."
@@ -223,14 +242,17 @@ usage() {
 Usage: ./dev.sh <command>
 
 Commands:
-  install     Install all dependencies (pip + npm)
-  dev         Start backend (:8080) + frontend (:5173) dev servers
-  stop        Stop any running dev servers (ports 8080, 5173)
-  build       TypeScript check + Vite build
-  lint        Run ESLint on the frontend
-  check       Run both build and lint
-  seed        Seed the database with default users/tags
-  doctor      Check development environment prerequisites
+  install          Install all dependencies (pip + npm)
+  dev              Start backend (:8080) + frontend (:5173) dev servers
+  stop             Stop any running dev servers (ports 8080, 5173)
+  build            TypeScript check + Vite build
+  lint             Run ESLint on the frontend
+  check            Run both build and lint
+  test             Run all tests (backend + frontend)
+  test:backend     Run backend tests only (pytest)
+  test:frontend    Run frontend tests only (vitest)
+  seed             Seed the database with default users/tags
+  doctor           Check development environment prerequisites
 
 Prerequisites: Python 3.10+, Node.js 18+
 Run './dev.sh doctor' to check your setup.
@@ -238,13 +260,16 @@ EOF
 }
 
 case "${1:-}" in
-  build)   cmd_build ;;
-  lint)    cmd_lint ;;
-  check)   cmd_check ;;
-  dev)     cmd_dev ;;
-  stop)    cmd_stop ;;
-  seed)    cmd_seed ;;
-  install) cmd_install ;;
-  doctor)  cmd_doctor ;;
-  *)       usage ;;
+  build)        cmd_build ;;
+  lint)         cmd_lint ;;
+  check)        cmd_check ;;
+  dev)          cmd_dev ;;
+  stop)         cmd_stop ;;
+  seed)         cmd_seed ;;
+  install)      cmd_install ;;
+  doctor)       cmd_doctor ;;
+  test)         cmd_test ;;
+  test:backend) cmd_test_backend ;;
+  test:frontend) cmd_test_frontend ;;
+  *)            usage ;;
 esac
