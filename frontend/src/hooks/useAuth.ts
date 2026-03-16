@@ -67,14 +67,34 @@ export function useAuthState(): AuthState {
     // If not logged in, there's nothing to time out — skip setup entirely.
     if (!token) return;
 
+    const onInactivityTimeout = () => {
+      logout();
+      // Navigate to the default dashboard so the screen shows live data
+      // rather than whatever authenticated page the user was on.
+      if (window.location.pathname !== '/') {
+        window.location.href = '/';
+      }
+    };
+
     const resetTimer = () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      timeoutRef.current = setTimeout(logout, INACTIVITY_TIMEOUT_MS);
+      timeoutRef.current = setTimeout(onInactivityTimeout, INACTIVITY_TIMEOUT_MS);
     };
 
     const events = ['mousedown', 'mousemove', 'keydown', 'touchstart', 'scroll'];
     events.forEach(event => window.addEventListener(event, resetTimer, { passive: true }));
     resetTimer();
+
+    // Listen for 401 responses from the API client — when the backend rejects the
+    // token (expired or invalid), auto-logout so the user sees the login screen
+    // instead of cryptic "Invalid token" errors.
+    const onAuthExpired = () => {
+      logout();
+      if (window.location.pathname !== '/') {
+        window.location.href = '/';
+      }
+    };
+    window.addEventListener('hmi:auth-expired', onAuthExpired);
 
     // Cleanup function — React calls this when the component unmounts OR before
     // re-running the effect (e.g., when `token` changes). Removing event listeners
@@ -82,6 +102,7 @@ export function useAuthState(): AuthState {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       events.forEach(event => window.removeEventListener(event, resetTimer));
+      window.removeEventListener('hmi:auth-expired', onAuthExpired);
     };
   }, [token, logout]);
 

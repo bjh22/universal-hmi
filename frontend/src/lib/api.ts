@@ -74,6 +74,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
+    if (res.status === 401) {
+      localStorage.removeItem('hmi_token');
+      localStorage.removeItem('hmi_user');
+      window.dispatchEvent(new CustomEvent('hmi:auth-expired'));
+    }
     throw new Error(body.detail || `HTTP ${res.status}`);
   }
   if (res.status === 204) return undefined as T;
