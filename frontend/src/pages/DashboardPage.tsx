@@ -10,6 +10,8 @@ import { EditorToolbar } from '../components/designer/EditorToolbar';
 import { DesignCanvas } from '../components/designer/DesignCanvas';
 import { useDesignMode, generateWidgetId } from '../hooks/useDesignMode';
 import type { WidgetTypeInfo } from '../components/designer/WidgetPalette';
+import { RESOLUTION_PRESETS, findPreset, computeCanvasDimensions } from '../components/designer/resolutionPresets';
+import { getScaledDefaults } from '../components/designer/widgetTypes';
 import type { ScreenData, Widget, TagValue, AlarmData, LayoutMode, ScreenResolution } from '../types';
 
 interface Props {
@@ -158,20 +160,23 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
   // Add widget from palette
   const handleAddWidget = useCallback((typeInfo: WidgetTypeInfo) => {
     const isAbs = dm.layoutMode === 'absolute';
+    const scaled = isAbs && screenResolution
+      ? getScaledDefaults(typeInfo, screenResolution.width)
+      : null;
     const widget: Widget = {
       id: generateWidgetId(),
       type: typeInfo.type,
       x: isAbs ? absPlacementOffset : 0,
       y: isAbs ? absPlacementOffset : 0,
-      w: isAbs ? typeInfo.defaultAbsW : typeInfo.defaultW,
-      h: isAbs ? typeInfo.defaultAbsH : typeInfo.defaultH,
+      w: isAbs ? (scaled?.absW ?? typeInfo.defaultAbsW) : typeInfo.defaultW,
+      h: isAbs ? (scaled?.absH ?? typeInfo.defaultAbsH) : typeInfo.defaultH,
       props: { ...typeInfo.defaultProps },
       ...(isAbs ? { chrome: 'compact' as const } : {}),
     };
     dm.addWidget(widget);
     dm.select(widget.id);
     if (isAbs) setAbsPlacementOffset(prev => prev + 20);
-  }, [dm, absPlacementOffset]);
+  }, [dm, absPlacementOffset, screenResolution]);
 
   // Create new screen
   const handleCreateScreen = useCallback(async () => {
@@ -181,12 +186,20 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
     if (newScreenMode === 'absolute') {
       let w: number, h: number;
       if (newScreenResolution === 'custom') {
-        w = newScreenCustomW;
-        h = newScreenCustomH;
+        const canvas = computeCanvasDimensions(newScreenCustomW, newScreenCustomH);
+        w = canvas.width;
+        h = canvas.height;
       } else {
-        const [rw, rh] = newScreenResolution.split('x').map(Number);
-        w = rw;
-        h = rh;
+        const preset = findPreset(newScreenResolution);
+        if (preset) {
+          w = preset.canvasWidth;
+          h = preset.canvasHeight;
+        } else {
+          const [rw, rh] = newScreenResolution.split('x').map(Number);
+          const canvas = computeCanvasDimensions(rw, rh);
+          w = canvas.width;
+          h = canvas.height;
+        }
       }
       targetRes = JSON.stringify({ width: w, height: h });
     }
@@ -578,27 +591,37 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
                 <select
                   value={newScreenResolution}
                   onChange={e => setNewScreenResolution(e.target.value)}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 min-h-[44px] text-sm text-white outline-none focus:border-blue-500 mb-2"
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 min-h-[44px] text-sm text-white outline-none focus:border-blue-500 mb-1"
                 >
-                  <option value="1920x1080">1920 × 1080 (Full HD)</option>
-                  <option value="1366x768">1366 × 768 (HD)</option>
-                  <option value="1024x768">1024 × 768 (XGA)</option>
+                  {RESOLUTION_PRESETS.map(p => (
+                    <option key={p.key} value={p.key}>{p.label}</option>
+                  ))}
                   <option value="custom">Custom...</option>
                 </select>
+                {newScreenResolution !== 'custom' && findPreset(newScreenResolution) && (
+                  <p className="text-[10px] text-slate-500 mb-2">
+                    Canvas: {findPreset(newScreenResolution)!.canvasWidth} × {findPreset(newScreenResolution)!.canvasHeight}px (after header &amp; sidebar)
+                  </p>
+                )}
                 {newScreenResolution === 'custom' && (
-                  <div className="flex gap-2">
-                    <div>
-                      <label className="text-[10px] text-slate-500">Width</label>
-                      <input type="number" value={newScreenCustomW} onChange={e => setNewScreenCustomW(Number(e.target.value))}
-                        min={320} max={3840}
-                        className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
+                  <div className="mb-2">
+                    <div className="flex gap-2">
+                      <div>
+                        <label className="text-[10px] text-slate-500">Screen Width</label>
+                        <input type="number" value={newScreenCustomW} onChange={e => setNewScreenCustomW(Number(e.target.value))}
+                          min={320} max={3840}
+                          className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500">Screen Height</label>
+                        <input type="number" value={newScreenCustomH} onChange={e => setNewScreenCustomH(Number(e.target.value))}
+                          min={240} max={2160}
+                          className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
+                      </div>
                     </div>
-                    <div>
-                      <label className="text-[10px] text-slate-500">Height</label>
-                      <input type="number" value={newScreenCustomH} onChange={e => setNewScreenCustomH(Number(e.target.value))}
-                        min={240} max={2160}
-                        className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
-                    </div>
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Canvas: {newScreenCustomW - 64} × {newScreenCustomH - 64}px (after header &amp; sidebar)
+                    </p>
                   </div>
                 )}
               </div>

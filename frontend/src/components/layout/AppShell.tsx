@@ -14,7 +14,7 @@
  *   - Data source connection indicators: per-source green/red dots showing equipment connectivity
  *   - Collapsible sidebar for more screen real estate
  */
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, TrendingUp, Bell, ClipboardList, BarChart3,
@@ -66,8 +66,18 @@ function SeverityIcon({ severity }: { severity: AlarmData['severity'] }) {
 }
 
 export function AppShell({ children, user, wsConnected, alarms, onLogout, navTitle = 'HMI', activeJobName, datasourceStatuses = [] }: AppShellProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    const saved = localStorage.getItem('hmi_sidebar_open');
+    if (saved !== null) return saved === 'true';
+    // Auto-collapse on small screens (8" panels and below)
+    return window.innerWidth > 1280;
+  });
   const [ackingAll, setAckingAll] = useState(false);
+
+  // Persist sidebar state
+  useEffect(() => {
+    localStorage.setItem('hmi_sidebar_open', String(sidebarOpen));
+  }, [sidebarOpen]);
   const location = useLocation();
 
   const activeAlarms = alarms.filter(a => a.state === 'active_unacked' || a.state === 'active_acked' || a.state === 'inactive_unacked');
