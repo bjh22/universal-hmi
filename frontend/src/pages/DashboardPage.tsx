@@ -1,3 +1,21 @@
+/**
+ * DashboardPage — the main screen viewer and editor for the HMI.
+ *
+ * This page has two modes:
+ *   1. Runtime mode: renders the active screen's widgets with live tag values
+ *      from the WebSocket. Operators use this to monitor and control equipment.
+ *   2. Design mode (Ctrl+E): opens the full screen editor with a widget palette,
+ *      drag-and-drop canvas, and property panel. Only users with the 'designer'
+ *      role can enter design mode.
+ *
+ * Screens can use two layout modes:
+ *   - Grid: responsive 12-column CSS grid (default, adapts to screen size)
+ *   - Absolute: fixed pixel positions on a target resolution canvas, scaled to fit
+ *     the viewport with letterboxing (used for dedicated panel PCs)
+ *
+ * The URL pattern is /screen/:slug — each screen has a URL-friendly slug.
+ * Tabs at the top let users switch between screens.
+ */
 import { useEffect, useState, useCallback, useRef, useMemo, memo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Pencil, Plus, Trash2, GripVertical } from 'lucide-react';
@@ -157,7 +175,10 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
     dm.exitEditMode();
   }, [dm]);
 
-  // Add widget from palette
+  // Add widget from palette.
+  // In absolute mode, each new widget is offset by 20px from the last so they don't
+  // stack directly on top of each other — this makes it obvious that a new widget
+  // was added and lets the designer immediately drag it to the desired position.
   const handleAddWidget = useCallback((typeInfo: WidgetTypeInfo) => {
     const isAbs = dm.layoutMode === 'absolute';
     const scaled = isAbs && screenResolution
@@ -224,7 +245,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
     setNewScreenResolution(defaultResolution);
     refreshScreens();
     navigate(`/screen/${screenSlug}`);
-  }, [newScreenName, screens.length, refreshScreens, newScreenMode, newScreenResolution, newScreenCustomW, newScreenCustomH, defaultLayout, defaultResolution]);
+  }, [newScreenName, screens.length, refreshScreens, newScreenMode, newScreenResolution, newScreenCustomW, newScreenCustomH, defaultLayout, defaultResolution, navigate]);
 
   // Delete current screen
   const handleDeleteScreen = useCallback(async () => {
@@ -233,7 +254,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
     await api.deleteScreen(activeScreen.id);
     refreshScreens();
     navigate('/');
-  }, [activeScreen, refreshScreens]);
+  }, [activeScreen, refreshScreens, navigate]);
 
   // Reorder screens via drag-and-drop
   const handleTabDrop = useCallback(async (dragId: number, dropId: number) => {

@@ -27,6 +27,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models.tag import SimulationBehavior, Tag, TagAccessMode, TagDataType
+from app.utils import iso_z
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,7 @@ class TagValue:
             "name": self.name,
             "value": self.value,
             "quality": self.quality,
-            "timestamp": self.timestamp.isoformat() + ("" if self.timestamp.tzinfo else "Z"),
+            "timestamp": iso_z(self.timestamp),
         }
         if self.description:
             d["description"] = self.description
@@ -393,10 +394,19 @@ class TagEngine:
         except (ValueError, TypeError):
             pass
         result = self.set_value(tag_name, value)
-        # Persist for internal (nonvolatile) tags — fire-and-forget async task
+        # Persist for internal (nonvolatile) tags — fire-and-forget async task.
+        # We add a done callback to log any unhandled exceptions from the task,
+        # since asyncio silently drops errors from untracked tasks.
         if result and self._is_internal_tag(tag):
-            asyncio.create_task(self._persist_value(tag.id, value))
+            task = asyncio.create_task(self._persist_value(tag.id, value))
+            task.add_done_callback(self._log_task_exception)
         return result
+
+    @staticmethod
+    def _log_task_exception(task: asyncio.Task):
+        """Callback for fire-and-forget tasks to log unhandled exceptions."""
+        if not task.cancelled() and task.exception():
+            logger.error("Background task failed: %s", task.exception())
 
     def _notify_change(self, tag_name: str, tv: TagValue):
         msg = {"type": "tag_update", "data": {tag_name: tv.to_dict()}}
@@ -415,7 +425,10 @@ class TagEngine:
             try:
                 q.put_nowait(msg)
             except asyncio.QueueFull:
-                # Track consecutively-full queues for cleanup
+                # Track consecutive drops per queue. We attach _drop_count directly
+                # to the Queue object (a monkey-patch pattern) instead of a separate
+                # dict to avoid managing a parallel lookup structure. The type: ignore
+                # comments suppress mypy warnings about adding attributes to Queue.
                 if not hasattr(q, '_drop_count'):
                     q._drop_count = 0  # type: ignore[attr-defined]
                 q._drop_count += 1  # type: ignore[attr-defined]
@@ -498,8 +511,11 @@ class TagEngine:
                 task.cancel()
                 try:
                     await task
-                except (asyncio.CancelledError, Exception):
+                except asyncio.CancelledError:
+                    # Expected when cancelling a task during shutdown
                     pass
+                except Exception:
+                    logger.debug("Error during shutdown task cleanup", exc_info=True)
 
     async def _simulation_loop(self):
         """Runs every 500ms, computing new values for simulated tags (sine waves,

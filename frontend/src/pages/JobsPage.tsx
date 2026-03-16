@@ -232,15 +232,15 @@ function SetpointEditor({ value, onChange, tags }: {
               {isBoolTag(key) ? (
                 <button
                   type="button"
-                  onClick={() => onChange({ ...value, [key]: !Boolean(val) })}
+                  onClick={() => onChange({ ...value, [key]: !val })}
                   className="w-24 sm:w-32 min-h-[48px] flex items-center gap-2 px-3 py-2"
                 >
-                  <div className={`w-10 h-5 rounded-full transition-colors relative flex-shrink-0 ${Boolean(val) ? 'bg-green-500' : 'bg-slate-600'}`}>
+                  <div className={`w-10 h-5 rounded-full transition-colors relative flex-shrink-0 ${val ? 'bg-green-500' : 'bg-slate-600'}`}>
                     <span className="absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow-sm"
-                      style={{ left: Boolean(val) ? '1.25rem' : '0.125rem' }} />
+                      style={{ left: val ? '1.25rem' : '0.125rem' }} />
                   </div>
-                  <span className={`text-xs font-medium ${Boolean(val) ? 'text-green-400' : 'text-slate-500'}`}>
-                    {Boolean(val) ? 'ON' : 'OFF'}
+                  <span className={`text-xs font-medium ${val ? 'text-green-400' : 'text-slate-500'}`}>
+                    {val ? 'ON' : 'OFF'}
                   </span>
                 </button>
               ) : hasEnum ? (
@@ -338,8 +338,8 @@ function JobSetpointDisplay({ setpoints, tags }: { setpoints: string | null; tag
                         <td className="px-4 py-3 text-slate-300 text-base">{getTagDisplayName(k, tags)}</td>
                         <td className="px-4 py-3 text-right text-base">
                           {isBool ? (
-                            <span className={`font-medium ${Boolean(v) ? 'text-green-400' : 'text-slate-500'}`}>
-                              {Boolean(v) ? 'ON' : 'OFF'}
+                            <span className={`font-medium ${v ? 'text-green-400' : 'text-slate-500'}`}>
+                              {v ? 'ON' : 'OFF'}
                             </span>
                           ) : (
                             <span className="text-slate-200">{formatTagValue(tag, v)}</span>

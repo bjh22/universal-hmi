@@ -1,5 +1,11 @@
 """
 Driver Manager: Creates and manages protocol driver instances based on data source config.
+
+A "data source" is a configured connection to an industrial device — a PLC, sensor gateway,
+or MQTT broker. Each data source has a protocol type (OPC UA, Modbus, EtherNet/IP, MQTT)
+and connection parameters. The DriverManager maps each data source to the correct protocol
+driver class, manages connection/reconnection lifecycle, and provides a lookup API so the
+TagEngine can poll tag values from the right driver.
 """
 
 import asyncio
@@ -68,6 +74,14 @@ class DriverManager:
         self._drivers[ds.id] = driver
 
     def _schedule_reconnect(self, ds_id: int, driver: ProtocolDriver, max_retries: int = 50):
+        """Schedule exponential-backoff reconnection for a failed driver.
+
+        Uses exponential backoff (2s → 4s → 8s → ... → 60s cap) to avoid
+        hammering a down PLC or network. The 60s cap balances responsiveness
+        (reconnect within a minute of recovery) with network politeness.
+        50 retries at max backoff ≈ 50 minutes of retry window, after which
+        the operator must fix the issue and restart the server.
+        """
         async def _reconnect():
             delay = 2
             attempts = 0

@@ -1,35 +1,13 @@
 import { useState } from 'react';
-import { AlertCircle, AlertTriangle, Info } from 'lucide-react';
 import { Dialog } from './Dialog';
+import { SeverityIcon } from './shared/SeverityIcon';
+import { severityColors, severityBorders } from '../lib/alarmUtils';
 import type { AlarmData } from '../types';
 
 interface FaultHelpDialogProps {
   alarm: AlarmData;
   onAcknowledge: () => Promise<void>;
   onDismiss: () => void;
-}
-
-const severityColors: Record<string, string> = {
-  critical: 'text-red-400',
-  warning: 'text-yellow-400',
-  info: 'text-blue-400',
-};
-
-const severityBorders: Record<string, string> = {
-  critical: 'border-red-500/40',
-  warning: 'border-yellow-500/40',
-  info: 'border-blue-500/40',
-};
-
-function SeverityIcon({ severity }: { severity: AlarmData['severity'] }) {
-  switch (severity) {
-    case 'critical':
-      return <AlertCircle size={20} className="text-red-400 shrink-0" />;
-    case 'warning':
-      return <AlertTriangle size={20} className="text-yellow-400 shrink-0" />;
-    default:
-      return <Info size={20} className="text-blue-400 shrink-0" />;
-  }
 }
 
 export function FaultHelpDialog({ alarm, onAcknowledge, onDismiss }: FaultHelpDialogProps) {
@@ -48,7 +26,7 @@ export function FaultHelpDialog({ alarm, onAcknowledge, onDismiss }: FaultHelpDi
     <Dialog title="Fault Help" onClose={onDismiss} wide>
       {/* Severity header */}
       <div className={`flex items-center gap-2 p-3 mb-4 rounded-lg border ${severityBorders[alarm.severity] || severityBorders.info} bg-[var(--hmi-bg-base)]`}>
-        <SeverityIcon severity={alarm.severity} />
+        <SeverityIcon severity={alarm.severity} size={20} />
         <div className="flex-1 min-w-0">
           <div className={`font-semibold ${severityColors[alarm.severity] || severityColors.info}`}>
             {alarm.severity.charAt(0).toUpperCase() + alarm.severity.slice(1)} — {alarm.tag_display_name || alarm.tag_name}

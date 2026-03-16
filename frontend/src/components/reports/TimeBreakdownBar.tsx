@@ -1,3 +1,11 @@
+/**
+ * TimeBreakdownBar — a horizontal stacked bar chart showing how production time
+ * is split between uptime (machine cycling), downtime (faulted), and idle (neither).
+ *
+ * Used on the Reports page to give operators and supervisors a quick visual summary
+ * of machine utilization for a selected timeframe. The three segments are color-coded
+ * green/red/gray and sized proportionally to their duration.
+ */
 interface Props {
   uptimeSeconds: number;
   downtimeSeconds: number;

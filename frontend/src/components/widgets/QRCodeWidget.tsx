@@ -30,13 +30,14 @@ export function QRCodeWidget({ title, tag, tagValues, staticContent, fgColor = '
     if (!canvas || !container) return;
 
     if (!content) {
+      // Reset error state when content is cleared — prop-driven sync, not cascading
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setError('No content');
       const ctx = canvas.getContext('2d');
       if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
       return;
     }
 
-    // Size the QR to fit the container
     const size = Math.min(container.clientWidth, container.clientHeight);
     if (size <= 0) return;
 

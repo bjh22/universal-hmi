@@ -10,6 +10,7 @@ from app.models.audit import AuditAction
 from app.models.tag import Tag
 from app.models.user import User
 from app.services.audit_service import log_audit
+from app.utils import iso_z
 
 router = APIRouter(prefix="/api/alarms", tags=["alarms"])
 
@@ -104,13 +105,6 @@ async def acknowledge_alarm(
     return {"success": True}
 
 
-def _utc_iso(dt) -> str:
-    """Format a datetime as ISO 8601 with Z suffix so JS treats it as UTC."""
-    if dt is None:
-        return ""
-    return dt.isoformat() + ("" if dt.tzinfo else "Z")
-
-
 def _alarm_to_out(alarm: Alarm, tag_name: str = "", tag_display_name: str | None = None) -> AlarmOut:
     return AlarmOut(
         id=alarm.id,
@@ -120,8 +114,8 @@ def _alarm_to_out(alarm: Alarm, tag_name: str = "", tag_display_name: str | None
         message=alarm.message,
         severity=alarm.severity,
         state=alarm.state,
-        triggered_at=_utc_iso(alarm.triggered_at),
-        acknowledged_at=_utc_iso(alarm.acknowledged_at) or None,
+        triggered_at=iso_z(alarm.triggered_at) if alarm.triggered_at else "",
+        acknowledged_at=iso_z(alarm.acknowledged_at) if alarm.acknowledged_at else None,
         acknowledged_by=alarm.acknowledged_by,
         trigger_value=alarm.trigger_value,
     )
@@ -135,10 +129,10 @@ def _history_to_out(h: AlarmHistory, current_display_name: str | None = None) ->
         tag_display_name=current_display_name or h.tag_display_name,
         message=h.message,
         severity=h.severity,
-        triggered_at=_utc_iso(h.triggered_at),
-        acknowledged_at=_utc_iso(h.acknowledged_at) or None,
+        triggered_at=iso_z(h.triggered_at) if h.triggered_at else "",
+        acknowledged_at=iso_z(h.acknowledged_at) if h.acknowledged_at else None,
         acknowledged_by=h.acknowledged_by,
-        cleared_at=_utc_iso(h.cleared_at) or None,
+        cleared_at=iso_z(h.cleared_at) if h.cleared_at else None,
         trigger_value=h.trigger_value,
         clear_value=h.clear_value,
     )

@@ -6,6 +6,7 @@ from app.api.deps import require_role
 from app.core.database import get_db
 from app.models.audit import AuditAction, AuditLog
 from app.models.user import User, UserRole
+from app.utils import iso_z
 
 router = APIRouter(prefix="/api/audit", tags=["audit"])
 
@@ -30,7 +31,7 @@ async def get_audit_log(
     return [
         {
             "id": r.id,
-            "timestamp": r.timestamp.isoformat() + ("" if r.timestamp.tzinfo else "Z"),
+            "timestamp": iso_z(r.timestamp),
             "user": r.user,
             "action": r.action.value if r.action else None,
             "details": r.details,

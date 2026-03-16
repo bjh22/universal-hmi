@@ -87,20 +87,29 @@ function BarGauge({ value, pct, color, min, max, units, decimalPlaces, valueFont
 }
 
 // ─── Radial / dial gauge ───
+// Draws a 240-degree arc (like a speedometer) using SVG path commands.
+// The arc spans from 150° to 390° (in standard math angles where 0° = right, 90° = down).
+// This positions the gap at the bottom of the dial, with min on the lower-left and max
+// on the lower-right. The "needle" is a filled dot that moves along the arc based on the
+// current value's percentage between min and max.
 function RadialGauge({ value, pct, color, min, max, units, decimalPlaces, valueFontSize, barThickness, gaugeSize, valueStyle }: {
   value: number; pct: number; color: string; min: number; max: number; units: string; decimalPlaces: number;
   valueFontSize: number; barThickness: number; gaugeSize: number; valueStyle?: TextStyle;
 }) {
-  const ARC_DEG = 240;
-  const START_DEG = 150;
-  const R = 44;
-  const CX = 50;
-  const CY = 50;
+  const ARC_DEG = 240;     // Total arc sweep in degrees
+  const START_DEG = 150;   // Start angle (lower-left, in CSS/SVG angle convention)
+  const R = 44;            // Arc radius in SVG viewBox units (viewBox is 100×100)
+  const CX = 50;           // Center X in viewBox
+  const CY = 50;           // Center Y in viewBox
 
+  // Convert degrees to radians for Math.sin/cos (JavaScript trig uses radians)
   const startAngle = (START_DEG * Math.PI) / 180;
   const endAngle = ((START_DEG + ARC_DEG) * Math.PI) / 180;
   const needleAngle = ((START_DEG + ARC_DEG * (pct / 100)) * Math.PI) / 180;
 
+  // Builds an SVG arc path string. SVG arcs need start/end points (not center+angles),
+  // so we use cos/sin to convert polar coordinates to Cartesian (x,y) points.
+  // The "large-arc-flag" (0 or 1) tells SVG which of the two possible arcs to draw.
   const arcPath = (cx: number, cy: number, r: number, start: number, end: number) => {
     const x1 = cx + r * Math.cos(start);
     const y1 = cy + r * Math.sin(start);

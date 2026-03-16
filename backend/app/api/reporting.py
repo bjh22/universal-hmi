@@ -16,7 +16,15 @@ router = APIRouter(prefix="/api/reporting", tags=["reporting"])
 
 
 def _parse_iso(value: str) -> datetime:
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    """Parse an ISO 8601 date string, converting the 'Z' suffix to a UTC offset.
+
+    Raises HTTPException(400) if the string is not a valid ISO 8601 date, so the
+    client gets a clear error instead of an internal 500.
+    """
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail=f"Invalid ISO date: {value}")
 
 
 def _default_range(
