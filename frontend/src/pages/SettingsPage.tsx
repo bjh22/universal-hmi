@@ -389,12 +389,13 @@ function FaultHelpConfig({ alarmConfig, setAlarmField }: {
 }
 
 // ─── Tag Edit Dialog ───
-function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
+function TagDialog({ tag, dataSources, allLabels, onSave, onClose, onLabelCreated }: {
   tag: Omit<Tag, 'id'> & { id?: number };
   dataSources: DataSourceData[];
   allLabels: TagLabel[];
   onSave: (data: Omit<Tag, 'id'> & { id?: number }) => void;
   onClose: () => void;
+  onLabelCreated?: () => void;
 }) {
   const [form, setForm] = useState(tag);
   const set = useCallback(<K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
@@ -407,12 +408,30 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
   }, []);
   const [labelSearch, setLabelSearch] = useState('');
   const [showLabelDropdown, setShowLabelDropdown] = useState(false);
+  const [creatingLabel, setCreatingLabel] = useState(false);
   const labelRef = useRef<HTMLDivElement>(null);
 
   const selectedLabelIds = new Set((form.labels || []).map(l => l.id));
   const filteredLabels = allLabels.filter(l =>
     !selectedLabelIds.has(l.id) && l.name.toLowerCase().includes(labelSearch.toLowerCase())
   );
+  const trimmedSearch = labelSearch.trim();
+  const exactMatch = allLabels.some(l => l.name.toLowerCase() === trimmedSearch.toLowerCase());
+  const canCreateLabel = trimmedSearch.length > 0 && !exactMatch;
+
+  const handleCreateLabel = useCallback(async () => {
+    if (!trimmedSearch || creatingLabel) return;
+    setCreatingLabel(true);
+    try {
+      const color = LABEL_COLORS[allLabels.length % LABEL_COLORS.length];
+      const newLabel = await api.createTagLabel({ name: trimmedSearch, color });
+      setForm(f => ({ ...f, labels: [...(f.labels || []), newLabel] }));
+      setLabelSearch('');
+      setShowLabelDropdown(false);
+      onLabelCreated?.();
+    } catch { /* label creation failed */ }
+    setCreatingLabel(false);
+  }, [trimmedSearch, creatingLabel, allLabels.length, onLabelCreated]);
 
   const toggleLabel = useCallback((label: TagLabel) => {
     setForm(f => {
@@ -469,7 +488,7 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
                   className="flex-1 min-w-[80px] bg-transparent text-sm text-white outline-none"
                 />
               </div>
-              {showLabelDropdown && filteredLabels.length > 0 && (
+              {showLabelDropdown && (filteredLabels.length > 0 || canCreateLabel) && (
                 <div className="absolute z-10 mt-1 w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-md shadow-lg max-h-40 overflow-y-auto">
                   {filteredLabels.map(l => (
                     <button key={l.id} type="button"
@@ -479,6 +498,13 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose }: {
                       {l.name}
                     </button>
                   ))}
+                  {canCreateLabel && (
+                    <button type="button" onClick={handleCreateLabel} disabled={creatingLabel}
+                      className="w-full text-left px-3 py-1.5 text-sm text-blue-400 hover:bg-[var(--hmi-border-subtle)] flex items-center gap-2 border-t border-[var(--hmi-border-subtle)]">
+                      <Plus size={14} className="flex-shrink-0" />
+                      {creatingLabel ? 'Creating...' : <>Create &ldquo;{trimmedSearch}&rdquo;</>}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -2724,7 +2750,7 @@ export function SettingsPage({ user, tagValues }: Props) {
             </table>
           </div>
 
-          {editTag && <TagDialog tag={editTag} dataSources={dataSources} allLabels={allLabels} onSave={handleSaveTag} onClose={() => setEditTag(null)} />}
+          {editTag && <TagDialog tag={editTag} dataSources={dataSources} allLabels={allLabels} onSave={handleSaveTag} onClose={() => setEditTag(null)} onLabelCreated={loadLabels} />}
           {deleteTagTarget && <DeleteConfirmDialog title="Delete Tag" name={deleteTagTarget.name} onConfirm={handleDeleteTag} onCancel={() => setDeleteTagTarget(null)} />}
           {showTagImport && <TagImportDialog dataSources={dataSources} existingTagNames={new Set(tags.map(t => t.name))} onImportCsv={handleCsvImport} onImportCodesys={handleCodesysImport} onImportRslogix={handleRslogixImport} onClose={() => setShowTagImport(false)} />}
           {bulkDeleteConfirm && (
@@ -2913,7 +2939,7 @@ export function SettingsPage({ user, tagValues }: Props) {
           {editDs && <DataSourceDialog ds={editDs} onSave={handleSaveDs} onClose={() => setEditDs(null)} />}
           {deleteDsTarget && <DeleteConfirmDialog title="Delete Data Source" name={deleteDsTarget.name} onConfirm={handleDeleteDs} onCancel={() => setDeleteDsTarget(null)} />}
           {browseDs && <BrowseTagsDialog dsId={browseDs.id} dsName={browseDs.name} existingTags={tags} onCreateTag={(tagData) => { setEditTag(tagData); }} onClose={() => setBrowseDs(null)} />}
-          {editTag && <TagDialog tag={editTag} dataSources={dataSources} allLabels={allLabels} onSave={handleSaveTag} onClose={() => setEditTag(null)} />}
+          {editTag && <TagDialog tag={editTag} dataSources={dataSources} allLabels={allLabels} onSave={handleSaveTag} onClose={() => setEditTag(null)} onLabelCreated={loadLabels} />}
         </div>
       )}
 
