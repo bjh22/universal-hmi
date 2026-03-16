@@ -264,11 +264,11 @@ export function TrendsPage() {
         </div>
       </div>
 
-      <div className="flex gap-4">
+      <div className="flex flex-col md:flex-row gap-4">
         {/* Tag selector */}
-        <div className="w-56 shrink-0 bg-slate-800 rounded-xl p-3 border border-slate-700">
+        <div className="w-full md:w-48 shrink-0 bg-slate-800 rounded-xl p-3 border border-slate-700">
           <div className="text-xs text-slate-400 font-medium uppercase mb-2">Tags (max 8)</div>
-          <div className="space-y-1 max-h-96 overflow-y-auto">
+          <div className="space-y-1 max-h-48 md:max-h-96 overflow-y-auto">
             {tags.map((tag) => (
               <label
                 key={tag.id}
@@ -288,7 +288,7 @@ export function TrendsPage() {
         </div>
 
         {/* Chart */}
-        <div className="flex-1 bg-slate-800 rounded-xl p-4 border border-slate-700 min-h-[400px]">
+        <div className="flex-1 bg-slate-800 rounded-xl p-4 border border-slate-700 min-h-[300px]">
           {displayChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={400}>
               <LineChart data={displayChartData} margin={{ left: selectedTags.length > 2 ? (Math.floor((selectedTags.length - 1) / 2)) * 60 : 0, right: selectedTags.length > 2 ? (Math.floor(selectedTags.length / 2) - 1) * 60 : 0 }}>

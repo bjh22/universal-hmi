@@ -184,7 +184,7 @@ export function ReportsPage() {
   return (
     <div className="min-h-screen bg-slate-900 text-white">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-slate-700">
+      <div className="px-3 sm:px-4 lg:px-6 py-4 border-b border-slate-700">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <BarChart3 className="w-5 h-5 text-blue-400" />
@@ -219,7 +219,7 @@ export function ReportsPage() {
         </div>
       </div>
 
-      <div className="p-6 space-y-4">
+      <div className="p-3 sm:p-4 lg:p-6 space-y-4">
         {/* Historical date controls */}
         {tab === 'historical' && (
           <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
@@ -271,7 +271,7 @@ export function ReportsPage() {
 
         {/* Summary cards */}
         {summary && (
-          <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             <SummaryCard icon={<Package className="w-4 h-4 text-blue-400" />} label="Count" value={summary.count.toLocaleString()} />
             <SummaryCard
               icon={<Zap className="w-4 h-4 text-amber-400" />}

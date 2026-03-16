@@ -233,7 +233,7 @@ function SetpointEditor({ value, onChange, tags }: {
                 <button
                   type="button"
                   onClick={() => onChange({ ...value, [key]: !Boolean(val) })}
-                  className="w-32 min-h-[48px] flex items-center gap-2 px-3 py-2"
+                  className="w-24 sm:w-32 min-h-[48px] flex items-center gap-2 px-3 py-2"
                 >
                   <div className={`w-10 h-5 rounded-full transition-colors relative flex-shrink-0 ${Boolean(val) ? 'bg-green-500' : 'bg-slate-600'}`}>
                     <span className="absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow-sm"
@@ -247,7 +247,7 @@ function SetpointEditor({ value, onChange, tags }: {
                 <select
                   value={String(val ?? '')}
                   onChange={e => updateValue(key, e.target.value)}
-                  className="w-32 min-h-[48px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white hover:border-blue-500 transition-all"
+                  className="w-24 sm:w-32 min-h-[48px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white hover:border-blue-500 transition-all"
                 >
                   <option value="">Select…</option>
                   {Object.entries(enumMap!).map(([k, label]) => (
@@ -258,7 +258,7 @@ function SetpointEditor({ value, onChange, tags }: {
                 <button
                   type="button"
                   onClick={() => openKeypad(key)}
-                  className="w-32 min-h-[48px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white text-left hover:border-blue-500 active:scale-95 transition-all"
+                  className="w-24 sm:w-32 min-h-[48px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white text-left hover:border-blue-500 active:scale-95 transition-all"
                 >
                   {val !== '' && val != null ? (
                     <span>{String(val)}</span>

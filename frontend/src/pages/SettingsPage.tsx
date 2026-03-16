@@ -6,6 +6,7 @@ import { IntegrationsTab } from '../components/settings/IntegrationsTab';
 import { ReasonCodesSettings } from '../components/settings/ReasonCodesSettings';
 import { ProductionSettingsTab } from '../components/settings/ProductionSettings';
 import { THEME_PRESETS, ACCENT_SWATCHES, applyTheme, DEFAULT_ACCENT, DEFAULT_PRESET } from '../lib/theme';
+import { RESOLUTION_PRESETS } from '../components/designer/resolutionPresets';
 import type { Tag, TagLabel, DataSourceData, ProtocolType, AuditEntry, UserData, BrowsedTag, BrowsedNode, UserListEntry, ImportPreviewTag, ImportConflictMode, TagValue } from '../types';
 
 interface Props {
@@ -169,7 +170,7 @@ function DataSourceDialog({ ds, onSave, onClose }: {
           <Field label="Name *">
             <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required className={inputCls} placeholder="e.g. PLC-01" />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Field label="Protocol *">
               <select
                 value={form.protocol}
@@ -523,7 +524,7 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose, onLabelCreate
           </Field>
 
           {/* Data source & address */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Field label="Data Source">
               <select
                 value={form.data_source_id ?? ''}
@@ -542,7 +543,7 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose, onLabelCreate
           </div>
 
           {/* Type & access */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Field label="Data Type">
               <select value={form.data_type} onChange={e => set('data_type', e.target.value as Tag['data_type'])} className={inputCls}>
                 <option value="bool">Bool</option>
@@ -567,7 +568,7 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose, onLabelCreate
 
           {/* Range & display (not applicable to bool) */}
           {form.data_type !== 'bool' && (
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Field label="Min Value">
                 <input type="number" value={form.min_value ?? ''} onChange={e => set('min_value', e.target.value ? Number(e.target.value) : null)} className={inputCls} />
               </Field>
@@ -588,7 +589,7 @@ function TagDialog({ tag, dataSources, allLabels, onSave, onClose, onLabelCreate
               Enabled
             </label>
             {form.trending_enabled && (
-              <div className="grid grid-cols-2 gap-3 mt-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
                 <Field label="Sample Rate (ms)">
                   <input type="number" value={form.trending_sample_rate_ms ?? ''} onChange={e => set('trending_sample_rate_ms', e.target.value ? Number(e.target.value) : null)} className={inputCls} min={100} step={100} placeholder="1000" />
                 </Field>
@@ -2476,11 +2477,11 @@ export function SettingsPage({ user, tagValues }: Props) {
                 onChange={e => { setPrefResolution(e.target.value); setPrefMsg(''); }}
                 className="w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
               >
-                <option value="1920x1080">1920 × 1080 (Full HD)</option>
-                <option value="1366x768">1366 × 768 (HD)</option>
-                <option value="1024x768">1024 × 768 (XGA)</option>
+                {RESOLUTION_PRESETS.map(p => (
+                  <option key={p.key} value={p.key}>{p.label} — canvas {p.canvasWidth}×{p.canvasHeight}</option>
+                ))}
               </select>
-              <p className="text-xs text-[var(--hmi-text-muted)] mt-1">Default resolution for new absolute-layout screens.</p>
+              <p className="text-xs text-[var(--hmi-text-muted)] mt-1">Default resolution for new absolute-layout screens. Canvas size accounts for header and sidebar.</p>
             </div>
           )}
 
@@ -2973,7 +2974,7 @@ export function SettingsPage({ user, tagValues }: Props) {
           {showCreateUser && (
             <div className="bg-[var(--hmi-bg-elevated)] border border-[var(--hmi-border)] rounded-xl p-4 mb-4">
               <div className="text-sm font-medium text-[var(--hmi-text-secondary)] mb-3">Create User</div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-[var(--hmi-text-secondary)]">Username</label>
                   <input value={newUser.username} onChange={e => setNewUser(p => ({ ...p, username: e.target.value }))}

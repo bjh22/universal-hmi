@@ -219,7 +219,7 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
           <button
             key={field}
             onClick={() => handleSort(field)}
-            className={`flex items-center gap-1 hover:text-slate-300 ${field === 'message' ? 'flex-1' : ''} ${field === 'severity' ? 'w-24' : field === 'triggered_at' ? 'w-40' : field === 'tag_name' ? 'w-32' : ''}`}
+            className={`flex items-center gap-1 hover:text-slate-300 ${field === 'message' ? 'flex-1 min-w-0' : ''} ${field === 'severity' ? 'w-16 shrink-0' : field === 'triggered_at' ? 'w-28 shrink-0' : field === 'tag_name' ? 'w-24 shrink-0' : ''}`}
           >
             {label}
             {sortField === field && <ArrowUpDown size={12} className="text-blue-400" />}
@@ -243,11 +243,11 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
                 {alarm.trigger_value && ` \u2022 Value: ${alarm.trigger_value}`}
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap shrink-0">
               {(alarm.state === 'active_unacked' || alarm.state === 'inactive_unacked') && (
                 <button
                   onClick={() => alarm.id && handleAck(alarm.id)}
-                  className="flex items-center gap-1 px-4 py-2.5 min-h-[44px] bg-slate-700 hover:bg-slate-600 rounded-md text-xs text-slate-200"
+                  className="flex items-center gap-1 px-3 py-2 min-h-[44px] bg-slate-700 hover:bg-slate-600 rounded-md text-xs text-slate-200"
                 >
                   <Check size={14} /> Acknowledge
                 </button>

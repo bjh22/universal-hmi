@@ -15,6 +15,16 @@ export interface WidgetTypeInfo {
   defaultProps: Record<string, unknown>;
 }
 
+/** Scale widget default sizes proportionally for smaller canvases. */
+export function getScaledDefaults(typeInfo: WidgetTypeInfo, canvasWidth: number): { absW: number; absH: number } {
+  const BASE_CANVAS_WIDTH = 1856; // Full HD canvas (1920 - 64 sidebar)
+  const scale = Math.min(1, canvasWidth / BASE_CANVAS_WIDTH);
+  return {
+    absW: Math.round(typeInfo.defaultAbsW * scale),
+    absH: Math.round(typeInfo.defaultAbsH * scale),
+  };
+}
+
 export const WIDGET_TYPES: WidgetTypeInfo[] = [
   {
     type: 'status_indicator', label: 'Status Indicator', icon: Activity, category: 'display',

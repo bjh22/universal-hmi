@@ -96,7 +96,7 @@ function IOPanel({ label, emptyLabel, tags, tagValues, editMode, onMove }: IOPan
           No tags labelled &quot;{emptyLabel}&quot;
         </div>
       ) : editMode ? (
-        <div className="bg-slate-900 rounded-lg border border-slate-700 overflow-hidden">
+        <div className="bg-slate-900 rounded-lg border border-slate-700 overflow-x-auto">
           <table className="w-full text-base">
             <tbody>
               {tags.map((tag, idx) => (
@@ -133,7 +133,7 @@ function IOPanel({ label, emptyLabel, tags, tagValues, editMode, onMove }: IOPan
       ) : (
         <div className="bg-slate-900 rounded-lg border border-slate-700 overflow-hidden">
           {boolTags.length > 0 && (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] px-2 py-1.5 gap-x-1 gap-y-0.5">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] px-2 py-1.5 gap-x-1 gap-y-0.5">
               {boolTags.map(tag => {
                 const on = Boolean(tagValues[tag.name]?.value);
                 return (
@@ -375,7 +375,7 @@ export function ServicePage({ user, tagValues }: Props) {
     <>
       <div className="flex h-full -m-4 overflow-hidden relative">
         {/* Main content area */}
-        <div className="flex-1 overflow-y-auto p-6 min-w-0">
+        <div className="flex-1 overflow-y-auto p-4 min-w-0">
           <div className="max-w-5xl">
             {/* Header */}
             <div className="flex items-center gap-3 mb-6">
@@ -587,7 +587,7 @@ export function ServicePage({ user, tagValues }: Props) {
         <aside
           className={`border-l border-slate-700 bg-slate-800 flex flex-col overflow-hidden transition-all duration-300 ${
             ioSidebarOpen
-              ? 'w-96 lg:relative absolute right-0 top-0 bottom-0 z-20 lg:z-0'
+              ? 'w-72 lg:relative absolute right-0 top-0 bottom-0 z-20 lg:z-0'
               : 'w-0'
           }`}
         >
