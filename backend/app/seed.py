@@ -730,7 +730,7 @@ async def create_demo_resources(session: AsyncSession):
         "production.target_rate": "120",
     }
     for key, value in production_settings.items():
-        session.add(AppSetting(key=key, value=value))
+        await session.merge(AppSetting(key=key, value=value))
 
     await session.flush()
 
