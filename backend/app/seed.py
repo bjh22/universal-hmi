@@ -827,6 +827,32 @@ async def create_demo_resources(session: AsyncSession):
     await session.flush()
 
 
+DEFAULT_REASON_CODES = [
+    {"code": "MECHANICAL", "description": "Mechanical failure or breakdown", "category": "Equipment", "sort_order": 0},
+    {"code": "ELECTRICAL", "description": "Electrical fault or power issue", "category": "Equipment", "sort_order": 1},
+    {"code": "MATERIAL", "description": "Raw material issue (jam, empty, defective)", "category": "Material", "sort_order": 2},
+    {"code": "CHANGEOVER", "description": "Product or format changeover", "category": "Planned", "sort_order": 3},
+    {"code": "OPERATOR", "description": "Operator-related stoppage", "category": "Operator", "sort_order": 4},
+    {"code": "PLANNED_MAINTENANCE", "description": "Scheduled preventive maintenance", "category": "Planned", "sort_order": 5},
+    {"code": "QUALITY_HOLD", "description": "Quality inspection or hold", "category": "Quality", "sort_order": 6},
+    {"code": "OTHER", "description": "Other or unclassified reason", "category": "Other", "sort_order": 7},
+]
+
+
+async def seed_default_reason_codes(session: AsyncSession):
+    """Seed default reason codes if none exist.
+
+    This is a standalone function so it can be called from both the seed script
+    and the project creation API endpoints.  It does NOT commit — the caller
+    is responsible for committing.
+    """
+    existing_rc = await session.execute(select(ReasonCode).limit(1))
+    if existing_rc.scalar_one_or_none() is None:
+        for rc_data in DEFAULT_REASON_CODES:
+            session.add(ReasonCode(**rc_data))
+        await session.flush()
+
+
 async def seed():
     await init_db()
 
@@ -851,20 +877,7 @@ async def seed():
                 ))
 
         # Reason codes
-        existing_rc = await session.execute(select(ReasonCode).limit(1))
-        if existing_rc.scalar_one_or_none() is None:
-            default_codes = [
-                ReasonCode(code="MECHANICAL", description="Mechanical failure or breakdown", category="Equipment", sort_order=0),
-                ReasonCode(code="ELECTRICAL", description="Electrical fault or power issue", category="Equipment", sort_order=1),
-                ReasonCode(code="MATERIAL", description="Raw material issue (jam, empty, defective)", category="Material", sort_order=2),
-                ReasonCode(code="CHANGEOVER", description="Product or format changeover", category="Planned", sort_order=3),
-                ReasonCode(code="OPERATOR", description="Operator-related stoppage", category="Operator", sort_order=4),
-                ReasonCode(code="PLANNED_MAINTENANCE", description="Scheduled preventive maintenance", category="Planned", sort_order=5),
-                ReasonCode(code="QUALITY_HOLD", description="Quality inspection or hold", category="Quality", sort_order=6),
-                ReasonCode(code="OTHER", description="Other or unclassified reason", category="Other", sort_order=7),
-            ]
-            for rc in default_codes:
-                session.add(rc)
+        await seed_default_reason_codes(session)
 
         # Check if demo resources already exist (skip if so)
         result = await session.execute(

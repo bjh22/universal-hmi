@@ -18,6 +18,8 @@ from app.models.alarm import Alarm, AlarmHistory
 from app.models.screen import Screen, ScreenTemplate
 from app.models.tag import Tag, TagLabel, TagTemplate, tag_label_assignments
 from app.models.app_setting import AppSetting
+from app.models.downtime_annotation import DowntimeAnnotation
+from app.models.reason_code import ReasonCode
 from app.models.user import User, UserRole
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -481,6 +483,17 @@ async def _build_snapshot(session: AsyncSession, project: Project) -> dict:
             "download_conditions": _safe_json_parse(job.download_conditions),
         })
 
+    # Reason codes
+    rc_result = await session.execute(select(ReasonCode).where(ReasonCode.is_active == True).order_by(ReasonCode.sort_order))
+    reason_codes = []
+    for rc in rc_result.scalars().all():
+        reason_codes.append({
+            "code": rc.code,
+            "description": rc.description,
+            "category": rc.category,
+            "sort_order": rc.sort_order,
+        })
+
     # Branding settings
     branding_keys = ["site_title", "nav_title", "favicon"]
     branding_result = await session.execute(
@@ -512,17 +525,19 @@ async def _build_snapshot(session: AsyncSession, project: Project) -> dict:
         "screens": screens,
         "screen_templates": screen_templates,
         "jobs": jobs,
+        "reason_codes": reason_codes,
     }
 
 
 async def _wipe_all_resources(session: AsyncSession):
     """Delete all HMI resources from the database."""
+    await session.execute(delete(DowntimeAnnotation))
     await session.execute(delete(AlarmHistory))
     await session.execute(delete(Alarm))
     await session.execute(delete(tag_label_assignments))
     # Preserve system tags during wipe
     await session.execute(delete(Tag).where(Tag.is_system != True))
-    for model in [Screen, Job, TagTemplate, ScreenTemplate, TagLabel, DataSource]:
+    for model in [Screen, Job, TagTemplate, ScreenTemplate, TagLabel, DataSource, ReasonCode]:
         await session.execute(delete(model))
     await session.flush()
 
@@ -622,6 +637,21 @@ async def load_project(
     if job_items:
         await _import_jobs(job_items, pid, session, "overwrite", {})
 
+    # Restore reason codes from snapshot, or seed defaults
+    rc_items = data.get("reason_codes", [])
+    if rc_items:
+        for rc_data in rc_items:
+            session.add(ReasonCode(
+                code=rc_data["code"],
+                description=rc_data.get("description"),
+                category=rc_data.get("category"),
+                sort_order=rc_data.get("sort_order", 0),
+            ))
+        await session.flush()
+    else:
+        from app.seed import seed_default_reason_codes
+        await seed_default_reason_codes(session)
+
     # Restore branding settings
     branding = data.get("branding", {})
     if branding:
@@ -661,6 +691,7 @@ async def create_blank_project(
     _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
 ):
     """Create a new project and wipe all current HMI resources."""
+    from app.seed import seed_default_reason_codes
     from app.services.tag_engine import tag_engine
 
     existing = await session.execute(select(Project).where(Project.name == body.name))
@@ -674,13 +705,12 @@ async def create_blank_project(
     # Wipe all resources
     await _wipe_all_resources(session)
 
-    # Save empty snapshot
-    empty_snapshot = {
-        "format_version": EXPORT_FORMAT_VERSION,
-        "project": {"name": project.name, "description": project.description, "version": project.version},
-        "data_sources": [], "tag_labels": [], "tags": [], "tag_templates": [],
-        "screens": [], "screen_templates": [], "jobs": [],
-    }
+    # Seed default reason codes for the new blank project
+    await seed_default_reason_codes(session)
+
+    # Save snapshot (includes default reason codes)
+    snapshot_data = await _build_snapshot(session, project)
+    empty_snapshot = snapshot_data
     project.snapshot = json.dumps(empty_snapshot)
     project.snapshot_saved_at = datetime.now(timezone.utc)
     await session.flush()
@@ -707,7 +737,7 @@ async def create_demo_project(
     _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
 ):
     """Create a new project with demo packaging machine data."""
-    from app.seed import create_demo_resources
+    from app.seed import create_demo_resources, seed_default_reason_codes
     from app.services.tag_engine import tag_engine
 
     existing = await session.execute(select(Project).where(Project.name == body.name))
@@ -718,9 +748,10 @@ async def create_demo_project(
     session.add(project)
     await session.flush()
 
-    # Wipe all resources, then create demo data
+    # Wipe all resources, then create demo data + default reason codes
     await _wipe_all_resources(session)
     await create_demo_resources(session)
+    await seed_default_reason_codes(session)
     await session.flush()
 
     # Save snapshot of demo state
