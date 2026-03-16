@@ -90,8 +90,12 @@ export function TrendWidget({ title, tags: tagConfigs = [], hours = 24, refreshS
       });
   }, [tagConfigs, allTags, hours]);
 
-  // Fetch on mount and when config changes
+  // Fetch on mount and when config changes.
+  // fetchData calls setState internally (setChartData, setLoading), which triggers
+  // the react-hooks/set-state-in-effect rule. We suppress it here because fetchData
+  // is an async fetch that calls setState in a .then() callback, not synchronously.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
   }, [fetchData]);
 

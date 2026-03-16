@@ -326,7 +326,7 @@ export function ServicePage({ user, tagValues }: Props) {
 
   const handleToggle = useCallback(async (tagName: string, currentValue: unknown) => {
     try {
-      await api.writeTag(tagName, !Boolean(currentValue));
+      await api.writeTag(tagName, !currentValue);
     } catch {
       // ignore
     }
@@ -509,12 +509,12 @@ export function ServicePage({ user, tagValues }: Props) {
                                       onClick={() => handleToggle(tag.name, liveValue)}
                                       className="inline-flex items-center gap-3 min-h-[48px] px-3 py-2"
                                     >
-                                      <div className={`w-12 h-6 rounded-full transition-colors relative flex-shrink-0 ${Boolean(liveValue) ? 'bg-green-500' : 'bg-slate-600'}`}>
+                                      <div className={`w-12 h-6 rounded-full transition-colors relative flex-shrink-0 ${liveValue ? 'bg-green-500' : 'bg-slate-600'}`}>
                                         <span className="absolute top-0.5 w-5 h-5 bg-white rounded-full transition-transform shadow-sm"
-                                          style={{ left: Boolean(liveValue) ? '1.5rem' : '0.125rem' }} />
+                                          style={{ left: liveValue ? '1.5rem' : '0.125rem' }} />
                                       </div>
-                                      <span className={`text-sm font-medium ${Boolean(liveValue) ? 'text-green-400' : 'text-slate-500'}`}>
-                                        {Boolean(liveValue) ? 'ON' : 'OFF'}
+                                      <span className={`text-sm font-medium ${liveValue ? 'text-green-400' : 'text-slate-500'}`}>
+                                        {liveValue ? 'ON' : 'OFF'}
                                       </span>
                                     </button>
                                   ) : isBool && isWritable ? (
@@ -522,18 +522,18 @@ export function ServicePage({ user, tagValues }: Props) {
                                       type="button"
                                       onPointerDown={() => handleMomentaryPress(tag.name)}
                                       onPointerUp={() => handleMomentaryRelease(tag.name)}
-                                      onPointerLeave={() => { if (Boolean(liveValue)) handleMomentaryRelease(tag.name); }}
+                                      onPointerLeave={() => { if (liveValue) handleMomentaryRelease(tag.name); }}
                                       className={`inline-flex items-center justify-center min-h-[48px] min-w-[80px] px-4 py-2 rounded-lg font-medium text-sm transition-all select-none ${
-                                        Boolean(liveValue)
+                                        liveValue
                                           ? 'bg-green-600 text-white shadow-inner'
                                           : 'bg-slate-600 text-slate-300 hover:bg-slate-500 active:bg-green-600 active:text-white'
                                       }`}
                                     >
-                                      {Boolean(liveValue) ? 'ON' : 'PRESS'}
+                                      {liveValue ? 'ON' : 'PRESS'}
                                     </button>
                                   ) : isBool ? (
-                                    <span className={`font-medium ${Boolean(liveValue) ? 'text-green-400' : 'text-slate-500'}`}>
-                                      {Boolean(liveValue) ? 'ON' : 'OFF'}
+                                    <span className={`font-medium ${liveValue ? 'text-green-400' : 'text-slate-500'}`}>
+                                      {liveValue ? 'ON' : 'OFF'}
                                     </span>
                                   ) : hasEnum && isWritable ? (
                                     <select

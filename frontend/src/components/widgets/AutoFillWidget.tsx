@@ -69,7 +69,12 @@ export function AutoFillWidget({ title, labelName, columns = 2, onColor = '#22c5
   const [fetchedTags, setFetchedTags] = useState<Tag[]>([]);
 
   useEffect(() => {
-    if (!labelName) { setFetchedTags([]); return; }
+    if (!labelName) {
+      // Reset when label is removed — prop-driven state sync, not a cascading render
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFetchedTags([]);
+      return;
+    }
     api.getTags().then(tags => {
       setFetchedTags(tags.filter(t => t.labels?.some(l => l.name === labelName)));
     }).catch(() => {});

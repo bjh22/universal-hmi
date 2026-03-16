@@ -95,7 +95,7 @@ export function ReportsPage() {
 
   useEffect(() => {
     if (tab !== 'live') return;
-    fetchLive(); // eslint-disable-line react-hooks/set-state-in-effect
+    fetchLive();
     const id = setInterval(fetchLive, 5000);
     return () => clearInterval(id);
   }, [tab, fetchLive]);
@@ -126,7 +126,7 @@ export function ReportsPage() {
 
   useEffect(() => {
     if (tab !== 'historical') return;
-    fetchHistorical(); // eslint-disable-line react-hooks/set-state-in-effect
+    fetchHistorical();
     return () => { abortRef.current?.abort(); };
   }, [tab, fetchHistorical]);
 

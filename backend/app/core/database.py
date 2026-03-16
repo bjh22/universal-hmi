@@ -27,9 +27,12 @@ engine = create_async_engine(
 # A session factory — calling async_session() creates a new database session.
 # A session is like a "workspace": you read/write data within it, then commit
 # (save) or rollback (discard) all changes at once.
-# expire_on_commit=False keeps ORM objects usable after commit — without this,
-# accessing an attribute after commit would trigger a lazy load (which fails
-# in async mode).
+# expire_on_commit=False keeps ORM objects usable after commit. By default,
+# SQLAlchemy "expires" all loaded attributes after a commit, so the next access
+# triggers a lazy SQL query to re-fetch them. In synchronous code this works
+# transparently, but in async mode lazy loads raise an error because they need
+# an active async context. Setting this to False means committed objects keep
+# their attribute values in memory — safe because our sessions are short-lived.
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 

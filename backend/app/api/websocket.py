@@ -7,8 +7,11 @@ the instant they happen, without the client having to poll.
 
 import asyncio
 import json
+import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
+logger = logging.getLogger(__name__)
 
 from app.services.tag_engine import tag_engine
 
@@ -49,7 +52,7 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         pass
     except Exception:
-        pass
+        logger.debug("WebSocket connection error", exc_info=True)
     finally:
         # Always unsubscribe when the connection ends, even if the client
         # disconnected unexpectedly. This prevents memory leaks from orphaned

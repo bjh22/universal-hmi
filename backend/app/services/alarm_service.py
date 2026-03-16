@@ -33,6 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.models.alarm import Alarm, AlarmHistory, AlarmSeverity, AlarmState
 from app.models.tag import Tag
 from app.services.tag_engine import TagEngine
+from app.utils import iso_z
 
 logger = logging.getLogger(__name__)
 
@@ -198,9 +199,9 @@ class AlarmService:
                 "message": alarm.message,
                 "severity": alarm.severity.value,
                 "state": alarm.state.value,
-                "triggered_at": alarm.triggered_at.isoformat() + ("" if alarm.triggered_at.tzinfo else "Z"),
+                "triggered_at": iso_z(alarm.triggered_at),
                 "acknowledged_at": (
-                    (alarm.acknowledged_at.isoformat() + ("" if alarm.acknowledged_at.tzinfo else "Z"))
+                    iso_z(alarm.acknowledged_at)
                     if alarm.acknowledged_at else None
                 ),
                 "acknowledged_by": alarm.acknowledged_by,
@@ -495,9 +496,9 @@ class AlarmService:
                 "message": alarm.message,
                 "severity": alarm.severity.value,
                 "state": alarm.state.value,
-                "triggered_at": alarm.triggered_at.isoformat() + ("" if alarm.triggered_at.tzinfo else "Z"),
+                "triggered_at": iso_z(alarm.triggered_at),
                 "acknowledged_at": (
-                    (alarm.acknowledged_at.isoformat() + ("" if alarm.acknowledged_at.tzinfo else "Z"))
+                    iso_z(alarm.acknowledged_at)
                     if alarm.acknowledged_at else None
                 ),
                 "acknowledged_by": alarm.acknowledged_by,

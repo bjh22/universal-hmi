@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import type { UserData, AlarmData, DatasourceStatus } from '../../types';
 import { api } from '../../lib/api';
+import { SeverityIcon } from '../shared/SeverityIcon';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -54,16 +55,7 @@ const NAV_ITEMS = [
   { to: '/support', icon: LifeBuoy, label: 'Support', roles: null },
 ];
 
-function SeverityIcon({ severity }: { severity: AlarmData['severity'] }) {
-  switch (severity) {
-    case 'critical':
-      return <AlertCircle size={16} className="text-red-400 shrink-0" />;
-    case 'warning':
-      return <AlertTriangle size={16} className="text-yellow-400 shrink-0" />;
-    default:
-      return <Info size={16} className="text-blue-400 shrink-0" />;
-  }
-}
+// SeverityIcon is now imported from shared/SeverityIcon
 
 export function AppShell({ children, user, wsConnected, alarms, onLogout, navTitle = 'HMI', activeJobName, datasourceStatuses = [] }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(() => {

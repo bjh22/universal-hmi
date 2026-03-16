@@ -40,9 +40,9 @@ async def render_from_text(
 
     try:
         png_bytes = render_zpl(body.zpl, dpi=body.dpi, width_dots=body.width_dots)
-    except Exception as e:
+    except Exception:
         logger.exception("ZPL render failed")
-        raise HTTPException(status_code=500, detail=f"Render failed: {e}")
+        raise HTTPException(status_code=500, detail="Render failed")
 
     return Response(content=png_bytes, media_type="image/png")
 
@@ -72,8 +72,8 @@ async def render_from_file(
 
     try:
         png_bytes = render_zpl(zpl_text, dpi=dpi, width_dots=width_dots)
-    except Exception as e:
+    except Exception:
         logger.exception("ZPL file render failed")
-        raise HTTPException(status_code=500, detail=f"Render failed: {e}")
+        raise HTTPException(status_code=500, detail="Render failed")
 
     return Response(content=png_bytes, media_type="image/png")

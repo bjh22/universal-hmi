@@ -23,6 +23,7 @@ from app.models.alarm import Alarm, AlarmHistory, AlarmState
 from app.models.downtime_annotation import DowntimeAnnotation
 from app.models.trend import TrendData
 from app.models.tag import Tag
+from app.utils import iso_z
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +94,9 @@ def _build_intervals_from_trend(
     current_start: datetime | None = None
     for i, (ts, value) in enumerate(samples):
         ts = _normalize_dt(ts)
+        # A cycling tag value >= 1.0 means the machine is running. We use >= 1.0
+        # instead of > 0 because PLCs often use integer booleans (0/1) and we want
+        # to avoid counting noise or transient fractional values as "running".
         is_on = bool(value and value >= 1.0)
         next_ts = _normalize_dt(samples[i + 1][0]) if i + 1 < len(samples) else frame_end
 
@@ -121,7 +125,14 @@ def _subtract_intervals(
     base: list[tuple[datetime, datetime]],
     subtract: list[tuple[datetime, datetime]],
 ) -> list[tuple[datetime, datetime]]:
-    """Remove subtract intervals from base intervals. Returns remaining intervals."""
+    """Remove subtract intervals from base intervals. Returns remaining intervals.
+
+    Algorithm: for each base interval, iterate through all subtraction intervals and
+    "punch holes" where they overlap. A subtraction that overlaps the middle of a base
+    interval splits it into two pieces (before and after the hole). Non-overlapping
+    subtractions are skipped. This is used to compute idle time = total frame minus
+    uptime minus downtime.
+    """
     if not subtract:
         return list(base)
     result: list[tuple[datetime, datetime]] = []
@@ -130,9 +141,11 @@ def _subtract_intervals(
         for ss, se in subtract:
             new_remaining = []
             for rs, re in remaining:
+                # No overlap — subtraction is entirely before or after this piece
                 if se <= rs or ss >= re:
                     new_remaining.append((rs, re))
                 else:
+                    # Overlap — keep the pieces before and after the subtraction
                     if ss > rs:
                         new_remaining.append((rs, ss))
                     if se < re:
@@ -330,8 +343,8 @@ async def compute_report(
         "quality": quality,
         "oee": oee,
         "timeframe": {
-            "start": frame_start.isoformat() + ("" if frame_start.tzinfo else "Z"),
-            "end": frame_end.isoformat() + ("" if frame_end.tzinfo else "Z"),
+            "start": iso_z(frame_start),
+            "end": iso_z(frame_end),
         },
     }
 
@@ -350,8 +363,8 @@ def _empty_report(frame_start: datetime, frame_end: datetime, settings: dict) ->
         "quality": None,
         "oee": None,
         "timeframe": {
-            "start": frame_start.isoformat() + ("" if frame_start.tzinfo else "Z"),
-            "end": frame_end.isoformat() + ("" if frame_end.tzinfo else "Z"),
+            "start": iso_z(frame_start),
+            "end": iso_z(frame_end),
         },
     }
 
@@ -481,8 +494,8 @@ def _merge_fault_intervals(
             "alarm_history_id": iv["alarm_history_id"],
             "tag_name": iv["tag_name"],
             "tag_display_name": iv["tag_display_name"],
-            "start_time": _iso(iv["original_start"]),
-            "end_time": _iso(iv["original_end"]) if iv["original_end"] else None,
+            "start_time": iso_z(iv["original_start"]),
+            "end_time": iso_z(iv["original_end"]) if iv["original_end"] else None,
             "is_exception": is_exc,
         }
 
@@ -521,11 +534,6 @@ def _merge_fault_intervals(
         "faults": cur_faults,
     })
     return merged
-
-
-def _iso(dt: datetime) -> str:
-    """Datetime → ISO-8601 string with UTC indicator."""
-    return dt.isoformat() + ("" if dt.tzinfo else "Z")
 
 
 async def get_downtime_periods(
@@ -591,11 +599,11 @@ async def get_downtime_periods(
                 merged_capped.append((s, e))
         capped_duration = _total_seconds(merged_capped)
 
-        start_iso = _iso(mp["original_start"])
+        start_iso = iso_z(mp["original_start"])
         ann = annotations.get(mp["original_start"].isoformat())
         periods.append({
             "start_time": start_iso,
-            "end_time": _iso(mp["original_end"]) if mp["original_end"] else None,
+            "end_time": iso_z(mp["original_end"]) if mp["original_end"] else None,
             "duration_seconds": round(duration, 1),
             "capped_duration_seconds": round(capped_duration, 1),
             "faults": mp["faults"],

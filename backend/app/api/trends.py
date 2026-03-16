@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.utils import iso_z
 from app.models.trend import TrendData, TrendView
 
 router = APIRouter(prefix="/api/trends", tags=["trends"])
@@ -37,7 +38,7 @@ async def get_trend_data(
     rows = result.scalars().all()
     return [
         {
-            "timestamp": r.timestamp.isoformat() + ("" if r.timestamp.tzinfo else "Z"),
+            "timestamp": iso_z(r.timestamp),
             "value": r.value,
             "string_value": r.string_value,
         }

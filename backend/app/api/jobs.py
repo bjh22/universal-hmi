@@ -12,6 +12,7 @@ from app.models.job import Job, JobHistory
 from app.models.user import User, UserRole
 from app.services.audit_service import log_audit
 from app.services.tag_engine import tag_engine
+from app.utils import iso_z
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
@@ -229,5 +230,5 @@ def _job_out(job: Job) -> dict:
         "setpoints": job.setpoints,
         "download_conditions": job.download_conditions,
         "created_by": job.created_by,
-        "created_at": (job.created_at.isoformat() + ("" if job.created_at.tzinfo else "Z")) if job.created_at else "",
+        "created_at": iso_z(job.created_at) if job.created_at else "",
     }
