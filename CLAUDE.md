@@ -72,6 +72,9 @@ dev.bat doctor         # Windows CMD
 ./dev.sh build      # TypeScript check + Vite build
 ./dev.sh lint       # ESLint
 ./dev.sh check      # Build + lint
+./dev.sh test       # Run all tests (backend + frontend)
+./dev.sh test:backend  # Backend tests only (pytest)
+./dev.sh test:frontend # Frontend tests only (vitest)
 ./dev.sh seed       # Seed database with default users/tags
 ./dev.sh doctor     # Check prerequisites
 ```
@@ -84,6 +87,9 @@ dev.bat stop        # Stop any running dev servers (ports 8080, 5173)
 dev.bat build       # TypeScript check + Vite build
 dev.bat lint        # ESLint
 dev.bat check       # Build + lint
+dev.bat test        # Run all tests (backend + frontend)
+dev.bat test:backend   # Backend tests only (pytest)
+dev.bat test:frontend  # Frontend tests only (vitest)
 dev.bat seed        # Seed database with default users/tags
 dev.bat doctor      # Check prerequisites
 ```
@@ -96,6 +102,9 @@ dev.bat doctor      # Check prerequisites
 .\dev.ps1 build     # TypeScript check + Vite build
 .\dev.ps1 lint      # ESLint
 .\dev.ps1 check     # Build + lint
+.\dev.ps1 test      # Run all tests (backend + frontend)
+.\dev.ps1 test:backend  # Backend tests only (pytest)
+.\dev.ps1 test:frontend # Frontend tests only (vitest)
 .\dev.ps1 seed      # Seed database with default users/tags
 .\dev.ps1 doctor    # Check prerequisites
 ```
@@ -107,6 +116,7 @@ npm run dev          # Vite dev server on :5173
 npm run build        # tsc -b && vite build
 npm run lint         # eslint .
 npx tsc --noEmit     # Type check only
+npx vitest run       # Run frontend tests
 ```
 
 **Backend only:**
@@ -114,6 +124,8 @@ npx tsc --noEmit     # Type check only
 cd backend
 python run.py        # Start on :8080
 python -m app.seed   # Seed database
+python -m pytest tests/ -v          # Run backend tests
+python -m pytest --cov=app tests/   # Run with coverage
 ```
 
 ## Authentication & Roles
@@ -259,6 +271,13 @@ See `DEVELOPER.md` → "Creating a Plugin Integration" for a full walkthrough wi
 - `backend/hmi-server.spec` — PyInstaller spec file for compiling backend into native executable
 - `deploy.sh` — Deployment packager (`--compile` flag for PyInstaller build)
 - `frontend/src/components/FaultHelpDialog.tsx` — Auto-popup dialog for fault troubleshooting with image/GIF
+- `backend/tests/conftest.py` — Shared test fixtures (in-memory DB, auth tokens, test client)
+- `backend/tests/unit/` — Backend unit tests (147 tests covering services + auth + ZPL)
+- `backend/tests/integration/` — Backend integration tests (25 tests covering API endpoints)
+- `frontend/vitest.config.ts` — Vitest test configuration
+- `frontend/src/hooks/__tests__/` — Frontend hook tests (useDesignMode, useWebSocket, useAuth)
+- `frontend/src/components/widgets/__tests__/` — Widget tests (Gauge, StatusIndicator, WidgetRenderer)
+- `TESTING_STRATEGY.md` — Original testing plan and architecture decisions
 
 ## Database Tables
 

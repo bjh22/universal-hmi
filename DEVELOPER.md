@@ -14,6 +14,7 @@ This guide covers the common development tasks you'll encounter when extending t
 - [Service Page](#service-page)
 - [Fault Help Dialog](#fault-help-dialog)
 - [ZPL Label Preview](#zpl-label-preview)
+- [Testing](#testing)
 - [Frontend Patterns](#frontend-patterns)
 - [Backend Patterns](#backend-patterns)
 - [API Reference](#api-reference)
@@ -1019,6 +1020,276 @@ The `zpl_preview` widget type allows embedding a live ZPL preview in any dashboa
 ### Dependencies
 
 The ZPL renderer requires three additional Python packages: `Pillow`, `python-barcode`, and `qrcode` (all listed in `requirements.txt`).
+
+---
+
+## Testing
+
+The project uses **pytest** for backend tests and **Vitest** for frontend tests. The full suite contains 252 tests (172 backend + 80 frontend) covering services, API endpoints, hooks, and widgets.
+
+### Running Tests
+
+```bash
+# All tests (backend + frontend)
+./dev.sh test
+
+# Backend only
+./dev.sh test:backend
+# or manually:
+cd backend && python -m pytest tests/ -v
+
+# Frontend only
+./dev.sh test:frontend
+# or manually:
+cd frontend && npx vitest run
+
+# Backend with coverage report
+cd backend && python -m pytest --cov=app tests/
+
+# Run a single backend test file
+cd backend && python -m pytest tests/unit/test_alarm_state_machine.py -v
+
+# Run a single frontend test file
+cd frontend && npx vitest run src/hooks/__tests__/useDesignMode.test.ts
+```
+
+### Test Dependencies
+
+Backend test dependencies are in `backend/requirements-dev.txt` (separate from production):
+
+```
+pytest>=8.0
+pytest-asyncio>=0.24
+pytest-cov>=5.0
+httpx>=0.27
+freezegun>=1.4
+```
+
+Install with: `cd backend && pip install -r requirements-dev.txt`
+
+Frontend test dependencies are in `frontend/package.json` devDependencies:
+
+- `vitest` — test runner (native Vite integration)
+- `@testing-library/react` — React component testing utilities
+- `@testing-library/jest-dom` — DOM assertion matchers
+- `jsdom` — browser environment simulation
+
+These are installed automatically with `npm install`.
+
+### Test Directory Structure
+
+```
+backend/tests/
+├── conftest.py                     # Shared fixtures (DB sessions, auth tokens, test client)
+├── unit/
+│   ├── test_reporting_intervals.py # Interval arithmetic (_clamp, _subtract, _build)
+│   ├── test_reporting_oee.py       # OEE formula, bucket generation, exception capping
+│   ├── test_alarm_state_machine.py # Alarm state transitions (all 6 paths)
+│   ├── test_alarm_conditions.py    # Boolean coercion edge cases
+│   ├── test_tag_simulation.py      # Simulation modes (sine, ramp, random, toggle, enum)
+│   ├── test_tag_coercion.py        # Value type coercion and serialization
+│   ├── test_auth_jwt.py            # JWT creation/decode/expiry, password hashing
+│   └── test_zpl_renderer.py        # ZPL-to-PNG rendering
+└── integration/
+    ├── test_auth_api.py            # Password/PIN login, role enforcement
+    ├── test_tags_api.py            # Tag CRUD, value reads and writes
+    └── test_reporting_api.py       # Summary, time-series, downtime, screens
+
+frontend/src/
+├── hooks/__tests__/
+│   ├── useDesignMode.test.ts       # Editor state machine (30 tests)
+│   ├── useWebSocket.test.ts        # Reconnect backoff, message handling
+│   └── useAuth.test.ts             # Login/logout, localStorage persistence
+├── lib/__tests__/
+│   └── api.test.ts                 # Auth headers, error handling, URL encoding
+├── components/widgets/__tests__/
+│   ├── GaugeWidget.test.tsx        # Display modes, color thresholds
+│   ├── StatusIndicator.test.tsx    # Value-to-label mapping, color application
+│   └── WidgetRenderer.test.tsx     # Widget type dispatch, unknown type handling
+├── test-setup.ts                   # Test environment setup (@testing-library/jest-dom)
+└── (root) vitest.config.ts         # Vitest configuration (jsdom, globals, setup)
+```
+
+### Backend Test Configuration
+
+**`backend/pytest.ini`** configures pytest for async test discovery:
+
+```ini
+[pytest]
+asyncio_mode = auto
+testpaths = tests
+python_files = test_*.py
+python_functions = test_*
+```
+
+`asyncio_mode = auto` means all `async def test_*` functions are automatically treated as async tests — no `@pytest.mark.asyncio` decorator needed.
+
+### Backend Test Fixtures
+
+The shared fixtures in `backend/tests/conftest.py` provide:
+
+| Fixture | Scope | Purpose |
+|---------|-------|---------|
+| `db_engine` | session | In-memory SQLite async engine with all tables created |
+| `db_session` | function | Fresh async session per test (rolled back after each test) |
+| `session_factory` | session | Async session factory for the test client |
+| `seeded_db` | function | Session pre-loaded with 4 default users and 4 test tags |
+| `admin_token` | function | Valid JWT for the `admin` user (designer role) |
+| `operator_token` | function | Valid JWT for the `operator` user |
+| `test_client` | function | FastAPI `AsyncClient` with database dependency overridden |
+
+Integration tests use `httpx.AsyncClient` with `ASGITransport` to call the FastAPI app directly — no running server required.
+
+### Frontend Test Configuration
+
+**`frontend/vitest.config.ts`** sets up Vitest with jsdom and React plugin:
+
+```ts
+import { defineConfig } from 'vitest/config'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test-setup.ts'],
+  },
+})
+```
+
+- `environment: 'jsdom'` provides a browser-like DOM environment
+- `globals: true` makes `describe`, `it`, `expect` available without imports
+- `setupFiles` loads `@testing-library/jest-dom` matchers (`.toBeInTheDocument()`, etc.)
+
+### Writing Backend Unit Tests
+
+Backend unit tests target pure functions extracted from services. They import the function directly and test without any database or HTTP context:
+
+```python
+from app.services.reporting_service import ReportingService
+
+def test_clamp_interval_within_range():
+    result = ReportingService._clamp_interval(
+        (100, 200), 50, 250
+    )
+    assert result == (100, 200)
+
+def test_clamp_interval_partial_overlap():
+    result = ReportingService._clamp_interval(
+        (100, 200), 150, 250
+    )
+    assert result == (150, 200)
+```
+
+**Key patterns:**
+- Test functions at the `_private` level since they contain the core logic
+- Use `@staticmethod` functions directly (no instance needed)
+- Group related tests in `class TestXxx:` blocks for organization
+- Use descriptive names: `test_<function>_<scenario>`
+
+### Writing Backend Integration Tests
+
+Integration tests use the `test_client` fixture to make HTTP requests through the full FastAPI stack:
+
+```python
+import pytest
+
+@pytest.mark.asyncio
+async def test_login_valid_credentials(test_client, seeded_db):
+    resp = await test_client.post('/api/auth/login', json={
+        'username': 'admin', 'password': 'admin'
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert 'access_token' in data
+    assert data['role'] == 'designer'
+```
+
+**Key patterns:**
+- Use `seeded_db` fixture when tests need pre-existing users/tags
+- Use `admin_token` or `operator_token` for authenticated requests
+- Pass auth via headers: `headers={'Authorization': f'Bearer {admin_token}'}`
+- Use unique names (e.g., timestamps) to avoid UNIQUE constraint conflicts
+
+### Writing Frontend Tests
+
+Frontend tests use React Testing Library to render components and assert on the DOM:
+
+```tsx
+import { describe, it, expect } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import { StatusIndicator } from '../StatusIndicator'
+
+it('shows mapped label for known value', () => {
+  const mapping = {
+    'Running': { label: 'RUNNING', color: '#22c55e' },
+  }
+  render(
+    <StatusIndicator
+      title="Machine"
+      tag="status_tag"
+      tagValues={makeTagValues('Running')}
+      mapping={mapping}
+    />
+  )
+  expect(screen.getByText('RUNNING')).toBeInTheDocument()
+})
+```
+
+For hooks, use `renderHook` from `@testing-library/react`:
+
+```ts
+import { renderHook, act } from '@testing-library/react'
+import { useDesignMode } from '../useDesignMode'
+
+it('toggles design mode', () => {
+  const { result } = renderHook(() => useDesignMode())
+  expect(result.current.designMode).toBe(false)
+  act(() => { result.current.toggleDesignMode() })
+  expect(result.current.designMode).toBe(true)
+})
+```
+
+**Key patterns:**
+- Use `screen.getByText()` / `screen.getByRole()` for querying rendered output
+- jsdom converts hex colors to `rgb()` format — assert with `toContain('59, 130, 246')` instead of `toContain('#3b82f6')`
+- Wrap state-changing calls in `act()`
+- Use `vi.spyOn(globalThis, 'fetch')` to mock API calls
+
+### Adding Tests for a New Widget
+
+When creating a new widget (see [Creating a New Widget](#creating-a-new-widget)), add a test file alongside:
+
+1. Create `frontend/src/components/widgets/__tests__/NewWidget.test.tsx`
+2. Write a `makeTagValues()` helper to create test tag data
+3. Test: renders with valid data, handles missing tag gracefully, applies expected styles
+4. Run: `cd frontend && npx vitest run src/components/widgets/__tests__/NewWidget.test.tsx`
+
+### Adding Tests for a New API Endpoint
+
+When adding a backend endpoint (see [Adding a Backend API Endpoint](#adding-a-backend-api-endpoint)):
+
+1. Create or extend a test file in `backend/tests/integration/`
+2. Use the `test_client` and `seeded_db` fixtures
+3. Test: successful response, authentication required (401), role enforcement (403), validation errors (422)
+4. Run: `cd backend && python -m pytest tests/integration/test_your_api.py -v`
+
+### Test Coverage
+
+| Category | Tests | What's Covered |
+|----------|-------|----------------|
+| Backend unit | 147 | ReportingService (intervals, OEE, buckets), AlarmService (state machine, conditions), TagEngine (simulation, coercion), auth (JWT, passwords), ZPL renderer |
+| Backend integration | 25 | Auth API (login, PIN, roles), Tags API (CRUD, write), Reporting API (summary, time-series, downtime), Screens API |
+| Frontend unit | 80 | useDesignMode (30), useWebSocket (11), useAuth (4), API client (5), GaugeWidget (11), StatusIndicator (8), WidgetRenderer (5) |
+| **Total** | **252** | |
+
+### What's Not Covered
+
+- **E2E tests** — No Playwright/Cypress browser automation (recommended as a future addition)
+- **Protocol drivers** — OPC-UA, Modbus, EtherNet/IP, MQTT drivers require hardware or protocol simulators
+- **Visual regression** — No screenshot comparison for widgets
+- **Load testing** — Not typical for industrial HMI applications
 
 ---
 
