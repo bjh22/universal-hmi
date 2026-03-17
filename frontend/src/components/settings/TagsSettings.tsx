@@ -323,8 +323,18 @@ function BulkEditDialog({ tagCount, dataSources, onApply, onClose }: {
     simulation_behavior:    { enabled: false, value: null },
   });
 
+  // Boolean fields that default to true when first enabled (users enabling
+  // "Alarm" in bulk edit almost always want alarm_enabled=true, not false).
+  const booleanKeys = new Set(['trending_enabled', 'alarm_enabled', 'alarm_help_enabled', 'simulation_enabled']);
+
   const toggle = useCallback((key: string) =>
-    setFields(f => ({ ...f, [key]: { ...f[key], enabled: !f[key].enabled } })), []);
+    setFields(f => {
+      const wasEnabled = f[key].enabled;
+      const newEnabled = !wasEnabled;
+      // When enabling a boolean toggle field, auto-set value to true
+      const value = (!wasEnabled && newEnabled && booleanKeys.has(key)) ? true : f[key].value;
+      return { ...f, [key]: { ...f[key], enabled: newEnabled, value } };
+    }), []);
   const setValue = useCallback((key: string, value: unknown) =>
     setFields(f => ({ ...f, [key]: { ...f[key], value } })), []);
 
