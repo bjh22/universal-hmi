@@ -311,6 +311,9 @@ function BulkEditDialog({ tagCount, dataSources, onApply, onClose }: {
     data_source_id:      { enabled: false, value: null },
     trending_enabled:    { enabled: false, value: false },
     alarm_enabled:       { enabled: false, value: false },
+    alarm_severity:      { enabled: false, value: 'warning' },
+    alarm_help_enabled:  { enabled: false, value: false },
+    alarm_help_text:     { enabled: false, value: '' },
     simulation_enabled:  { enabled: false, value: false },
     simulation_behavior: { enabled: false, value: null },
   });
@@ -320,10 +323,26 @@ function BulkEditDialog({ tagCount, dataSources, onApply, onClose }: {
   const setValue = useCallback((key: string, value: unknown) =>
     setFields(f => ({ ...f, [key]: { ...f[key], value } })), []);
 
+  // Map bulk-edit alarm sub-fields into an alarm_config patch dict
+  const alarmConfigKeys: Record<string, string> = {
+    alarm_severity: 'severity',
+    alarm_help_enabled: 'help_enabled',
+    alarm_help_text: 'help_text',
+  };
+
   const handleApply = useCallback(() => {
     const patch: Record<string, unknown> = {};
+    const alarmPatch: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(fields)) {
-      if (v.enabled) patch[k] = v.value;
+      if (!v.enabled) continue;
+      if (k in alarmConfigKeys) {
+        alarmPatch[alarmConfigKeys[k]] = v.value;
+      } else {
+        patch[k] = v.value;
+      }
+    }
+    if (Object.keys(alarmPatch).length > 0) {
+      patch.alarm_config = alarmPatch;
     }
     if (Object.keys(patch).length > 0) onApply(patch);
     else onClose();
@@ -427,6 +446,49 @@ function BulkEditDialog({ tagCount, dataSources, onApply, onClose }: {
               </label>
             </div>
           ))}
+
+          {/* Alarm Severity */}
+          <div className={rowCls}>
+            <button onClick={() => toggle('alarm_severity')} className={checkCls}>
+              {fields.alarm_severity.enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+            </button>
+            <span className={labelCls}>Alarm Severity</span>
+            <select value={fields.alarm_severity.value as string}
+              onChange={e => setValue('alarm_severity', e.target.value)}
+              disabled={!fields.alarm_severity.enabled} className={ctrlCls}>
+              <option value="info">Info</option>
+              <option value="warning">Warning</option>
+              <option value="critical">Critical</option>
+            </select>
+          </div>
+
+          {/* Alarm Fault Help Enabled */}
+          <div className={rowCls}>
+            <button onClick={() => toggle('alarm_help_enabled')} className={checkCls}>
+              {fields.alarm_help_enabled.enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+            </button>
+            <span className={labelCls}>Fault Help</span>
+            <label className="flex items-center gap-2 text-sm text-[var(--hmi-text-secondary)] cursor-pointer">
+              <input type="checkbox"
+                checked={fields.alarm_help_enabled.value as boolean}
+                onChange={e => setValue('alarm_help_enabled', e.target.checked)}
+                disabled={!fields.alarm_help_enabled.enabled}
+                className="accent-blue-500 disabled:opacity-40" />
+              {(fields.alarm_help_enabled.value as boolean) ? 'Enabled' : 'Disabled'}
+            </label>
+          </div>
+
+          {/* Alarm Help Text */}
+          <div className={rowCls}>
+            <button onClick={() => toggle('alarm_help_text')} className={checkCls}>
+              {fields.alarm_help_text.enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+            </button>
+            <span className={labelCls}>Help Text</span>
+            <input type="text" value={fields.alarm_help_text.value as string}
+              onChange={e => setValue('alarm_help_text', e.target.value)}
+              disabled={!fields.alarm_help_text.enabled}
+              className={ctrlCls} placeholder="Troubleshooting instructions" />
+          </div>
 
           {/* Simulation Behavior */}
           <div className={rowCls + ' border-b-0'}>

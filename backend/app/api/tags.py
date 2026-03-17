@@ -1135,19 +1135,41 @@ async def bulk_update_tags(
     allowed = {
         "data_type", "access_mode", "engineering_units",
         "trending_enabled", "alarm_enabled", "simulation_enabled",
-        "simulation_behavior", "data_source_id",
+        "simulation_behavior", "data_source_id", "alarm_config",
     }
     fields = {k: v for k, v in body.fields.items() if k in allowed}
     if not fields:
         return {"updated": 0}
+    # alarm_config is handled specially: merge provided keys into each tag's
+    # existing config so that bulk-edit of e.g. severity does not wipe the
+    # tag's existing message or help settings.
+    alarm_config_patch = None
+    if "alarm_config" in fields:
+        raw = fields.pop("alarm_config")
+        if isinstance(raw, dict):
+            alarm_config_patch = raw
+        elif isinstance(raw, str):
+            try:
+                alarm_config_patch = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                pass
     result = await session.execute(select(Tag).where(Tag.id.in_(body.tag_ids)))
     tags = [t for t in result.scalars().all() if not t.is_system]
     for tag in tags:
         for key, val in fields.items():
             setattr(tag, key, val)
+        if alarm_config_patch is not None:
+            existing = {}
+            if tag.alarm_config:
+                try:
+                    existing = json.loads(tag.alarm_config) if isinstance(tag.alarm_config, str) else tag.alarm_config
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            existing.update(alarm_config_patch)
+            tag.alarm_config = json.dumps(existing)
         tag_engine.register_tag(tag)
     await session.flush()
-    reload_alarms = "alarm_enabled" in fields
+    reload_alarms = "alarm_enabled" in fields or alarm_config_patch is not None
     reload_trends = "trending_enabled" in fields
     if reload_alarms or reload_trends:
         await session.commit()
