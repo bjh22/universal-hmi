@@ -90,6 +90,8 @@ _SYSTEM_TAG_TYPES = {d["name"]: d["data_type"] for d in SYSTEM_TAG_DEFS}
 
 
 class TagEngine:
+    _PERSIST_FLUSH_INTERVAL_S = 5  # Flush dirty persisted values every 5 seconds
+
     def __init__(self):
         self._values: dict[str, TagValue] = {}
         self._tags: dict[str, Tag] = {}  # tag name -> Tag model
@@ -97,6 +99,7 @@ class TagEngine:
         self._running = False
         self._sim_task: asyncio.Task | None = None
         self._poll_task: asyncio.Task | None = None
+        self._persist_task: asyncio.Task | None = None
         self._driver_manager = None
         self._session_factory: async_sessionmaker[AsyncSession] | None = None
         self._subscribers: list[asyncio.Queue] = []
@@ -112,6 +115,9 @@ class TagEngine:
         self._last_ds_status: dict[int, bool] = {}
         # Cache datasource metadata (id -> {name, protocol}) for WS broadcasts
         self._ds_meta: dict[int, dict[str, str]] = {}
+        # Buffered persistence: collect dirty internal tag values and flush periodically
+        # to reduce SD card write pressure on low-end hardware (e.g. Raspberry Pi)
+        self._persist_dirty: dict[int, object] = {}  # tag_id -> value
 
     @property
     def values(self) -> dict[str, TagValue]:
@@ -245,20 +251,37 @@ class TagEngine:
             case _:
                 return parsed
 
-    async def _persist_value(self, tag_id: int, value):
-        """Persist an internal tag's current value to the database (fire-and-forget)."""
-        if not self._session_factory:
+    def _mark_persist_dirty(self, tag_id: int, value):
+        """Mark an internal tag value as needing persistence.
+
+        Values are buffered and flushed to the database periodically (every 5s)
+        in a single transaction, reducing I/O pressure on slow storage like SD cards.
+        """
+        self._persist_dirty[tag_id] = value
+
+    async def _persist_flush_loop(self):
+        """Periodically flush dirty persisted tag values to the database."""
+        while self._running:
+            await asyncio.sleep(self._PERSIST_FLUSH_INTERVAL_S)
+            await self._flush_persisted_values()
+
+    async def _flush_persisted_values(self):
+        """Flush all buffered tag persistence writes in a single transaction."""
+        if not self._persist_dirty or not self._session_factory:
             return
+        batch = dict(self._persist_dirty)
+        self._persist_dirty.clear()
         try:
-            serialized = self._serialize_value(value)
             async with self._session_factory() as session:
-                await session.execute(
-                    text("UPDATE tags SET persisted_value = :val WHERE id = :id"),
-                    {"val": serialized, "id": tag_id},
-                )
+                for tag_id, value in batch.items():
+                    serialized = self._serialize_value(value)
+                    await session.execute(
+                        text("UPDATE tags SET persisted_value = :val WHERE id = :id"),
+                        {"val": serialized, "id": tag_id},
+                    )
                 await session.commit()
         except Exception as e:
-            logger.warning(f"Failed to persist tag value (id={tag_id}): {e}")
+            logger.warning(f"Failed to flush persisted tag values: {e}")
 
     def get_tag(self, tag_name: str) -> Tag | None:
         return self._tags.get(tag_name)
@@ -394,12 +417,10 @@ class TagEngine:
         except (ValueError, TypeError):
             pass
         result = self.set_value(tag_name, value)
-        # Persist for internal (nonvolatile) tags — fire-and-forget async task.
-        # We add a done callback to log any unhandled exceptions from the task,
-        # since asyncio silently drops errors from untracked tasks.
+        # Buffer persistence for internal (nonvolatile) tags — the periodic
+        # flush loop writes all dirty values in a single transaction every 5s.
         if result and self._is_internal_tag(tag):
-            task = asyncio.create_task(self._persist_value(tag.id, value))
-            task.add_done_callback(self._log_task_exception)
+            self._mark_persist_dirty(tag.id, value)
         return result
 
     @staticmethod
@@ -503,10 +524,12 @@ class TagEngine:
         self._sim_task = asyncio.create_task(self._simulation_loop())
         if self._driver_manager:
             self._poll_task = asyncio.create_task(self._polling_loop())
+        if self._session_factory:
+            self._persist_task = asyncio.create_task(self._persist_flush_loop())
 
     async def stop_simulation(self):
         self._running = False
-        for task in [self._sim_task, self._poll_task]:
+        for task in [self._sim_task, self._poll_task, self._persist_task]:
             if task:
                 task.cancel()
                 try:
@@ -516,6 +539,8 @@ class TagEngine:
                     pass
                 except Exception:
                     logger.debug("Error during shutdown task cleanup", exc_info=True)
+        # Flush any remaining dirty persisted values on shutdown
+        await self._flush_persisted_values()
 
     async def _simulation_loop(self):
         """Runs every 500ms, computing new values for simulated tags (sine waves,

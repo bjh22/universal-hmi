@@ -122,6 +122,10 @@ async def init_db():
         # Production run tag tracking
         await _add_column_if_missing(conn, "production_runs", "start_good_count", "INTEGER")
         await _add_column_if_missing(conn, "production_runs", "good_count_tag", "VARCHAR(200)")
+        # Performance indexes for alarm_history (reporting queries)
+        await _create_index_if_missing(conn, "ix_alarm_history_tag_name", "alarm_history", "tag_name")
+        await _create_index_if_missing(conn, "ix_alarm_history_triggered_at", "alarm_history", "triggered_at")
+        await _create_index_if_missing(conn, "ix_alarm_history_cleared_at", "alarm_history", "cleared_at")
 
 
 async def _add_column_if_missing(conn, table: str, column: str, col_type: str):
@@ -132,6 +136,16 @@ async def _add_column_if_missing(conn, table: str, column: str, col_type: str):
         return  # Table doesn't exist yet (will be created by create_all)
     if column not in columns:
         await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+
+
+async def _create_index_if_missing(conn, index_name: str, table: str, column: str):
+    """Create an index on an existing table if it doesn't exist yet."""
+    result = await conn.execute(
+        text("SELECT name FROM sqlite_master WHERE type='index' AND name=:name"),
+        {"name": index_name},
+    )
+    if not result.fetchone():
+        await conn.execute(text(f"CREATE INDEX {index_name} ON {table} ({column})"))
 
 
 async def _rename_column_if_needed(conn, table: str, old_name: str, new_name: str):

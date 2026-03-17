@@ -8,7 +8,7 @@ for safety — operators must be notified of abnormal conditions promptly.
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -58,6 +58,11 @@ class Alarm(Base):
 # may look back months or years after the fact.
 class AlarmHistory(Base):
     __tablename__ = "alarm_history"
+    __table_args__ = (
+        Index("ix_alarm_history_tag_name", "tag_name"),
+        Index("ix_alarm_history_triggered_at", "triggered_at"),
+        Index("ix_alarm_history_cleared_at", "cleared_at"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     # Not a ForeignKey — intentionally decoupled so history survives tag deletion

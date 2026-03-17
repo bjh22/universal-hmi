@@ -1,4 +1,5 @@
 import json
+import time
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -46,14 +47,25 @@ async def _set_setting(session: AsyncSession, key: str, value: str | None) -> No
         session.add(AppSetting(key=key, value=value))
 
 
+# In-memory cache to avoid 6 SELECTs per reporting endpoint call.
+# Invalidated on settings update; TTL prevents stale data if updated externally.
+_settings_cache: dict | None = None
+_settings_cache_time: float = 0.0
+_SETTINGS_CACHE_TTL = 30.0  # seconds
+
+
 async def load_production_settings(session: AsyncSession) -> dict:
+    global _settings_cache, _settings_cache_time
+    if _settings_cache is not None and (time.monotonic() - _settings_cache_time) < _SETTINGS_CACHE_TTL:
+        return dict(_settings_cache)
+
     good_count_tag = await _get_setting(session, _KEYS["good_count_tag"])
     reject_raw = await _get_setting(session, _KEYS["reject_fault_tags"])
     downtime_raw = await _get_setting(session, _KEYS["downtime_alarm_tags"])
     cycling_tag = await _get_setting(session, _KEYS["cycling_tag"])
     exception_raw = await _get_setting(session, _KEYS["downtime_exception_tags"])
     target_rate_raw = await _get_setting(session, _KEYS["target_rate"])
-    return {
+    result = {
         "good_count_tag": good_count_tag,
         "reject_fault_tags": json.loads(reject_raw) if reject_raw else [],
         "downtime_alarm_tags": json.loads(downtime_raw) if downtime_raw else [],
@@ -61,6 +73,15 @@ async def load_production_settings(session: AsyncSession) -> dict:
         "downtime_exception_tags": json.loads(exception_raw) if exception_raw else [],
         "target_rate": float(target_rate_raw) if target_rate_raw else None,
     }
+    _settings_cache = result
+    _settings_cache_time = time.monotonic()
+    return dict(result)
+
+
+def invalidate_production_settings_cache():
+    global _settings_cache, _settings_cache_time
+    _settings_cache = None
+    _settings_cache_time = 0.0
 
 
 @router.get("/")
@@ -81,4 +102,5 @@ async def update_production_settings(
     await _set_setting(session, _KEYS["downtime_exception_tags"], json.dumps(body.downtime_exception_tags))
     await _set_setting(session, _KEYS["target_rate"], str(body.target_rate) if body.target_rate is not None else None)
     await session.commit()
+    invalidate_production_settings_cache()
     return await load_production_settings(session)
