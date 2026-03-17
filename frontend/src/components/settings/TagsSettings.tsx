@@ -305,14 +305,22 @@ function BulkEditDialog({ tagCount, dataSources, onApply, onClose }: {
   onClose: () => void;
 }) {
   const [fields, setFields] = useState<Record<string, BulkFieldState>>({
-    data_type:           { enabled: false, value: 'float' },
-    access_mode:         { enabled: false, value: 'read_write' },
-    engineering_units:   { enabled: false, value: '' },
-    data_source_id:      { enabled: false, value: null },
-    trending_enabled:    { enabled: false, value: false },
-    alarm_enabled:       { enabled: false, value: false },
-    simulation_enabled:  { enabled: false, value: false },
-    simulation_behavior: { enabled: false, value: null },
+    data_type:              { enabled: false, value: 'float' },
+    access_mode:            { enabled: false, value: 'read_write' },
+    engineering_units:      { enabled: false, value: '' },
+    display_format:         { enabled: false, value: '' },
+    min_value:              { enabled: false, value: 0 },
+    max_value:              { enabled: false, value: 100 },
+    deadband:               { enabled: false, value: 0 },
+    data_source_id:         { enabled: false, value: null },
+    trending_enabled:       { enabled: false, value: false },
+    trending_sample_rate_ms: { enabled: false, value: 1000 },
+    alarm_enabled:          { enabled: false, value: false },
+    alarm_severity:         { enabled: false, value: 'warning' },
+    alarm_help_enabled:     { enabled: false, value: false },
+    alarm_help_text:        { enabled: false, value: '' },
+    simulation_enabled:     { enabled: false, value: false },
+    simulation_behavior:    { enabled: false, value: null },
   });
 
   const toggle = useCallback((key: string) =>
@@ -320,10 +328,26 @@ function BulkEditDialog({ tagCount, dataSources, onApply, onClose }: {
   const setValue = useCallback((key: string, value: unknown) =>
     setFields(f => ({ ...f, [key]: { ...f[key], value } })), []);
 
+  // Map bulk-edit alarm sub-fields into an alarm_config patch dict
+  const alarmConfigKeys: Record<string, string> = {
+    alarm_severity: 'severity',
+    alarm_help_enabled: 'help_enabled',
+    alarm_help_text: 'help_text',
+  };
+
   const handleApply = useCallback(() => {
     const patch: Record<string, unknown> = {};
+    const alarmPatch: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(fields)) {
-      if (v.enabled) patch[k] = v.value;
+      if (!v.enabled) continue;
+      if (k in alarmConfigKeys) {
+        alarmPatch[alarmConfigKeys[k]] = v.value;
+      } else {
+        patch[k] = v.value;
+      }
+    }
+    if (Object.keys(alarmPatch).length > 0) {
+      patch.alarm_config = alarmPatch;
     }
     if (Object.keys(patch).length > 0) onApply(patch);
     else onClose();
@@ -391,6 +415,54 @@ function BulkEditDialog({ tagCount, dataSources, onApply, onClose }: {
               className={ctrlCls} placeholder="e.g. °C, bar, rpm" />
           </div>
 
+          {/* Display Format */}
+          <div className={rowCls}>
+            <button onClick={() => toggle('display_format')} className={checkCls}>
+              {fields.display_format.enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+            </button>
+            <span className={labelCls}>Display Format</span>
+            <input type="text" value={fields.display_format.value as string}
+              onChange={e => setValue('display_format', e.target.value || null)}
+              disabled={!fields.display_format.enabled}
+              className={ctrlCls} placeholder="e.g. 0.00, 0.0" />
+          </div>
+
+          {/* Min Value */}
+          <div className={rowCls}>
+            <button onClick={() => toggle('min_value')} className={checkCls}>
+              {fields.min_value.enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+            </button>
+            <span className={labelCls}>Min Value</span>
+            <input type="number" value={fields.min_value.value as number}
+              onChange={e => setValue('min_value', e.target.value === '' ? null : Number(e.target.value))}
+              disabled={!fields.min_value.enabled}
+              className={ctrlCls} />
+          </div>
+
+          {/* Max Value */}
+          <div className={rowCls}>
+            <button onClick={() => toggle('max_value')} className={checkCls}>
+              {fields.max_value.enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+            </button>
+            <span className={labelCls}>Max Value</span>
+            <input type="number" value={fields.max_value.value as number}
+              onChange={e => setValue('max_value', e.target.value === '' ? null : Number(e.target.value))}
+              disabled={!fields.max_value.enabled}
+              className={ctrlCls} />
+          </div>
+
+          {/* Deadband */}
+          <div className={rowCls}>
+            <button onClick={() => toggle('deadband')} className={checkCls}>
+              {fields.deadband.enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+            </button>
+            <span className={labelCls}>Deadband</span>
+            <input type="number" value={fields.deadband.value as number}
+              onChange={e => setValue('deadband', e.target.value === '' ? null : Number(e.target.value))}
+              disabled={!fields.deadband.enabled}
+              className={ctrlCls} step="0.1" min="0" />
+          </div>
+
           {/* Data Source */}
           <div className={rowCls}>
             <button onClick={() => toggle('data_source_id')} className={checkCls}>
@@ -427,6 +499,61 @@ function BulkEditDialog({ tagCount, dataSources, onApply, onClose }: {
               </label>
             </div>
           ))}
+
+          {/* Trending Sample Rate */}
+          <div className={rowCls}>
+            <button onClick={() => toggle('trending_sample_rate_ms')} className={checkCls}>
+              {fields.trending_sample_rate_ms.enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+            </button>
+            <span className={labelCls}>Sample Rate (ms)</span>
+            <input type="number" value={fields.trending_sample_rate_ms.value as number}
+              onChange={e => setValue('trending_sample_rate_ms', e.target.value === '' ? null : Number(e.target.value))}
+              disabled={!fields.trending_sample_rate_ms.enabled}
+              className={ctrlCls} min="100" step="100" />
+          </div>
+
+          {/* Alarm Severity */}
+          <div className={rowCls}>
+            <button onClick={() => toggle('alarm_severity')} className={checkCls}>
+              {fields.alarm_severity.enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+            </button>
+            <span className={labelCls}>Alarm Severity</span>
+            <select value={fields.alarm_severity.value as string}
+              onChange={e => setValue('alarm_severity', e.target.value)}
+              disabled={!fields.alarm_severity.enabled} className={ctrlCls}>
+              <option value="info">Info</option>
+              <option value="warning">Warning</option>
+              <option value="critical">Critical</option>
+            </select>
+          </div>
+
+          {/* Alarm Fault Help Enabled */}
+          <div className={rowCls}>
+            <button onClick={() => toggle('alarm_help_enabled')} className={checkCls}>
+              {fields.alarm_help_enabled.enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+            </button>
+            <span className={labelCls}>Fault Help</span>
+            <label className="flex items-center gap-2 text-sm text-[var(--hmi-text-secondary)] cursor-pointer">
+              <input type="checkbox"
+                checked={fields.alarm_help_enabled.value as boolean}
+                onChange={e => setValue('alarm_help_enabled', e.target.checked)}
+                disabled={!fields.alarm_help_enabled.enabled}
+                className="accent-blue-500 disabled:opacity-40" />
+              {(fields.alarm_help_enabled.value as boolean) ? 'Enabled' : 'Disabled'}
+            </label>
+          </div>
+
+          {/* Alarm Help Text */}
+          <div className={rowCls}>
+            <button onClick={() => toggle('alarm_help_text')} className={checkCls}>
+              {fields.alarm_help_text.enabled ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+            </button>
+            <span className={labelCls}>Help Text</span>
+            <input type="text" value={fields.alarm_help_text.value as string}
+              onChange={e => setValue('alarm_help_text', e.target.value)}
+              disabled={!fields.alarm_help_text.enabled}
+              className={ctrlCls} placeholder="Troubleshooting instructions" />
+          </div>
 
           {/* Simulation Behavior */}
           <div className={rowCls + ' border-b-0'}>
@@ -1467,6 +1594,7 @@ export function TagsSettings({ tags, dataSources, allLabels, tagValues, canManag
   const [tagLabelFilter, setTagLabelFilter] = useState('all');
   const [tagTypeFilter, setTagTypeFilter] = useState('all');
   const [tagSourceFilter, setTagSourceFilter] = useState<number | 'all' | 'none'>('all');
+  const [tagFeatureFilter, setTagFeatureFilter] = useState('all');
   const [showAdvFilters, setShowAdvFilters] = useState(false);
   const [editTag, setEditTag] = useState<(Omit<Tag, 'id'> & { id?: number }) | null>(null);
   const [deleteTagTarget, setDeleteTagTarget] = useState<Tag | null>(null);
@@ -1493,6 +1621,14 @@ export function TagsSettings({ tags, dataSources, allLabels, tagValues, canManag
         if (tagSourceFilter === 'none' && t.data_source_id != null) return false;
         if (tagSourceFilter !== 'none' && t.data_source_id !== tagSourceFilter) return false;
       }
+      if (tagFeatureFilter !== 'all') {
+        if (tagFeatureFilter === 'trending' && !t.trending_enabled) return false;
+        if (tagFeatureFilter === 'alarm' && !t.alarm_enabled) return false;
+        if (tagFeatureFilter === 'simulation' && !t.simulation_enabled) return false;
+        if (tagFeatureFilter === 'no_trending' && t.trending_enabled) return false;
+        if (tagFeatureFilter === 'no_alarm' && t.alarm_enabled) return false;
+        if (tagFeatureFilter === 'no_simulation' && t.simulation_enabled) return false;
+      }
       if (tagSearch) {
         const q = tagSearch.toLowerCase();
         return t.name.toLowerCase().includes(q) ||
@@ -1502,13 +1638,13 @@ export function TagsSettings({ tags, dataSources, allLabels, tagValues, canManag
       }
       return true;
     });
-  }, [tags, tagSearch, tagLabelFilter, tagTypeFilter, tagSourceFilter]);
+  }, [tags, tagSearch, tagLabelFilter, tagTypeFilter, tagSourceFilter, tagFeatureFilter]);
 
   // Clear selection when filters change
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedTagIds(new Set());
-  }, [tagSearch, tagLabelFilter, tagTypeFilter, tagSourceFilter]);
+  }, [tagSearch, tagLabelFilter, tagTypeFilter, tagSourceFilter, tagFeatureFilter]);
 
   // Data source name lookup for tag table
   const dsNameMap = useMemo(() => {
@@ -1709,12 +1845,12 @@ export function TagsSettings({ tags, dataSources, allLabels, tagValues, canManag
         </select>
         <button
           onClick={() => setShowAdvFilters(f => !f)}
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm ${showAdvFilters || tagTypeFilter !== 'all' || tagSourceFilter !== 'all' ? 'bg-[var(--hmi-accent-bg)] text-[var(--hmi-accent-text)] border border-[var(--hmi-accent)]/40' : 'bg-[var(--hmi-bg-elevated)] border border-[var(--hmi-border)] text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-secondary)]'}`}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm ${showAdvFilters || tagTypeFilter !== 'all' || tagSourceFilter !== 'all' || tagFeatureFilter !== 'all' ? 'bg-[var(--hmi-accent-bg)] text-[var(--hmi-accent-text)] border border-[var(--hmi-accent)]/40' : 'bg-[var(--hmi-bg-elevated)] border border-[var(--hmi-border)] text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-secondary)]'}`}
         >
           <Filter size={14} /> Filters
-          {(tagTypeFilter !== 'all' || tagSourceFilter !== 'all') && (
+          {(tagTypeFilter !== 'all' || tagSourceFilter !== 'all' || tagFeatureFilter !== 'all') && (
             <span className="ml-1 px-1.5 py-0.5 bg-[var(--hmi-accent)] text-white text-[10px] rounded-full font-medium">
-              {[tagTypeFilter, String(tagSourceFilter)].filter(f => f !== 'all').length}
+              {[tagTypeFilter, String(tagSourceFilter), tagFeatureFilter].filter(f => f !== 'all').length}
             </span>
           )}
         </button>
@@ -1769,9 +1905,22 @@ export function TagsSettings({ tags, dataSources, allLabels, tagValues, canManag
             <option value="none">Internal</option>
             {dataSources.map(ds => <option key={ds.id} value={ds.id}>{ds.name}</option>)}
           </select>
-          {(tagTypeFilter !== 'all' || tagSourceFilter !== 'all') && (
+          <select
+            value={tagFeatureFilter}
+            onChange={e => setTagFeatureFilter(e.target.value)}
+            className="bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-lg px-3 py-1.5 text-sm text-[var(--hmi-text-secondary)] outline-none"
+          >
+            <option value="all">All Features</option>
+            <option value="trending">Trending</option>
+            <option value="alarm">Alarming</option>
+            <option value="simulation">Simulated</option>
+            <option value="no_trending">Not Trending</option>
+            <option value="no_alarm">Not Alarming</option>
+            <option value="no_simulation">Not Simulated</option>
+          </select>
+          {(tagTypeFilter !== 'all' || tagSourceFilter !== 'all' || tagFeatureFilter !== 'all') && (
             <button
-              onClick={() => { setTagTypeFilter('all'); setTagSourceFilter('all'); }}
+              onClick={() => { setTagTypeFilter('all'); setTagSourceFilter('all'); setTagFeatureFilter('all'); }}
               className="text-xs text-[var(--hmi-text-muted)] hover:text-[var(--hmi-text-secondary)]"
             >
               Clear filters
