@@ -20,6 +20,7 @@ Key design decisions:
 
 import asyncio
 import logging
+import time
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete, insert, select
@@ -47,6 +48,7 @@ class TrendService:
         self._trending_tags: list[dict] = []
         self._buffer: list[dict] = []
         self._last_values: dict[int, float | str | None] = {}  # tag_id -> last recorded value
+        self._last_sample_times: dict[int, float] = {}  # tag_id -> monotonic time of last sample
 
     async def load_trending_tags(self, session: AsyncSession):
         result = await session.execute(
@@ -110,7 +112,16 @@ class TrendService:
             try:
                 if self._trending_tags:
                     now = datetime.now(timezone.utc)
+                    mono_now = time.monotonic()
                     for tc in self._trending_tags:
+                        tag_id = tc["tag_id"]
+
+                        # Respect per-tag sample rate: skip if not enough time elapsed
+                        sample_interval_s = tc["sample_rate_ms"] / 1000.0
+                        last_sample = self._last_sample_times.get(tag_id, 0.0)
+                        if mono_now - last_sample < sample_interval_s:
+                            continue
+
                         tv = self._tag_engine.get_value(tc["name"])
                         if tv is None:
                             continue
@@ -125,13 +136,13 @@ class TrendService:
                             string_value = str(tv.value)
 
                         # Deadband: skip if value hasn't changed enough
-                        tag_id = tc["tag_id"]
                         deadband = tc.get("deadband")
                         if deadband and numeric_value is not None and tag_id in self._last_values:
                             last = self._last_values[tag_id]
                             if isinstance(last, (int, float)) and abs(numeric_value - last) < deadband:
                                 continue
 
+                        self._last_sample_times[tag_id] = mono_now
                         self._last_values[tag_id] = numeric_value if numeric_value is not None else string_value
                         self._buffer.append({
                             "tag_id": tag_id,

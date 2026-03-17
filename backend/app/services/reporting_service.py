@@ -127,25 +127,29 @@ def _subtract_intervals(
 ) -> list[tuple[datetime, datetime]]:
     """Remove subtract intervals from base intervals. Returns remaining intervals.
 
-    Algorithm: for each base interval, iterate through all subtraction intervals and
-    "punch holes" where they overlap. A subtraction that overlaps the middle of a base
-    interval splits it into two pieces (before and after the hole). Non-overlapping
-    subtractions are skipped. This is used to compute idle time = total frame minus
-    uptime minus downtime.
+    Algorithm: sorts subtract intervals by start time, then for each base interval
+    only checks subtraction intervals that could overlap (skips those entirely before
+    or after). This avoids O(n*m) worst case for many non-overlapping intervals.
     """
     if not subtract:
         return list(base)
+
+    sorted_sub = sorted(subtract, key=lambda x: x[0])
     result: list[tuple[datetime, datetime]] = []
+
     for bs, be in base:
         remaining = [(bs, be)]
-        for ss, se in subtract:
+        for ss, se in sorted_sub:
+            if not remaining:
+                break
+            # All remaining subtractions start after the latest remaining piece ends
+            if ss >= remaining[-1][1]:
+                break
             new_remaining = []
             for rs, re in remaining:
-                # No overlap — subtraction is entirely before or after this piece
                 if se <= rs or ss >= re:
                     new_remaining.append((rs, re))
                 else:
-                    # Overlap — keep the pieces before and after the subtraction
                     if ss > rs:
                         new_remaining.append((rs, ss))
                     if se < re:
@@ -621,27 +625,196 @@ async def compute_time_series(
     frame_end: datetime,
     granularity: str = "day",
 ) -> list[dict]:
-    """Compute bucketed metrics for charting."""
-    buckets = _generate_buckets(frame_start, frame_end, granularity)
-    results = []
+    """Compute bucketed metrics for charting.
 
+    Fetches trend data and alarm history once for the full range, then slices
+    per bucket in-memory to avoid N separate DB query rounds.
+    """
+    buckets = _generate_buckets(frame_start, frame_end, granularity)
+    if not buckets:
+        return []
+
+    good_count_tag = settings.get("good_count_tag")
+    reject_fault_tags: list[str] = settings.get("reject_fault_tags", [])
+    downtime_alarm_tags: list[str] = settings.get("downtime_alarm_tags", [])
+    cycling_tag = settings.get("cycling_tag")
+    exception_tags: list[str] = settings.get("downtime_exception_tags", [])
+    target_rate: float | None = settings.get("target_rate")
+
+    # Pre-fetch all data for the full range once
+    good_count_id = await _get_tag_id_by_name(session, good_count_tag) if good_count_tag else None
+    cycling_tag_id = await _get_tag_id_by_name(session, cycling_tag) if cycling_tag else None
+
+    # Pre-fetch all trend samples for good_count and cycling tags
+    all_good_samples: list[tuple[datetime, float | None]] = []
+    if good_count_id:
+        result = await session.execute(
+            select(TrendData.timestamp, TrendData.value)
+            .where(
+                TrendData.tag_id == good_count_id,
+                TrendData.timestamp >= frame_start,
+                TrendData.timestamp <= frame_end,
+            )
+            .order_by(TrendData.timestamp.asc())
+        )
+        all_good_samples = [(row.timestamp, row.value) for row in result]
+
+    all_cycling_samples: list[tuple[datetime, float | None]] = []
+    cycling_pre_sample: tuple[datetime, float | None] | None = None
+    if cycling_tag_id:
+        pre_result = await session.execute(
+            select(TrendData.timestamp, TrendData.value)
+            .where(TrendData.tag_id == cycling_tag_id, TrendData.timestamp < frame_start)
+            .order_by(TrendData.timestamp.desc())
+            .limit(1)
+        )
+        row = pre_result.first()
+        if row:
+            cycling_pre_sample = (row.timestamp, row.value)
+
+        result = await session.execute(
+            select(TrendData.timestamp, TrendData.value)
+            .where(
+                TrendData.tag_id == cycling_tag_id,
+                TrendData.timestamp >= frame_start,
+                TrendData.timestamp <= frame_end,
+            )
+            .order_by(TrendData.timestamp.asc())
+        )
+        all_cycling_samples = [(row.timestamp, row.value) for row in result]
+
+    # Pre-fetch all fault intervals for the full range
+    all_fault_intervals = await _get_fault_intervals(
+        session, downtime_alarm_tags, frame_start, frame_end,
+    )
+
+    # Pre-fetch reject counts
+    all_reject_history_count = 0
+    reject_tag_ids: dict[str, int] = {}
+    if reject_fault_tags:
+        reject_tag_ids = await _get_tag_ids_by_names(session, reject_fault_tags)
+        history_count_result = await session.execute(
+            select(AlarmHistory.triggered_at)
+            .where(
+                AlarmHistory.tag_name.in_(reject_fault_tags),
+                AlarmHistory.triggered_at >= frame_start,
+                AlarmHistory.triggered_at < frame_end,
+            )
+            .order_by(AlarmHistory.triggered_at)
+        )
+        # Store timestamps for bucketing
+        reject_history_times = [row.triggered_at for row in history_count_result]
+    else:
+        reject_history_times = []
+
+    results = []
     for bucket_start, bucket_end, label in buckets:
-        report = await compute_report(session, settings, bucket_start, bucket_end)
+        total_seconds = (bucket_end - bucket_start).total_seconds()
+        if total_seconds <= 0:
+            results.append(_make_ts_entry(label, _empty_report(bucket_start, bucket_end, settings)))
+            continue
+
+        # Slice good count samples for this bucket
+        count = 0
+        if good_count_id and all_good_samples:
+            bucket_samples = [
+                (ts, v) for ts, v in all_good_samples
+                if _normalize_dt(ts) >= bucket_start and _normalize_dt(ts) <= bucket_end
+            ]
+            if len(bucket_samples) >= 2:
+                first_v = bucket_samples[0][1]
+                last_v = bucket_samples[-1][1]
+                if first_v is not None and last_v is not None:
+                    count = max(0, int(last_v - first_v))
+
+        # Slice reject counts for this bucket
+        reject_count = sum(
+            1 for t in reject_history_times
+            if _normalize_dt(t) >= bucket_start and _normalize_dt(t) < bucket_end
+        )
+
+        # Slice fault intervals for this bucket
+        bucket_faults = [
+            fi for fi in all_fault_intervals
+            if fi["start"] < bucket_end and fi["end"] > bucket_start
+        ]
+        # Re-clamp to bucket boundaries
+        downtime_intervals: list[tuple[datetime, datetime]] = []
+        for fi in bucket_faults:
+            s = max(fi["start"], bucket_start)
+            e = min(fi["end"], bucket_end)
+            is_exception = fi["tag_name"] in exception_tags
+            duration = (e - s).total_seconds()
+            if is_exception and duration > EXCEPTION_CAP_SECONDS:
+                cap_end = s + timedelta(seconds=EXCEPTION_CAP_SECONDS)
+                downtime_intervals.append((s, cap_end))
+            else:
+                downtime_intervals.append((s, e))
+        downtime_seconds = _total_seconds(downtime_intervals)
+
+        # Slice cycling samples for this bucket
+        uptime_seconds = 0.0
+        if cycling_tag_id:
+            bucket_cycling = [
+                (ts, v) for ts, v in all_cycling_samples
+                if _normalize_dt(ts) >= bucket_start and _normalize_dt(ts) <= bucket_end
+            ]
+            # Find pre-bucket sample for initial state
+            pre_sample = cycling_pre_sample
+            for ts, v in all_cycling_samples:
+                if _normalize_dt(ts) < bucket_start:
+                    pre_sample = (ts, v)
+                else:
+                    break
+            if pre_sample:
+                bucket_cycling.insert(0, (bucket_start, pre_sample[1]))
+            if bucket_cycling:
+                cycling_intervals = _build_intervals_from_trend(bucket_cycling, bucket_start, bucket_end)
+                uptime_intervals = _subtract_intervals(cycling_intervals, downtime_intervals)
+                uptime_seconds = _total_seconds(uptime_intervals)
+        else:
+            uptime_seconds = max(0, total_seconds - downtime_seconds)
+
+        idle_seconds = max(0, total_seconds - uptime_seconds - downtime_seconds)
+
+        rate = round(count / (uptime_seconds / 3600), 2) if uptime_seconds > 0 else None
+        active_time = uptime_seconds + downtime_seconds
+        availability = round(uptime_seconds / active_time, 4) if active_time > 0 else None
+        performance = round(min(rate / target_rate, 1.0), 4) if target_rate and target_rate > 0 and rate is not None else None
+        quality = round(count / (count + reject_count), 4) if (count + reject_count) > 0 else None
+        oee = round(availability * performance * quality, 4) if availability is not None and performance is not None and quality is not None else None
+
         results.append({
             "period": label,
-            "count": report["count"],
-            "reject_count": report["reject_count"],
-            "rate": report["rate"],
-            "uptime_seconds": report["uptime_seconds"],
-            "downtime_seconds": report["downtime_seconds"],
-            "idle_seconds": report["idle_seconds"],
-            "avg_oee": report["oee"],
-            "avg_availability": report["availability"],
-            "avg_performance": report["performance"],
-            "avg_quality": report["quality"],
+            "count": count,
+            "reject_count": reject_count,
+            "rate": rate,
+            "uptime_seconds": round(uptime_seconds, 1),
+            "downtime_seconds": round(downtime_seconds, 1),
+            "idle_seconds": round(idle_seconds, 1),
+            "avg_oee": oee,
+            "avg_availability": availability,
+            "avg_performance": performance,
+            "avg_quality": quality,
         })
 
     return results
+
+
+def _make_ts_entry(label: str, report: dict) -> dict:
+    return {
+        "period": label,
+        "count": report["count"],
+        "reject_count": report["reject_count"],
+        "rate": report["rate"],
+        "uptime_seconds": report["uptime_seconds"],
+        "downtime_seconds": report["downtime_seconds"],
+        "idle_seconds": report["idle_seconds"],
+        "avg_oee": report["oee"],
+        "avg_availability": report["availability"],
+        "avg_performance": report["performance"],
+        "avg_quality": report["quality"],
+    }
 
 
 async def get_downtime_summary(

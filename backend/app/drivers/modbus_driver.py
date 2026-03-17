@@ -49,12 +49,78 @@ class ModbusDriver(ProtocolDriver):
         return True
 
     async def read_tags(self, addresses: list[str]) -> dict[str, Any]:
-        result = {}
+        """Read multiple tags, batching contiguous registers of the same type.
+
+        Groups addresses by register type and merges contiguous address ranges
+        into single multi-register reads to minimize network round-trips.
+        """
+        if not self._client:
+            return {addr: None for addr in addresses}
+
+        result: dict[str, Any] = {}
+
+        # Group by register type for batch reads
+        groups: dict[str, list[tuple[str, int, int]]] = {}  # type -> [(addr_str, reg_addr, count)]
         for addr in addresses:
-            try:
-                result[addr] = await self.read_tag(addr)
-            except Exception:
-                result[addr] = None
+            reg_type, reg_addr, count = self._parse_address(addr)
+            groups.setdefault(reg_type, []).append((addr, reg_addr, count))
+
+        for reg_type, entries in groups.items():
+            # Sort by register address for contiguous range detection
+            entries.sort(key=lambda x: x[1])
+
+            # Build contiguous batches (gap of > 1 register breaks the batch)
+            batches: list[list[tuple[str, int, int]]] = []
+            current_batch: list[tuple[str, int, int]] = [entries[0]]
+            for i in range(1, len(entries)):
+                prev_addr_str, prev_reg, prev_count = current_batch[-1]
+                cur_addr_str, cur_reg, cur_count = entries[i]
+                if cur_reg <= prev_reg + prev_count:
+                    current_batch.append(entries[i])
+                else:
+                    batches.append(current_batch)
+                    current_batch = [entries[i]]
+            batches.append(current_batch)
+
+            for batch in batches:
+                if len(batch) == 1:
+                    # Single register — use simple read
+                    addr_str, reg_addr, count = batch[0]
+                    try:
+                        result[addr_str] = await self._read_register(reg_type, reg_addr, count)
+                    except Exception:
+                        result[addr_str] = None
+                    continue
+
+                # Multi-register batch read
+                batch_start = batch[0][1]
+                batch_end = batch[-1][1] + batch[-1][2]
+                total_count = batch_end - batch_start
+
+                try:
+                    batch_result = await self._read_register_batch(reg_type, batch_start, total_count)
+                    if batch_result is not None:
+                        for addr_str, reg_addr, count in batch:
+                            offset = reg_addr - batch_start
+                            if reg_type in ("coil", "discrete"):
+                                result[addr_str] = batch_result[offset] if offset < len(batch_result) else None
+                            else:
+                                result[addr_str] = batch_result[offset] if count == 1 and offset < len(batch_result) else None
+                    else:
+                        # Batch failed — fall back to individual reads
+                        for addr_str, reg_addr, count in batch:
+                            try:
+                                result[addr_str] = await self._read_register(reg_type, reg_addr, count)
+                            except Exception:
+                                result[addr_str] = None
+                except Exception:
+                    # Batch failed — fall back to individual reads
+                    for addr_str, reg_addr, count in batch:
+                        try:
+                            result[addr_str] = await self._read_register(reg_type, reg_addr, count)
+                        except Exception:
+                            result[addr_str] = None
+
         return result
 
     async def browse(self) -> list[dict]:
@@ -68,6 +134,21 @@ class ModbusDriver(ProtocolDriver):
         reg_addr = int(parts[1]) if len(parts) > 1 else 0
         count = int(parts[2]) if len(parts) > 2 else 1
         return reg_type, reg_addr, count
+
+    async def _read_register_batch(self, reg_type: str, address: int, count: int) -> list | None:
+        """Read multiple contiguous registers/coils and return the full list."""
+        if reg_type == "coil":
+            result = await self._client.read_coils(address, count)
+            return result.bits[:count] if result and not result.isError() else None
+        elif reg_type == "discrete":
+            result = await self._client.read_discrete_inputs(address, count)
+            return result.bits[:count] if result and not result.isError() else None
+        elif reg_type == "input":
+            result = await self._client.read_input_registers(address, count)
+            return result.registers if result and not result.isError() else None
+        else:  # holding
+            result = await self._client.read_holding_registers(address, count)
+            return result.registers if result and not result.isError() else None
 
     async def _read_register(self, reg_type: str, address: int, count: int):
         if reg_type == "coil":
