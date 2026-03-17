@@ -35,6 +35,9 @@ from app.services.trend_service import TrendService
 
 logging.basicConfig(level=logging.INFO if not settings.debug else logging.DEBUG)
 
+# Suppress noisy asyncua INFO logs (e.g. "read_attributes of several nodes" every poll cycle)
+logging.getLogger("asyncua").setLevel(logging.WARNING)
+
 # Attach in-memory log handler for the Support > Logs page
 from app.services.log_service import log_handler as _log_handler
 _log_handler.setFormatter(logging.Formatter('%(message)s'))
