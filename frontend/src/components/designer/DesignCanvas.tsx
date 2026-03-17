@@ -19,7 +19,7 @@
  * dragging even with many widgets on screen.
  */
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
-import { Lock } from 'lucide-react';
+import { Lock, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { Widget, TagValue, AlarmData, LayoutMode, ScreenResolution } from '../../types';
 import type { GridSettings } from '../../hooks/useDesignMode';
 import { CONTAINER_INNER_GRID } from '../../hooks/useDesignMode';
@@ -92,6 +92,7 @@ export function DesignCanvas({
   } | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [marquee, setMarquee] = useState<MarqueeState | null>(null);
+  const [designerPageMap, setDesignerPageMap] = useState<Record<string, number>>({});
 
   const getColWidth = useCallback(() => {
     if (!canvasRef.current) return 80;
@@ -421,8 +422,16 @@ export function DesignCanvas({
               {widgets.filter(w => !w.parentId).map((w) => {
                 const isSelected = selectedIds.has(w.id);
                 const isLocked = lockedIds.has(w.id);
-                const isContainer = w.type === 'container' || w.type === 'collapsible_container';
-                const children = isContainer ? widgets.filter(c => c.parentId === w.id) : [];
+                const isContainer = w.type === 'container';
+                const isCarousel = isContainer && (w.props as Record<string, unknown>).containerMode === 'carousel';
+                const activePage = isCarousel ? (designerPageMap[w.id] ?? 0) : undefined;
+                const allChildren = isContainer ? widgets.filter(c => c.parentId === w.id) : [];
+                const children = isCarousel
+                  ? allChildren.filter(c => ((c.props as Record<string, unknown>).page as number ?? 0) === activePage)
+                  : allChildren;
+                const carouselPageCount = isCarousel
+                  ? Math.max(1, allChildren.reduce((max, c) => Math.max(max, ((c.props as Record<string, unknown>).page as number ?? 0) + 1), 0))
+                  : 0;
                 return (
                   <div
                     key={w.id}
@@ -450,6 +459,22 @@ export function DesignCanvas({
                     <div className={`h-full ${isContainer ? '' : 'pointer-events-none'}`}>
                       <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} />
                     </div>
+                    {/* Carousel page navigator (design mode) */}
+                    {isCarousel && (
+                      <div className="absolute bottom-1 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 bg-slate-900/80 rounded-full px-2 py-1 pointer-events-auto">
+                        <button type="button" className="text-slate-400 hover:text-white"
+                          onClick={e => { e.stopPropagation(); setDesignerPageMap(prev => ({ ...prev, [w.id]: ((prev[w.id] ?? 0) - 1 + carouselPageCount) % carouselPageCount })); }}>
+                          <ChevronLeft size={12} />
+                        </button>
+                        <span className="text-[10px] text-slate-300 select-none">
+                          {(activePage ?? 0) + 1} / {carouselPageCount}
+                        </span>
+                        <button type="button" className="text-slate-400 hover:text-white"
+                          onClick={e => { e.stopPropagation(); setDesignerPageMap(prev => ({ ...prev, [w.id]: ((prev[w.id] ?? 0) + 1) % carouselPageCount })); }}>
+                          <ChevronRight size={12} />
+                        </button>
+                      </div>
+                    )}
                     {/* Render container children with pixel-based positioning inside the container */}
                     {children.map((child) => {
                       const childSelected = selectedIds.has(child.id);

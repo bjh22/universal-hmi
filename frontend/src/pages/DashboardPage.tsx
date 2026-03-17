@@ -58,6 +58,11 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
   const [absScale, setAbsScale] = useState(1);
   const [absOffset, setAbsOffset] = useState({ x: 0, y: 0 });
   const [collapsedContainerIds, setCollapsedContainerIds] = useState<Set<string>>(new Set());
+  const [carouselPageMap, setCarouselPageMap] = useState<Record<string, number>>({});
+
+  const handleCarouselPageChange = useCallback((id: string, page: number) => {
+    setCarouselPageMap(prev => ({ ...prev, [id]: page }));
+  }, []);
   const [dragTabId, setDragTabId] = useState<number | null>(null);
   const [dropTargetId, setDropTargetId] = useState<number | null>(null);
 
@@ -113,7 +118,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
             // Initialize collapsed state from defaultCollapsed props
             const collapsed = new Set<string>();
             for (const w of widgets) {
-              if (w.type === 'collapsible_container' && (w.props as Record<string, unknown>).defaultCollapsed) {
+              if (w.type === 'container' && (w.props as Record<string, unknown>).containerMode === 'collapsible' && (w.props as Record<string, unknown>).defaultCollapsed) {
                 collapsed.add(w.id);
               }
             }
@@ -540,7 +545,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
             }}
           >
             {runtimeWidgets.map((w, index) => (
-              <RuntimeWidget key={w.id} widget={w} index={index} isAbsolute tagValues={tagValues} alarms={alarms} userRole={userRole} widgetMap={widgetMap} childrenByParent={childrenByParent} collapsedContainerIds={collapsedContainerIds} onToggleContainerCollapsed={toggleContainerCollapsed} />
+              <RuntimeWidget key={w.id} widget={w} index={index} isAbsolute tagValues={tagValues} alarms={alarms} userRole={userRole} widgetMap={widgetMap} childrenByParent={childrenByParent} collapsedContainerIds={collapsedContainerIds} onToggleContainerCollapsed={toggleContainerCollapsed} carouselPageMap={carouselPageMap} onCarouselPageChange={handleCarouselPageChange} />
             ))}
           </div>
         </div>
@@ -551,7 +556,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole }: Props) {
           style={{ gridTemplateColumns: 'repeat(12, 1fr)', gridAutoRows: '80px' }}
         >
           {runtimeWidgets.filter(w => !w.parentId).map((w, index) => (
-            <RuntimeWidget key={w.id} widget={w} index={index} isAbsolute={false} tagValues={tagValues} alarms={alarms} userRole={userRole} widgetMap={widgetMap} childrenByParent={childrenByParent} collapsedContainerIds={collapsedContainerIds} onToggleContainerCollapsed={toggleContainerCollapsed} />
+            <RuntimeWidget key={w.id} widget={w} index={index} isAbsolute={false} tagValues={tagValues} alarms={alarms} userRole={userRole} widgetMap={widgetMap} childrenByParent={childrenByParent} collapsedContainerIds={collapsedContainerIds} onToggleContainerCollapsed={toggleContainerCollapsed} carouselPageMap={carouselPageMap} onCarouselPageChange={handleCarouselPageChange} />
           ))}
         </div>
       )}
@@ -693,19 +698,29 @@ interface RuntimeWidgetProps {
   childrenByParent: Map<string, Widget[]>;
   collapsedContainerIds: Set<string>;
   onToggleContainerCollapsed: (id: string, collapsed: boolean) => void;
+  carouselPageMap: Record<string, number>;
+  onCarouselPageChange: (id: string, page: number) => void;
 }
 
-const RuntimeWidget = memo(function RuntimeWidget({ widget: w, index, isAbsolute, tagValues, alarms, userRole, widgetMap, childrenByParent, collapsedContainerIds, onToggleContainerCollapsed }: RuntimeWidgetProps) {
+const RuntimeWidget = memo(function RuntimeWidget({ widget: w, index, isAbsolute, tagValues, alarms, userRole, widgetMap, childrenByParent, collapsedContainerIds, onToggleContainerCollapsed, carouselPageMap, onCarouselPageChange }: RuntimeWidgetProps) {
   // Cascade container visibility to children (and collapse state for collapsible containers)
   if (w.parentId) {
     const parent = widgetMap.get(w.parentId);
-    if (parent && (parent.type === 'container' || parent.type === 'collapsible_container')) {
+    if (parent && parent.type === 'container') {
       const parentVis = (parent.visible !== false)
         && (!parent.visibleTag || !!tagValues[parent.visibleTag]?.value)
         && (!parent.visibleRoles?.length || (userRole && parent.visibleRoles.includes(userRole)));
       if (!parentVis) return null;
+      const parentProps = parent.props as Record<string, unknown>;
+      const parentMode = parentProps.containerMode as string;
       // Hide children of collapsed collapsible containers
-      if (parent.type === 'collapsible_container' && collapsedContainerIds.has(parent.id)) return null;
+      if (parentMode === 'collapsible' && collapsedContainerIds.has(parent.id)) return null;
+      // Hide children not on the active carousel page
+      if (parentMode === 'carousel') {
+        const activePage = carouselPageMap[parent.id] ?? 0;
+        const childPage = (w.props as Record<string, unknown>).page as number ?? 0;
+        if (childPage !== activePage) return null;
+      }
     }
   }
 
@@ -721,16 +736,27 @@ const RuntimeWidget = memo(function RuntimeWidget({ widget: w, index, isAbsolute
 
   const tagName = (w.props as Record<string, unknown>).tag as string | undefined;
   const longDesc = tagName ? tagValues[tagName]?.description : undefined;
-  const containerDesc = (w.type === 'container' || w.type === 'collapsible_container') ? (w.props as Record<string, unknown>).description as string : undefined;
+  const containerDesc = w.type === 'container' ? (w.props as Record<string, unknown>).description as string : undefined;
   const infoDesc = longDesc || containerDesc;
   const showInfoBtn = w.showInfo !== false && !!infoDesc;
 
-  // Collapsible container props
-  const isCollapsible = w.type === 'collapsible_container';
+  // Container mode props
+  const wProps = w.props as Record<string, unknown>;
+  const isCollapsible = w.type === 'container' && wProps.containerMode === 'collapsible';
+  const isCarousel = w.type === 'container' && wProps.containerMode === 'carousel';
   const collapsibleProps = isCollapsible ? {
     collapsed: collapsedContainerIds.has(w.id),
     onToggleCollapsed: (c: boolean) => onToggleContainerCollapsed(w.id, c),
   } : {};
+  const carouselProps = isCarousel ? (() => {
+    const allChildren = Array.from(widgetMap.values()).filter(c => c.parentId === w.id);
+    const maxPage = allChildren.reduce((max, c) => Math.max(max, (c.props as Record<string, unknown>).page as number ?? 0), 0);
+    return {
+      pageCount: maxPage + 1,
+      currentPage: carouselPageMap[w.id] ?? 0,
+      onPageChange: (page: number) => onCarouselPageChange(w.id, page),
+    };
+  })() : {};
 
   if (isAbsolute) {
     return (
@@ -739,12 +765,12 @@ const RuntimeWidget = memo(function RuntimeWidget({ widget: w, index, isAbsolute
         style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: index }}
       >
         {showInfoBtn && <InfoButton description={infoDesc!} title={(w.props as Record<string, unknown>).title as string} />}
-        <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} {...collapsibleProps} />
+        <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} {...collapsibleProps} {...carouselProps} />
       </div>
     );
   }
 
-  const isContainer = w.type === 'container' || w.type === 'collapsible_container';
+  const isContainer = w.type === 'container';
   const children = isContainer && !isAbsolute
     ? (childrenByParent.get(w.id) ?? [])
     : [];
@@ -755,10 +781,10 @@ const RuntimeWidget = memo(function RuntimeWidget({ widget: w, index, isAbsolute
       className={`relative ${isEnabled ? '' : 'opacity-50 pointer-events-none'}`}
     >
       {showInfoBtn && <InfoButton description={infoDesc!} title={(w.props as Record<string, unknown>).title as string} />}
-      <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} {...collapsibleProps} />
+      <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} {...collapsibleProps} {...carouselProps} />
       {/* Render container children with pixel-based positioning */}
       {children.map((child: Widget, ci: number) => (
-        <RuntimeWidget key={child.id} widget={child} index={ci} isAbsolute tagValues={tagValues} alarms={alarms} userRole={userRole} widgetMap={widgetMap} childrenByParent={childrenByParent} collapsedContainerIds={collapsedContainerIds} onToggleContainerCollapsed={onToggleContainerCollapsed} />
+        <RuntimeWidget key={child.id} widget={child} index={ci} isAbsolute tagValues={tagValues} alarms={alarms} userRole={userRole} widgetMap={widgetMap} childrenByParent={childrenByParent} collapsedContainerIds={collapsedContainerIds} onToggleContainerCollapsed={onToggleContainerCollapsed} carouselPageMap={carouselPageMap} onCarouselPageChange={onCarouselPageChange} />
       ))}
     </div>
   );
@@ -770,6 +796,7 @@ const RuntimeWidget = memo(function RuntimeWidget({ widget: w, index, isAbsolute
   if (prev.userRole !== next.userRole) return false;
   if (prev.childrenByParent !== next.childrenByParent) return false;
   if (prev.collapsedContainerIds !== next.collapsedContainerIds) return false;
+  if (prev.carouselPageMap !== next.carouselPageMap) return false;
 
   // Only diff the tag values this widget actually reads
   const w = prev.widget;
