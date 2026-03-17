@@ -225,7 +225,7 @@ export function useDesignMode(): DesignModeState {
       return prev.map(w => {
         if (w.id === id) return { ...w, x, y };
         // Move children along with container
-        if ((target.type === 'container' || target.type === 'collapsible_container') && w.parentId === id) {
+        if (target.type === 'container' && w.parentId === id) {
           return { ...w, x: w.x + dx, y: w.y + dy };
         }
         return w;

@@ -28,7 +28,6 @@ import { DropdownSelectWidget } from './DropdownSelectWidget';
 import { OeeWidget } from './OeeWidget';
 import { ControlGroupWidget, type ControlItem } from './ControlGroupWidget';
 import { ContainerWidget } from './ContainerWidget';
-import { CollapsibleContainerWidget } from './CollapsibleContainerWidget';
 import { LightIndicator } from './LightIndicator';
 import { AutoFillWidget } from './AutoFillWidget';
 import { CognexViewerWidget } from './CognexViewerWidget';
@@ -46,6 +45,9 @@ interface Props {
   alarms?: AlarmData[];
   collapsed?: boolean;
   onToggleCollapsed?: (collapsed: boolean) => void;
+  pageCount?: number;
+  currentPage?: number;
+  onPageChange?: (page: number) => void;
 }
 
 /**
@@ -90,7 +92,7 @@ function getWidgetTagNames(widget: Widget): string[] {
 // memo() is a React optimization that wraps this component to skip re-rendering
 // if its props haven't changed. The second argument (after the component function)
 // is a custom comparison function that decides whether to skip — see bottom of file.
-export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, alarms = [], collapsed, onToggleCollapsed }: Props) {
+export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, alarms = [], collapsed, onToggleCollapsed, pageCount, currentPage, onPageChange }: Props) {
   const p = widget.props as Record<string, unknown>;
   const chrome = widget.chrome;
 
@@ -139,9 +141,7 @@ export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, 
     case 'zebra_printer':
       return <ZebraPrinterWidget title={p.title as string} tagPrefix={p.tagPrefix as string || 'zebra'} showControls={p.showControls as boolean} showFaults={p.showFaults as boolean} tagValues={tagValues} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
     case 'container':
-      return <ContainerWidget title={p.title as string} description={p.description as string} titleStyle={p.titleStyle as undefined} chrome={chrome} />;
-    case 'collapsible_container':
-      return <CollapsibleContainerWidget title={p.title as string} description={p.description as string} titleStyle={p.titleStyle as undefined} chrome={chrome} defaultCollapsed={p.defaultCollapsed as boolean} collapsed={collapsed} onToggleCollapsed={onToggleCollapsed} />;
+      return <ContainerWidget title={p.title as string} description={p.description as string} titleStyle={p.titleStyle as undefined} chrome={chrome} containerMode={(p.containerMode as string as 'standard' | 'collapsible' | 'carousel') ?? 'standard'} defaultCollapsed={p.defaultCollapsed as boolean} collapsed={collapsed} onToggleCollapsed={onToggleCollapsed} pageCount={pageCount} currentPage={currentPage} onPageChange={onPageChange} autoRotateSeconds={p.autoRotateSeconds as number} showDots={p.showDots as boolean} showArrows={p.showArrows as boolean} />;
     case 'qr_code':
       return <QRCodeWidget title={p.title as string} tag={p.tag as string} tagValues={tagValues} staticContent={p.staticContent as string} fgColor={p.fgColor as string} bgColor={p.bgColor as string} titleStyle={p.titleStyle as undefined} chrome={chrome} />;
     case 'trend':
@@ -172,6 +172,8 @@ export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, 
   if (prev.widget !== next.widget) return false;
   if (prev.alarms !== next.alarms) return false;
   if (prev.collapsed !== next.collapsed) return false;
+  if (prev.pageCount !== next.pageCount) return false;
+  if (prev.currentPage !== next.currentPage) return false;
   // Only compare tag values this widget actually uses — ignore changes to unrelated tags
   const tagNames = getWidgetTagNames(prev.widget);
   if (tagNames.length === 0) return prev.tagValues === next.tagValues;

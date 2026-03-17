@@ -114,8 +114,25 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
           </Field>
         </Section>
 
+        {/* Container Mode */}
+        {widget.type === 'container' && (
+          <Section title="Container Mode">
+            <Field label="Mode">
+              <select
+                value={p.containerMode || 'standard'}
+                onChange={e => setProp('containerMode', e.target.value)}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+              >
+                <option value="standard">Standard</option>
+                <option value="collapsible">Collapsible</option>
+                <option value="carousel">Carousel</option>
+              </select>
+            </Field>
+          </Section>
+        )}
+
         {/* Container Description (for info button) */}
-        {(widget.type === 'container' || widget.type === 'collapsible_container') && (
+        {widget.type === 'container' && (
           <Section title="Info Button">
             <Field label="Description">
               <textarea
@@ -129,8 +146,8 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
           </Section>
         )}
 
-        {/* Collapsible Container: Default Collapsed */}
-        {widget.type === 'collapsible_container' && (
+        {/* Collapsible: Default Collapsed */}
+        {widget.type === 'container' && p.containerMode === 'collapsible' && (
           <Section title="Collapse">
             <Field label="Default Collapsed">
               <button
@@ -145,9 +162,41 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
           </Section>
         )}
 
+        {/* Carousel Settings */}
+        {widget.type === 'container' && p.containerMode === 'carousel' && (
+          <Section title="Carousel">
+            <Field label="Auto-Rotate (seconds)">
+              <input type="number" value={p.autoRotateSeconds ?? 0} onChange={e => setProp('autoRotateSeconds', Number(e.target.value))}
+                min={0} step={1}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
+            </Field>
+            <p className="text-[10px] text-slate-500 -mt-1">0 = disabled</p>
+            <Field label="Show Arrows">
+              <button
+                onClick={() => setProp('showArrows', !(p.showArrows !== false))}
+                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                  p.showArrows !== false ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {p.showArrows !== false ? 'Yes' : 'No'}
+              </button>
+            </Field>
+            <Field label="Show Dots">
+              <button
+                onClick={() => setProp('showDots', !(p.showDots !== false))}
+                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                  p.showDots !== false ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {p.showDots !== false ? 'Yes' : 'No'}
+              </button>
+            </Field>
+          </Section>
+        )}
+
         {/* Group Assignment */}
-        {widget.type !== 'container' && widget.type !== 'collapsible_container' && (() => {
-          const containers = widgets.filter(w => (w.type === 'container' || w.type === 'collapsible_container') && w.id !== widget.id);
+        {widget.type !== 'container' && (() => {
+          const containers = widgets.filter(w => w.type === 'container' && w.id !== widget.id);
           if (containers.length === 0) return null;
           return (
             <Section title="Group">
@@ -180,6 +229,20 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
                   ))}
                 </select>
               </Field>
+              {/* Page picker for carousel container children */}
+              {widget.parentId && (() => {
+                const parentWidget = widgets.find(w => w.id === widget.parentId);
+                if (!parentWidget || (parentWidget.props as Record<string, unknown>).containerMode !== 'carousel') return null;
+                const currentPage = (p.page as number ?? 0) + 1;
+                return (
+                  <Field label="Page">
+                    <input type="number" value={currentPage}
+                      onChange={e => setProp('page', Math.max(0, Number(e.target.value) - 1))}
+                      min={1}
+                      className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
+                  </Field>
+                );
+              })()}
             </Section>
           );
         })()}
@@ -204,7 +267,7 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
         </Section>
 
         {/* Tag Binding */}
-        {widget.type !== 'text_label' && widget.type !== 'alarm_summary' && widget.type !== 'multi_value' && widget.type !== 'control_group' && widget.type !== 'auto_fill' && widget.type !== 'container' && widget.type !== 'collapsible_container' && widget.type !== 'cognex_viewer' && widget.type !== 'zebra_printer' && widget.type !== 'trend' && (
+        {widget.type !== 'text_label' && widget.type !== 'alarm_summary' && widget.type !== 'multi_value' && widget.type !== 'control_group' && widget.type !== 'auto_fill' && widget.type !== 'container' && widget.type !== 'cognex_viewer' && widget.type !== 'zebra_printer' && widget.type !== 'trend' && (
           <Section title="Tag Binding">
             <Field label="Tag Name">
               <TagPicker value={p.tag || ''} onChange={v => setProp('tag', v)} />

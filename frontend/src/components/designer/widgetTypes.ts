@@ -1,6 +1,6 @@
 import {
   Activity, Gauge, Hash, ToggleLeft, MousePointerClick,
-  SlidersHorizontal, Type, FileText, Bell, ChevronDown, BarChart3, LayoutGrid, Square, Circle, Sparkles, ScanBarcode, PanelTopClose, QrCode, TrendingUp, Printer,
+  SlidersHorizontal, Type, FileText, Bell, ChevronDown, BarChart3, LayoutGrid, Square, Circle, Sparkles, ScanBarcode, QrCode, TrendingUp, Printer,
 } from 'lucide-react';
 
 export interface WidgetTypeInfo {
@@ -109,12 +109,7 @@ export const WIDGET_TYPES: WidgetTypeInfo[] = [
   {
     type: 'container', label: 'Container', icon: Square, category: 'layout',
     defaultW: 6, defaultH: 4, defaultAbsW: 400, defaultAbsH: 300,
-    defaultProps: { title: 'Group', description: '' },
-  },
-  {
-    type: 'collapsible_container', label: 'Collapsible Container', icon: PanelTopClose, category: 'layout',
-    defaultW: 6, defaultH: 4, defaultAbsW: 400, defaultAbsH: 300,
-    defaultProps: { title: 'Group', description: '', defaultCollapsed: false },
+    defaultProps: { title: 'Group', description: '', containerMode: 'standard', defaultCollapsed: false, autoRotateSeconds: 0, showDots: true, showArrows: true },
   },
   {
     type: 'qr_code', label: 'QR Code', icon: QrCode, category: 'display',
