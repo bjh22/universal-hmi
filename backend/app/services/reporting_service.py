@@ -30,6 +30,14 @@ logger = logging.getLogger(__name__)
 EXCEPTION_CAP_SECONDS = 300  # 5 minutes
 
 
+async def _get_all_alarm_tag_names(session: AsyncSession) -> list[str]:
+    """Return the names of all alarm-enabled tags (these define downtime)."""
+    result = await session.execute(
+        select(Tag.name).where(Tag.alarm_enabled.is_(True))
+    )
+    return [name for (name,) in result]
+
+
 async def _get_tag_id_by_name(session: AsyncSession, tag_name: str) -> int | None:
     result = await session.execute(
         select(Tag.id).where(Tag.name == tag_name)
@@ -250,7 +258,6 @@ async def compute_report(
 
     good_count_tag = settings.get("good_count_tag")
     reject_fault_tags: list[str] = settings.get("reject_fault_tags", [])
-    downtime_alarm_tags: list[str] = settings.get("downtime_alarm_tags", [])
     cycling_tag = settings.get("cycling_tag")
     exception_tags: list[str] = settings.get("downtime_exception_tags", [])
     target_rate: float | None = settings.get("target_rate")
@@ -267,7 +274,8 @@ async def compute_report(
     if reject_fault_tags:
         reject_count = await _get_reject_count(session, reject_fault_tags, frame_start, frame_end)
 
-    # 3. Get fault intervals (downtime periods)
+    # 3. Get fault intervals (downtime periods) — all alarm-enabled tags cause downtime
+    downtime_alarm_tags = await _get_all_alarm_tag_names(session)
     fault_intervals = await _get_fault_intervals(
         session, downtime_alarm_tags, frame_start, frame_end,
     )
@@ -551,9 +559,10 @@ async def get_downtime_periods(
     Overlapping fault intervals are merged into single downtime periods.
     Each period contains a ``faults`` list with all contributing alarms.
     """
-    downtime_alarm_tags: list[str] = settings.get("downtime_alarm_tags", [])
     exception_tags: list[str] = settings.get("downtime_exception_tags", [])
 
+    # All alarm-enabled tags cause downtime
+    downtime_alarm_tags = await _get_all_alarm_tag_names(session)
     fault_intervals = await _get_fault_intervals(
         session, downtime_alarm_tags, frame_start, frame_end,
     )
@@ -636,10 +645,12 @@ async def compute_time_series(
 
     good_count_tag = settings.get("good_count_tag")
     reject_fault_tags: list[str] = settings.get("reject_fault_tags", [])
-    downtime_alarm_tags: list[str] = settings.get("downtime_alarm_tags", [])
     cycling_tag = settings.get("cycling_tag")
     exception_tags: list[str] = settings.get("downtime_exception_tags", [])
     target_rate: float | None = settings.get("target_rate")
+
+    # All alarm-enabled tags cause downtime
+    downtime_alarm_tags = await _get_all_alarm_tag_names(session)
 
     # Pre-fetch all data for the full range once
     good_count_id = await _get_tag_id_by_name(session, good_count_tag) if good_count_tag else None

@@ -724,7 +724,6 @@ async def create_demo_resources(session: AsyncSession):
     production_settings = {
         "production.good_count_tag": "Machine.GoodCount",
         "production.reject_fault_tags": json.dumps(["Machine.TempAlarm"]),
-        "production.downtime_alarm_tags": json.dumps(["Machine.PressureAlarm"]),
         "production.cycling_tag": "Machine.Running",
         "production.downtime_exception_tags": json.dumps([]),
         "production.target_rate": "120",

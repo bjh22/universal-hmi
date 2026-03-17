@@ -288,7 +288,7 @@ export interface ReportBucket {
 export interface ProductionSettings {
   good_count_tag: string | null;
   reject_fault_tags: string[];
-  downtime_alarm_tags: string[];
+
   cycling_tag: string | null;
   downtime_exception_tags: string[];
   target_rate: number | null;
