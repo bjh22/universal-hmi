@@ -16,7 +16,6 @@ const PAGE_SIZE = 100;
 
 export function AlarmsPage({ realtimeAlarms }: Props) {
   const [tab, setTab] = useState<'active' | 'history'>('active');
-  const [activeAlarms, setActiveAlarms] = useState<AlarmData[]>([]);
   const [historyAlarms, setHistoryAlarms] = useState<AlarmData[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
@@ -25,24 +24,24 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   useEffect(() => {
-    if (tab === 'active') {
-      api.getActiveAlarms().then(setActiveAlarms).catch(() => {});
-    } else {
+    if (tab === 'history') {
       api.getAlarmHistory().then(setHistoryAlarms).catch(() => {});
     }
   }, [tab]);
 
-  // Merge realtime alarms and deduplicate by id
+  // For the active tab, realtimeAlarms (from useWebSocket) is the authoritative source.
+  // useWebSocket already merges API-fetched alarms on connect, so we don't need to merge
+  // the stale activeAlarms here — doing so caused acks from the top bar to not take effect.
   const deduped = useMemo(() => {
     const rawAlarms = tab === 'active'
-      ? [...realtimeAlarms.filter(a => a.state !== 'inactive'), ...activeAlarms.filter(a => a.state !== 'inactive')]
+      ? realtimeAlarms.filter(a => a.state !== 'inactive')
       : historyAlarms;
     const map = new Map<number, AlarmData>();
     for (const a of rawAlarms) {
       if (a.id) map.set(a.id, a);
     }
     return Array.from(map.values());
-  }, [tab, realtimeAlarms, activeAlarms, historyAlarms]);
+  }, [tab, realtimeAlarms, historyAlarms]);
 
   // Filter
   const filtered = useMemo(() => {
@@ -82,13 +81,7 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
 
   const handleAck = async (id: number) => {
     await api.acknowledgeAlarm(id);
-    setActiveAlarms(prev => prev.reduce<AlarmData[]>((acc, a) => {
-      if (a.id !== id) { acc.push(a); return acc; }
-      // inactive_unacked → inactive: remove from active list entirely
-      if (a.state === 'inactive_unacked') return acc;
-      acc.push({ ...a, state: 'active_acked' as const });
-      return acc;
-    }, []));
+    // State update comes via WebSocket broadcast
   };
 
   const handleAckAll = useCallback(async () => {
@@ -96,12 +89,7 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
     if (unacked.length === 0) return;
     if (!window.confirm(`Acknowledge all ${unacked.length} unacknowledged alarm(s)?`)) return;
     await Promise.all(unacked.map(a => api.acknowledgeAlarm(a.id)));
-    setActiveAlarms(prev => prev.reduce<AlarmData[]>((acc, a) => {
-      if (a.state === 'active_unacked') { acc.push({ ...a, state: 'active_acked' as const }); return acc; }
-      if (a.state === 'inactive_unacked') return acc; // remove from active list
-      acc.push(a);
-      return acc;
-    }, []));
+    // State updates come via WebSocket broadcast
   }, [displayAlarms]);
 
   const handleSort = (field: SortField) => {
