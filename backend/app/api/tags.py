@@ -1134,7 +1134,9 @@ async def bulk_update_tags(
         return {"updated": 0}
     allowed = {
         "data_type", "access_mode", "engineering_units",
-        "trending_enabled", "alarm_enabled", "simulation_enabled",
+        "display_format", "min_value", "max_value", "deadband",
+        "trending_enabled", "trending_sample_rate_ms",
+        "alarm_enabled", "simulation_enabled",
         "simulation_behavior", "data_source_id", "alarm_config",
     }
     fields = {k: v for k, v in body.fields.items() if k in allowed}
@@ -1170,7 +1172,7 @@ async def bulk_update_tags(
         tag_engine.register_tag(tag)
     await session.flush()
     reload_alarms = "alarm_enabled" in fields or alarm_config_patch is not None
-    reload_trends = "trending_enabled" in fields
+    reload_trends = any(k in fields for k in ("trending_enabled", "trending_sample_rate_ms", "deadband"))
     if reload_alarms or reload_trends:
         await session.commit()
     if reload_alarms:
