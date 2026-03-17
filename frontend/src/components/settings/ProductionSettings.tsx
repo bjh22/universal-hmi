@@ -9,7 +9,7 @@ export function ProductionSettingsTab() {
   const [settings, setSettings] = useState<ProductionSettingsType>({
     good_count_tag: null,
     reject_fault_tags: [],
-    downtime_alarm_tags: [],
+
     cycling_tag: null,
     downtime_exception_tags: [],
     target_rate: null,
@@ -117,54 +117,30 @@ export function ProductionSettingsTab() {
             No alarm-enabled tags found. Configure tags with alarms in the Tags settings first.
           </div>
         ) : (
-          <div className="bg-slate-800 rounded-lg border border-slate-700 max-h-48 overflow-y-auto">
-            {alarmTags.map(t => (
-              <label key={t.id} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-700/50 cursor-pointer text-sm">
-                <input
-                  type="checkbox"
-                  checked={settings.reject_fault_tags.includes(t.name)}
-                  onChange={() => setSettings({
-                    ...settings,
-                    reject_fault_tags: toggleTag(settings.reject_fault_tags, t.name),
-                  })}
-                  className="rounded border-slate-600"
-                />
-                <span className="text-slate-200 font-mono text-xs">{t.name}</span>
-                {t.display_name && <span className="text-slate-400 text-xs">— {t.display_name}</span>}
-              </label>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Downtime Alarm Tags */}
-      <div className="mb-6">
-        <label className="block text-sm font-medium text-slate-200 mb-1">Downtime Alarm Tags</label>
-        <p className="text-xs text-slate-400 mb-2">
-          Alarm-enabled tags that indicate machine downtime. Downtime periods are derived from alarm history (when the alarm fires and clears).
-        </p>
-        {alarmTags.length === 0 ? (
-          <div className="text-xs text-slate-500 py-3 bg-slate-800 rounded-lg px-3 border border-slate-700">
-            No alarm-enabled tags found.
-          </div>
-        ) : (
-          <div className="bg-slate-800 rounded-lg border border-slate-700 max-h-48 overflow-y-auto">
-            {alarmTags.map(t => (
-              <label key={t.id} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-700/50 cursor-pointer text-sm">
-                <input
-                  type="checkbox"
-                  checked={settings.downtime_alarm_tags.includes(t.name)}
-                  onChange={() => setSettings({
-                    ...settings,
-                    downtime_alarm_tags: toggleTag(settings.downtime_alarm_tags, t.name),
-                  })}
-                  className="rounded border-slate-600"
-                />
-                <span className="text-slate-200 font-mono text-xs">{t.name}</span>
-                {t.display_name && <span className="text-slate-400 text-xs">— {t.display_name}</span>}
-              </label>
-            ))}
-          </div>
+          <>
+            <div className="flex items-center justify-end gap-2 mb-1">
+              <button type="button" onClick={() => setSettings({ ...settings, reject_fault_tags: alarmTags.map(t => t.name) })} className="text-xs text-blue-400 hover:text-blue-300">Select All</button>
+              <span className="text-slate-600">|</span>
+              <button type="button" onClick={() => setSettings({ ...settings, reject_fault_tags: [] })} className="text-xs text-blue-400 hover:text-blue-300">Select None</button>
+            </div>
+            <div className="bg-slate-800 rounded-lg border border-slate-700 max-h-48 overflow-y-auto">
+              {alarmTags.map(t => (
+                <label key={t.id} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-700/50 cursor-pointer text-sm">
+                  <input
+                    type="checkbox"
+                    checked={settings.reject_fault_tags.includes(t.name)}
+                    onChange={() => setSettings({
+                      ...settings,
+                      reject_fault_tags: toggleTag(settings.reject_fault_tags, t.name),
+                    })}
+                    className="rounded border-slate-600"
+                  />
+                  <span className="text-slate-200 font-mono text-xs">{t.name}</span>
+                  {t.display_name && <span className="text-slate-400 text-xs">— {t.display_name}</span>}
+                </label>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
@@ -179,23 +155,30 @@ export function ProductionSettingsTab() {
             No alarm-enabled tags found.
           </div>
         ) : (
-          <div className="bg-slate-800 rounded-lg border border-slate-700 max-h-48 overflow-y-auto">
-            {alarmTags.map(t => (
-              <label key={t.id} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-700/50 cursor-pointer text-sm">
-                <input
-                  type="checkbox"
-                  checked={settings.downtime_exception_tags.includes(t.name)}
-                  onChange={() => setSettings({
-                    ...settings,
-                    downtime_exception_tags: toggleTag(settings.downtime_exception_tags, t.name),
-                  })}
-                  className="rounded border-slate-600"
-                />
-                <span className="text-slate-200 font-mono text-xs">{t.name}</span>
-                {t.display_name && <span className="text-slate-400 text-xs">— {t.display_name}</span>}
-              </label>
-            ))}
-          </div>
+          <>
+            <div className="flex items-center justify-end gap-2 mb-1">
+              <button type="button" onClick={() => setSettings({ ...settings, downtime_exception_tags: alarmTags.map(t => t.name) })} className="text-xs text-blue-400 hover:text-blue-300">Select All</button>
+              <span className="text-slate-600">|</span>
+              <button type="button" onClick={() => setSettings({ ...settings, downtime_exception_tags: [] })} className="text-xs text-blue-400 hover:text-blue-300">Select None</button>
+            </div>
+            <div className="bg-slate-800 rounded-lg border border-slate-700 max-h-48 overflow-y-auto">
+              {alarmTags.map(t => (
+                <label key={t.id} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-700/50 cursor-pointer text-sm">
+                  <input
+                    type="checkbox"
+                    checked={settings.downtime_exception_tags.includes(t.name)}
+                    onChange={() => setSettings({
+                      ...settings,
+                      downtime_exception_tags: toggleTag(settings.downtime_exception_tags, t.name),
+                    })}
+                    className="rounded border-slate-600"
+                  />
+                  <span className="text-slate-200 font-mono text-xs">{t.name}</span>
+                  {t.display_name && <span className="text-slate-400 text-xs">— {t.display_name}</span>}
+                </label>
+              ))}
+            </div>
+          </>
         )}
       </div>
 

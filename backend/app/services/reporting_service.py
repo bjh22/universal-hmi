@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 EXCEPTION_CAP_SECONDS = 300  # 5 minutes
 
 
+
 async def _get_tag_id_by_name(session: AsyncSession, tag_name: str) -> int | None:
     result = await session.execute(
         select(Tag.id).where(Tag.name == tag_name)
@@ -45,17 +46,6 @@ async def _get_tag_ids_by_names(session: AsyncSession, tag_names: list[str]) -> 
     )
     return {name: tid for name, tid in result}
 
-
-async def _get_tag_info_by_names(
-    session: AsyncSession, tag_names: list[str],
-) -> dict[str, dict]:
-    """Return {tag_name: {"id": int, "display_name": str|None}} for given tag names."""
-    if not tag_names:
-        return {}
-    result = await session.execute(
-        select(Tag.name, Tag.id, Tag.display_name).where(Tag.name.in_(tag_names))
-    )
-    return {name: {"id": tid, "display_name": dname} for name, tid, dname in result}
 
 
 def _clamp_interval(
@@ -161,21 +151,17 @@ def _subtract_intervals(
 
 async def _get_fault_intervals(
     session: AsyncSession,
-    tag_names: list[str],
     frame_start: datetime,
     frame_end: datetime,
 ) -> list[dict]:
-    """Get fault intervals from alarm_history and active alarms for the given tags."""
-    if not tag_names:
-        return []
-
+    """Get fault intervals from alarm_history and active alarms for critical-severity alarms."""
     intervals: list[dict] = []
 
     # Get completed alarm history entries that overlap with the timeframe
     history_result = await session.execute(
         select(AlarmHistory)
         .where(
-            AlarmHistory.tag_name.in_(tag_names),
+            AlarmHistory.severity == AlarmSeverity.CRITICAL,
             AlarmHistory.triggered_at < frame_end,
             or_(
                 AlarmHistory.cleared_at.is_(None),
@@ -201,22 +187,25 @@ async def _get_fault_intervals(
                 "original_end": _normalize_dt(h.cleared_at) if h.cleared_at else None,
             })
 
-    # Get currently active alarms that overlap with the timeframe
-    tag_info = await _get_tag_info_by_names(session, tag_names)
-    if tag_info:
-        tag_id_values = [info["id"] for info in tag_info.values()]
-        active_result = await session.execute(
-            select(Alarm)
-            .where(
-                Alarm.tag_id.in_(tag_id_values),
-                Alarm.state.in_([AlarmState.ACTIVE_UNACKED, AlarmState.ACTIVE_ACKED]),
-                Alarm.triggered_at < frame_end,
-            )
+    # Get currently active critical alarms that overlap with the timeframe
+    active_result = await session.execute(
+        select(Alarm)
+        .where(
+            Alarm.severity == AlarmSeverity.CRITICAL,
+            Alarm.state.in_([AlarmState.ACTIVE_UNACKED, AlarmState.ACTIVE_ACKED]),
+            Alarm.triggered_at < frame_end,
         )
-        # Build reverse lookup: tag_id -> {name, display_name}
-        id_to_info = {info["id"]: {"name": name, "display_name": info["display_name"]}
-                      for name, info in tag_info.items()}
-        for a in active_result.scalars().all():
+    )
+    # Build tag_id -> {name, display_name} lookup for active alarms
+    active_alarms = active_result.scalars().all()
+    if active_alarms:
+        active_tag_ids = list({a.tag_id for a in active_alarms})
+        tag_info_result = await session.execute(
+            select(Tag.id, Tag.name, Tag.display_name).where(Tag.id.in_(active_tag_ids))
+        )
+        id_to_info = {tid: {"name": name, "display_name": dname}
+                      for tid, name, dname in tag_info_result}
+        for a in active_alarms:
             info = id_to_info.get(a.tag_id, {"name": "", "display_name": None})
             clamped = _clamp_interval(
                 _normalize_dt(a.triggered_at),
@@ -250,7 +239,6 @@ async def compute_report(
 
     good_count_tag = settings.get("good_count_tag")
     reject_fault_tags: list[str] = settings.get("reject_fault_tags", [])
-    downtime_alarm_tags: list[str] = settings.get("downtime_alarm_tags", [])
     cycling_tag = settings.get("cycling_tag")
     exception_tags: list[str] = settings.get("downtime_exception_tags", [])
     target_rate: float | None = settings.get("target_rate")
@@ -267,9 +255,9 @@ async def compute_report(
     if reject_fault_tags:
         reject_count = await _get_reject_count(session, reject_fault_tags, frame_start, frame_end)
 
-    # 3. Get fault intervals (downtime periods)
+    # 3. Get fault intervals (downtime periods) — critical-severity alarms cause downtime
     fault_intervals = await _get_fault_intervals(
-        session, downtime_alarm_tags, frame_start, frame_end,
+        session, frame_start, frame_end,
     )
 
     # 4. Apply exception capping and compute downtime
@@ -551,11 +539,11 @@ async def get_downtime_periods(
     Overlapping fault intervals are merged into single downtime periods.
     Each period contains a ``faults`` list with all contributing alarms.
     """
-    downtime_alarm_tags: list[str] = settings.get("downtime_alarm_tags", [])
     exception_tags: list[str] = settings.get("downtime_exception_tags", [])
 
+    # Critical-severity alarms cause downtime
     fault_intervals = await _get_fault_intervals(
-        session, downtime_alarm_tags, frame_start, frame_end,
+        session, frame_start, frame_end,
     )
 
     merged = _merge_fault_intervals(fault_intervals, exception_tags)
@@ -636,7 +624,6 @@ async def compute_time_series(
 
     good_count_tag = settings.get("good_count_tag")
     reject_fault_tags: list[str] = settings.get("reject_fault_tags", [])
-    downtime_alarm_tags: list[str] = settings.get("downtime_alarm_tags", [])
     cycling_tag = settings.get("cycling_tag")
     exception_tags: list[str] = settings.get("downtime_exception_tags", [])
     target_rate: float | None = settings.get("target_rate")
@@ -683,9 +670,9 @@ async def compute_time_series(
         )
         all_cycling_samples = [(row.timestamp, row.value) for row in result]
 
-    # Pre-fetch all fault intervals for the full range
+    # Pre-fetch all fault intervals (critical-severity) for the full range
     all_fault_intervals = await _get_fault_intervals(
-        session, downtime_alarm_tags, frame_start, frame_end,
+        session, frame_start, frame_end,
     )
 
     # Pre-fetch reject counts

@@ -16,7 +16,6 @@ router = APIRouter(prefix="/api/production/settings", tags=["production-settings
 _KEYS = {
     "good_count_tag": "production.good_count_tag",
     "reject_fault_tags": "production.reject_fault_tags",
-    "downtime_alarm_tags": "production.downtime_alarm_tags",
     "cycling_tag": "production.cycling_tag",
     "downtime_exception_tags": "production.downtime_exception_tags",
     "target_rate": "production.target_rate",
@@ -26,7 +25,6 @@ _KEYS = {
 class ProductionSettingsBody(BaseModel):
     good_count_tag: str | None = None
     reject_fault_tags: list[str] = []
-    downtime_alarm_tags: list[str] = []
     cycling_tag: str | None = None
     downtime_exception_tags: list[str] = []
     target_rate: float | None = None
@@ -61,14 +59,12 @@ async def load_production_settings(session: AsyncSession) -> dict:
 
     good_count_tag = await _get_setting(session, _KEYS["good_count_tag"])
     reject_raw = await _get_setting(session, _KEYS["reject_fault_tags"])
-    downtime_raw = await _get_setting(session, _KEYS["downtime_alarm_tags"])
     cycling_tag = await _get_setting(session, _KEYS["cycling_tag"])
     exception_raw = await _get_setting(session, _KEYS["downtime_exception_tags"])
     target_rate_raw = await _get_setting(session, _KEYS["target_rate"])
     result = {
         "good_count_tag": good_count_tag,
         "reject_fault_tags": json.loads(reject_raw) if reject_raw else [],
-        "downtime_alarm_tags": json.loads(downtime_raw) if downtime_raw else [],
         "cycling_tag": cycling_tag,
         "downtime_exception_tags": json.loads(exception_raw) if exception_raw else [],
         "target_rate": float(target_rate_raw) if target_rate_raw else None,
@@ -97,7 +93,6 @@ async def update_production_settings(
 ):
     await _set_setting(session, _KEYS["good_count_tag"], body.good_count_tag)
     await _set_setting(session, _KEYS["reject_fault_tags"], json.dumps(body.reject_fault_tags))
-    await _set_setting(session, _KEYS["downtime_alarm_tags"], json.dumps(body.downtime_alarm_tags))
     await _set_setting(session, _KEYS["cycling_tag"], body.cycling_tag)
     await _set_setting(session, _KEYS["downtime_exception_tags"], json.dumps(body.downtime_exception_tags))
     await _set_setting(session, _KEYS["target_rate"], str(body.target_rate) if body.target_rate is not None else None)
