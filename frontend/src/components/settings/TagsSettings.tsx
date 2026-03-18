@@ -41,7 +41,7 @@ export function TagDialog({ tag, dataSources, allLabels, onSave, onClose, onLabe
     try {
       const color = LABEL_COLORS[allLabels.length % LABEL_COLORS.length];
       const newLabel = await api.createTagLabel({ name: trimmedSearch, color });
-      setForm(f => ({ ...f, labels: [...(f.labels || []), newLabel] }));
+      setForm(f => { const labels: TagLabel[] = [...(f.labels || []), newLabel]; return { ...f, labels }; });
       setLabelSearch('');
       setShowLabelDropdown(false);
       onLabelCreated?.();
