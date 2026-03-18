@@ -61,8 +61,16 @@ export interface Tag {
   simulation_behavior: string | null;
   simulation_config: Record<string, unknown> | null;
   enum_mapping: Record<string, string> | null;      // maps numeric values to display strings
+  visibility_enabled: boolean;
+  visibility_conditions: string | null;             // JSON string: VisibilityCondition[]
   labels: TagLabel[];
   is_system?: boolean;
+}
+
+export interface VisibilityCondition {
+  tag: string;
+  operator: '==' | '!=' | '>' | '<' | '>=' | '<=';
+  value: unknown;
 }
 
 export interface ImportPreviewTag {

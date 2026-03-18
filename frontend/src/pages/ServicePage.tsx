@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Wrench, ChevronDown, ChevronRight, Tag as TagIcon, Pencil, Save, X, ArrowUp, ArrowDown, PanelRightOpen, PanelRightClose } from 'lucide-react';
 import { api } from '../lib/api';
 import { getTagDisplayName } from '../lib/tagDisplayName';
+import { isTagVisible } from '../lib/tagVisibility';
+import type { TagVisibilityMap } from '../lib/tagVisibility';
 import { NumericKeypad, AlphaKeyboard } from '../components/widgets/TouchInput';
 import type { Tag, TagValue, UserData, ServiceConfig } from '../types';
 
@@ -12,6 +14,7 @@ const OUTPUT_LABEL = 'Output';
 interface Props {
   user: UserData | null;
   tagValues: Record<string, TagValue>;
+  tagVisibilityMap?: TagVisibilityMap;
 }
 
 function parseTypedValue(val: string): unknown {
@@ -169,7 +172,7 @@ function IOPanel({ label, emptyLabel, tags, tagValues, editMode, onMove }: IOPan
   );
 }
 
-export function ServicePage({ user, tagValues }: Props) {
+export function ServicePage({ user, tagValues, tagVisibilityMap = {} }: Props) {
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [keypad, setKeypad] = useState<{ tag: string; kind: 'numeric' | 'alpha' } | null>(null);
@@ -220,18 +223,18 @@ export function ServicePage({ user, tagValues }: Props) {
   useEffect(() => { loadTags(); loadConfig(); }, [loadTags, loadConfig]);
 
   const inputTags = useMemo(
-    () => allTags.filter(t => hasLabel(t, INPUT_LABEL)),
-    [allTags],
+    () => allTags.filter(t => hasLabel(t, INPUT_LABEL) && isTagVisible(t.name, tagVisibilityMap, tagValues)),
+    [allTags, tagVisibilityMap, tagValues],
   );
 
   const outputTags = useMemo(
-    () => allTags.filter(t => hasLabel(t, OUTPUT_LABEL)),
-    [allTags],
+    () => allTags.filter(t => hasLabel(t, OUTPUT_LABEL) && isTagVisible(t.name, tagVisibilityMap, tagValues)),
+    [allTags, tagVisibilityMap, tagValues],
   );
 
   const serviceTags = useMemo(
-    () => allTags.filter(t => hasLabel(t, SERVICE_LABEL)),
-    [allTags],
+    () => allTags.filter(t => hasLabel(t, SERVICE_LABEL) && isTagVisible(t.name, tagVisibilityMap, tagValues)),
+    [allTags, tagVisibilityMap, tagValues],
   );
 
   const activeOrder = editMode ? editOrder : serviceConfig.order;

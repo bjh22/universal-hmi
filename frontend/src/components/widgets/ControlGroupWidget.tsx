@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { api } from '../../lib/api';
+import { isTagVisible } from '../../lib/tagVisibility';
+import type { TagVisibilityMap } from '../../lib/tagVisibility';
 import type { TagValue, TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
 import { NumericKeypad } from './TouchInput';
@@ -17,6 +19,7 @@ interface Props {
   title: string;
   controls: ControlItem[];
   tagValues: Record<string, TagValue>;
+  tagVisibilityMap?: TagVisibilityMap;
   columns?: number;
   titleStyle?: TextStyle;
   valueStyle?: TextStyle;
@@ -232,7 +235,7 @@ function DropdownControl({ item, tagValues, valueStyle }: { item: ControlItem & 
 
 // ─── Main Component ───
 
-export function ControlGroupWidget({ title, controls = [], tagValues, columns = 1, titleStyle, valueStyle, chrome = 'full' }: Props) {
+export function ControlGroupWidget({ title, controls = [], tagValues, tagVisibilityMap = {}, columns = 1, titleStyle, valueStyle, chrome = 'full' }: Props) {
   return (
     <div className={`${getContainerClasses(chrome)} h-full flex flex-col`}>
       {shouldShowTitle(chrome) && <div className={getTitleClasses(chrome)} style={textStyleToCSS(titleStyle)}>
@@ -247,15 +250,19 @@ export function ControlGroupWidget({ title, controls = [], tagValues, columns = 
           alignContent: 'start',
         } : undefined}
       >
-        {controls.map((ctrl, i) => (
-          <div key={i} className="border-b border-slate-700/50 last:border-0">
-            {ctrl.type === 'toggle' && <ToggleControl item={ctrl as ControlItem & { type: 'toggle' }} tagValues={tagValues} valueStyle={valueStyle} />}
-            {ctrl.type === 'value' && <ValueControl item={ctrl as ControlItem & { type: 'value' }} tagValues={tagValues} valueStyle={valueStyle} />}
-            {ctrl.type === 'button' && <ButtonControl item={ctrl as ControlItem & { type: 'button' }} tagValues={tagValues} />}
-            {ctrl.type === 'input' && <InputControl item={ctrl as ControlItem & { type: 'input' }} tagValues={tagValues} valueStyle={valueStyle} />}
-            {ctrl.type === 'dropdown' && <DropdownControl item={ctrl as ControlItem & { type: 'dropdown' }} tagValues={tagValues} valueStyle={valueStyle} />}
-          </div>
-        ))}
+        {controls.map((ctrl, i) => {
+          // Skip controls whose tag has failing visibility conditions
+          if (ctrl.tag && !isTagVisible(ctrl.tag, tagVisibilityMap, tagValues)) return null;
+          return (
+            <div key={i} className="border-b border-slate-700/50 last:border-0">
+              {ctrl.type === 'toggle' && <ToggleControl item={ctrl as ControlItem & { type: 'toggle' }} tagValues={tagValues} valueStyle={valueStyle} />}
+              {ctrl.type === 'value' && <ValueControl item={ctrl as ControlItem & { type: 'value' }} tagValues={tagValues} valueStyle={valueStyle} />}
+              {ctrl.type === 'button' && <ButtonControl item={ctrl as ControlItem & { type: 'button' }} tagValues={tagValues} />}
+              {ctrl.type === 'input' && <InputControl item={ctrl as ControlItem & { type: 'input' }} tagValues={tagValues} valueStyle={valueStyle} />}
+              {ctrl.type === 'dropdown' && <DropdownControl item={ctrl as ControlItem & { type: 'dropdown' }} tagValues={tagValues} valueStyle={valueStyle} />}
+            </div>
+          );
+        })}
         {controls.length === 0 && (
           <div className="text-sm text-slate-600 italic text-center py-4">No controls configured</div>
         )}

@@ -11,10 +11,11 @@ import type { Tag, TagLabel, DataSourceData, AuditEntry, UserData, UserListEntry
 interface Props {
   user: UserData | null;
   tagValues: Record<string, TagValue>;
+  onTagsChanged?: () => void;
 }
 
 // ─── Main SettingsPage ───
-export function SettingsPage({ user, tagValues }: Props) {
+export function SettingsPage({ user, tagValues, onTagsChanged }: Props) {
   const [tab, setTab] = useState<'branding' | 'preferences' | 'tags' | 'datasources' | 'integrations' | 'reporting' | 'users' | 'audit'>('tags');
   const [tags, setTags] = useState<Tag[]>([]);
   const [dataSources, setDataSources] = useState<DataSourceData[]>([]);
@@ -24,7 +25,7 @@ export function SettingsPage({ user, tagValues }: Props) {
 
   const canManage = ['engineer', 'designer'].includes(user?.role || '');
 
-  const loadTags = useCallback(() => { api.getTags().then(setTags).catch(() => {}); }, []);
+  const loadTags = useCallback(() => { api.getTags().then(t => { setTags(t); onTagsChanged?.(); }).catch(() => {}); }, [onTagsChanged]);
   const loadLabels = useCallback(() => { api.getTagLabels().then(setAllLabels).catch(() => {}); }, []);
   const loadDataSources = useCallback(() => { api.getDataSources().then(setDataSources).catch(() => {}); }, []);
   const refreshUsers = useCallback(() => { api.getUsers().then(setUsers).catch(() => {}); }, []);

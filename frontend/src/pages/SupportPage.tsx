@@ -5,6 +5,8 @@ import { api } from '../lib/api';
 import { SystemUpdateTab } from '../components/support/SystemUpdateTab';
 import { ZplPreviewPage } from './ZplPreviewPage';
 import { WidgetRenderer } from '../components/widgets/WidgetRenderer';
+import { isTagVisible } from '../lib/tagVisibility';
+import type { TagVisibilityMap } from '../lib/tagVisibility';
 import type { ScreenData, Widget, TagValue, AlarmData, UserData, LogEntry } from '../types';
 
 interface Props {
@@ -12,11 +14,12 @@ interface Props {
   tagValues: Record<string, TagValue>;
   alarms: AlarmData[];
   userRole?: string;
+  tagVisibilityMap?: TagVisibilityMap;
 }
 
 type SupportTab = 'dashboard' | 'logs' | 'update' | 'zpl-preview';
 
-export function SupportPage({ user, tagValues, alarms, userRole }: Props) {
+export function SupportPage({ user, tagValues, alarms, userRole, tagVisibilityMap = {} }: Props) {
   const [tab, setTab] = useState<SupportTab>('dashboard');
   const canManage = ['supervisor', 'engineer', 'designer'].includes(user?.role || '');
 
@@ -46,7 +49,7 @@ export function SupportPage({ user, tagValues, alarms, userRole }: Props) {
       </div>
 
       {tab === 'dashboard' && (
-        <SupportDashboard tagValues={tagValues} alarms={alarms} userRole={userRole} />
+        <SupportDashboard tagValues={tagValues} alarms={alarms} userRole={userRole} tagVisibilityMap={tagVisibilityMap} />
       )}
       {tab === 'logs' && <LogsTab />}
       {tab === 'update' && <SystemUpdateTab canManage={canManage} />}
@@ -57,10 +60,11 @@ export function SupportPage({ user, tagValues, alarms, userRole }: Props) {
 
 // ─── Support Dashboard Tab ──────────────────────────────────────────────────
 
-function SupportDashboard({ tagValues, alarms, userRole }: {
+function SupportDashboard({ tagValues, alarms, userRole, tagVisibilityMap = {} }: {
   tagValues: Record<string, TagValue>;
   alarms: AlarmData[];
   userRole?: string;
+  tagVisibilityMap?: TagVisibilityMap;
 }) {
   const navigate = useNavigate();
   const [screen, setScreen] = useState<ScreenData | null>(null);
@@ -154,7 +158,9 @@ function SupportDashboard({ tagValues, alarms, userRole }: {
             const visibleByProp = w.visible !== false;
             const visibleByTag = w.visibleTag ? !!tagValues[w.visibleTag]?.value : true;
             const visibleByRole = !w.visibleRoles || w.visibleRoles.length === 0 || (userRole && w.visibleRoles.includes(userRole));
-            if (!visibleByProp || !visibleByTag || !visibleByRole) return null;
+            const primaryTag = (w.props as Record<string, unknown>).tag as string | undefined;
+            const visibleByTagConfig = primaryTag ? isTagVisible(primaryTag, tagVisibilityMap, tagValues) : true;
+            if (!visibleByProp || !visibleByTag || !visibleByRole || !visibleByTagConfig) return null;
 
             const enabledByProp = w.enabled !== false;
             const enabledByTag = w.enabledTag ? !!tagValues[w.enabledTag]?.value : true;
@@ -167,7 +173,7 @@ function SupportDashboard({ tagValues, alarms, userRole }: {
                 style={{ gridColumn: `${w.x + 1} / span ${w.w}`, gridRow: `${w.y + 1} / span ${w.h}` }}
                 className={isEnabled ? '' : 'opacity-50 pointer-events-none'}
               >
-                <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} />
+                <WidgetRenderer widget={w} tagValues={tagValues} alarms={alarms} tagVisibilityMap={tagVisibilityMap} />
               </div>
             );
           })}

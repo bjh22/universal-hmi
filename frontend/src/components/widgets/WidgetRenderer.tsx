@@ -13,6 +13,7 @@
  *      tag values that THIS widget actually uses, not every tag in the system.
  */
 import { memo } from 'react';
+import type { TagVisibilityMap } from '../../lib/tagVisibility';
 import type { Widget, TagValue, AlarmData } from '../../types';
 import { ErrorBoundary } from './ErrorBoundary';
 import { StatusIndicator } from './StatusIndicator';
@@ -43,6 +44,7 @@ interface Props {
   widget: Widget;
   tagValues: Record<string, TagValue>;
   alarms?: AlarmData[];
+  tagVisibilityMap?: TagVisibilityMap;
   collapsed?: boolean;
   onToggleCollapsed?: (collapsed: boolean) => void;
   pageCount?: number;
@@ -92,7 +94,7 @@ function getWidgetTagNames(widget: Widget): string[] {
 // memo() is a React optimization that wraps this component to skip re-rendering
 // if its props haven't changed. The second argument (after the component function)
 // is a custom comparison function that decides whether to skip — see bottom of file.
-export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, alarms = [], collapsed, onToggleCollapsed, pageCount, currentPage, onPageChange }: Props) {
+export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, alarms = [], tagVisibilityMap = {}, collapsed, onToggleCollapsed, pageCount, currentPage, onPageChange }: Props) {
   const p = widget.props as Record<string, unknown>;
   const chrome = widget.chrome;
 
@@ -124,18 +126,18 @@ export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, 
       const mvControls: ControlItem[] = mvTags.map(t => ({
         type: 'value' as const, tag: t.tag, label: t.label, units: t.units, decimalPlaces: p.decimalPlaces as number ?? 1,
       }));
-      return <ControlGroupWidget title={p.title as string} controls={mvControls} tagValues={tagValues} columns={p.columns as number} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
+      return <ControlGroupWidget title={p.title as string} controls={mvControls} tagValues={tagValues} tagVisibilityMap={tagVisibilityMap} columns={p.columns as number} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
     }
     case 'dropdown_select':
       return <DropdownSelectWidget title={p.title as string} tag={p.tag as string} tagValues={tagValues} options={p.options as Array<{ label: string; value: unknown }>} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
     case 'oee':
       return <OeeWidget title={p.title as string} availabilityTag={p.availabilityTag as string} performanceTag={p.performanceTag as string} qualityTag={p.qualityTag as string} oeeTag={p.oeeTag as string} tagValues={tagValues} decimalPlaces={p.decimalPlaces as number} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
     case 'auto_fill':
-      return <AutoFillWidget title={p.title as string} labelName={p.labelName as string} columns={p.columns as number} onColor={p.onColor as string} offColor={p.offColor as string} decimalPlaces={p.decimalPlaces as number} tagOrder={p.tagOrder as string[]} tagValues={tagValues} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
+      return <AutoFillWidget title={p.title as string} labelName={p.labelName as string} columns={p.columns as number} onColor={p.onColor as string} offColor={p.offColor as string} decimalPlaces={p.decimalPlaces as number} tagOrder={p.tagOrder as string[]} tagValues={tagValues} tagVisibilityMap={tagVisibilityMap} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
     case 'light_indicator':
       return <LightIndicator title={p.title as string} tag={p.tag as string} writeTag={p.writeTag as string} onColor={p.onColor as string} offColor={p.offColor as string} size={p.size as 'small' | 'medium' | 'large'} tagValues={tagValues} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
     case 'control_group':
-      return <ControlGroupWidget title={p.title as string} controls={p.controls as ControlItem[] || []} tagValues={tagValues} columns={p.columns as number} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
+      return <ControlGroupWidget title={p.title as string} controls={p.controls as ControlItem[] || []} tagValues={tagValues} tagVisibilityMap={tagVisibilityMap} columns={p.columns as number} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
     case 'cognex_viewer':
       return <CognexViewerWidget title={p.title as string} tagPrefix={p.tagPrefix as string || 'dataman'} showImage={p.showImage as boolean} showTrigger={p.showTrigger as boolean} tagValues={tagValues} titleStyle={p.titleStyle as undefined} valueStyle={p.valueStyle as undefined} chrome={chrome} />;
     case 'zebra_printer':
@@ -171,6 +173,7 @@ export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, 
   // If the widget config itself changed (e.g. designer edited it), always re-render
   if (prev.widget !== next.widget) return false;
   if (prev.alarms !== next.alarms) return false;
+  if (prev.tagVisibilityMap !== next.tagVisibilityMap) return false;
   if (prev.collapsed !== next.collapsed) return false;
   if (prev.pageCount !== next.pageCount) return false;
   if (prev.currentPage !== next.currentPage) return false;

@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Cog, Edit, Save, X, ChevronDown, ChevronRight, Tag as TagIcon, AlertCircle } from 'lucide-react';
 import { api } from '../lib/api';
 import { getTagDisplayName } from '../lib/tagDisplayName';
+import { isTagVisible } from '../lib/tagVisibility';
+import type { TagVisibilityMap } from '../lib/tagVisibility';
 import { NumericKeypad, AlphaKeyboard } from '../components/widgets/TouchInput';
 import type { Tag, TagValue, UserData } from '../types';
 
@@ -10,6 +12,7 @@ const LABEL_NAME = 'Factory Config';
 interface Props {
   user: UserData | null;
   tagValues: Record<string, TagValue>;
+  tagVisibilityMap?: TagVisibilityMap;
 }
 
 function parseTypedValue(val: string): unknown {
@@ -33,7 +36,7 @@ function groupTags(tags: Tag[]): { group: string; tags: Tag[] }[] {
     .map(([group, tags]) => ({ group, tags }));
 }
 
-export function FactoryConfigPage({ user, tagValues }: Props) {
+export function FactoryConfigPage({ user, tagValues, tagVisibilityMap = {} }: Props) {
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [editMode, setEditMode] = useState(false);
   const [editValues, setEditValues] = useState<Record<string, unknown>>({});
@@ -56,8 +59,8 @@ export function FactoryConfigPage({ user, tagValues }: Props) {
   useEffect(() => { loadTags(); }, [loadTags]);
 
   const factoryTags = useMemo(
-    () => allTags.filter(t => t.labels?.some(l => l.name === LABEL_NAME)),
-    [allTags],
+    () => allTags.filter(t => t.labels?.some(l => l.name === LABEL_NAME) && isTagVisible(t.name, tagVisibilityMap, tagValues)),
+    [allTags, tagVisibilityMap, tagValues],
   );
 
   const grouped = useMemo(() => groupTags(factoryTags), [factoryTags]);

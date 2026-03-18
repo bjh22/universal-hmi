@@ -2,13 +2,159 @@ import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { Search, Download, Plus, Pencil, Trash2, Upload, X, FolderSearch, Tag as TagIcon, CheckSquare, Square, MinusSquare, Filter, ChevronRight, ChevronDown, Folder, FolderOpen, Loader2 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { InlineTagValue, DeleteConfirmDialog, Field, inputCls, EMPTY_TAG, LABEL_COLORS, EnumMappingEditor, parseAlarmConfig, FaultHelpConfig } from './shared';
-import type { Tag, TagLabel, DataSourceData, BrowsedTag, BrowsedNode, ImportPreviewTag, ImportConflictMode, TagValue } from '../../types';
+import { parseVisibilityConditions } from '../../lib/tagVisibility';
+import type { Tag, TagLabel, DataSourceData, BrowsedTag, BrowsedNode, ImportPreviewTag, ImportConflictMode, TagValue, VisibilityCondition } from '../../types';
+
+// ─── Visibility Condition Editor ───
+const OPERATORS_BOOL = ['==', '!='] as const;
+const OPERATORS_NUMERIC = ['==', '!=', '>', '<', '>=', '<='] as const;
+const OPERATORS_STRING = ['==', '!='] as const;
+
+function getOperatorsForType(dataType?: string) {
+  if (dataType === 'bool') return OPERATORS_BOOL;
+  if (dataType === 'int' || dataType === 'float') return OPERATORS_NUMERIC;
+  return OPERATORS_STRING;
+}
+
+function VisibilityConditionEditor({ conditions, allTags, onChange }: {
+  conditions: VisibilityCondition[];
+  allTags: Tag[];
+  onChange: (conditions: VisibilityCondition[]) => void;
+}) {
+  const tagMap = useMemo(() => new Map(allTags.map(t => [t.name, t])), [allTags]);
+  const [searchTerms, setSearchTerms] = useState<Record<number, string>>({});
+
+  const addCondition = () => {
+    onChange([...conditions, { tag: '', operator: '==', value: true }]);
+  };
+
+  const removeCondition = (idx: number) => {
+    onChange(conditions.filter((_, i) => i !== idx));
+  };
+
+  const updateCondition = (idx: number, patch: Partial<VisibilityCondition>) => {
+    onChange(conditions.map((c, i) => i === idx ? { ...c, ...patch } : c));
+  };
+
+  return (
+    <div className="mt-3 space-y-2">
+      <p className="text-xs text-blue-400">Tag is visible if ANY condition is true</p>
+      {conditions.map((cond, idx) => {
+        const selectedTag = tagMap.get(cond.tag);
+        const operators = getOperatorsForType(selectedTag?.data_type);
+        const search = searchTerms[idx] ?? '';
+
+        // Parse enum mapping for dropdown value input
+        let enumMap: Record<string, string> | null = null;
+        if (selectedTag?.enum_mapping) {
+          try {
+            enumMap = typeof selectedTag.enum_mapping === 'string' ? JSON.parse(selectedTag.enum_mapping) : selectedTag.enum_mapping;
+          } catch { /* ignore */ }
+        }
+        const hasEnum = enumMap && Object.keys(enumMap).length > 0;
+
+        return (
+          <div key={idx} className="flex items-center gap-2 flex-wrap">
+            {/* Tag picker — searchable dropdown */}
+            <div className="relative flex-1 min-w-[140px]">
+              <input
+                type="text"
+                value={cond.tag && !search ? (selectedTag?.display_name || cond.tag) : search}
+                placeholder="Select tag..."
+                onChange={e => {
+                  setSearchTerms(s => ({ ...s, [idx]: e.target.value }));
+                  if (cond.tag) updateCondition(idx, { tag: '', value: true });
+                }}
+                onFocus={() => setSearchTerms(s => ({ ...s, [idx]: '' }))}
+                className={inputCls + ' !py-1.5 text-xs'}
+              />
+              {(search !== undefined && !cond.tag || search) && (
+                <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-600 rounded-md shadow-lg max-h-40 overflow-auto">
+                  {allTags
+                    .filter(t => {
+                      const q = search.toLowerCase();
+                      return !q || t.name.toLowerCase().includes(q) || (t.display_name || '').toLowerCase().includes(q);
+                    })
+                    .slice(0, 30)
+                    .map(t => (
+                      <button
+                        key={t.name}
+                        type="button"
+                        onClick={() => {
+                          // Reset value to sensible default for the selected tag's type
+                          const defaultValue = t.data_type === 'bool' ? true : t.data_type === 'int' || t.data_type === 'float' ? 0 : '';
+                          updateCondition(idx, { tag: t.name, operator: '==', value: defaultValue });
+                          setSearchTerms(s => { const next = { ...s }; delete next[idx]; return next; });
+                        }}
+                        className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700 truncate"
+                      >
+                        {t.display_name || t.name}
+                        {t.display_name && <span className="text-slate-500 ml-1">({t.name})</span>}
+                      </button>
+                    ))}
+                </div>
+              )}
+            </div>
+
+            {/* Operator */}
+            <select
+              value={cond.operator}
+              onChange={e => updateCondition(idx, { operator: e.target.value as VisibilityCondition['operator'] })}
+              className={inputCls + ' !w-16 !py-1.5 text-xs text-center'}
+            >
+              {operators.map(op => <option key={op} value={op}>{op}</option>)}
+            </select>
+
+            {/* Value input — adapts to tag type */}
+            {selectedTag?.data_type === 'bool' ? (
+              <label className="flex items-center gap-1.5 text-xs text-[var(--hmi-text-secondary)] cursor-pointer min-w-[60px]">
+                <input
+                  type="checkbox"
+                  checked={cond.value === true || cond.value === 'true'}
+                  onChange={e => updateCondition(idx, { value: e.target.checked })}
+                  className="accent-blue-500"
+                />
+                {cond.value === true || cond.value === 'true' ? 'TRUE' : 'FALSE'}
+              </label>
+            ) : hasEnum ? (
+              <select
+                value={String(cond.value ?? '')}
+                onChange={e => updateCondition(idx, { value: Number(e.target.value) })}
+                className={inputCls + ' !w-32 !py-1.5 text-xs'}
+              >
+                {Object.entries(enumMap!).sort(([a], [b]) => Number(a) - Number(b)).map(([key, label]) => (
+                  <option key={key} value={key}>{label} ({key})</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="number"
+                value={String(cond.value ?? '')}
+                onChange={e => updateCondition(idx, { value: e.target.value === '' ? '' : Number(e.target.value) })}
+                className={inputCls + ' !w-20 !py-1.5 text-xs'}
+              />
+            )}
+
+            {/* Remove button */}
+            <button type="button" onClick={() => removeCondition(idx)} className="p-1 text-slate-500 hover:text-red-400">
+              <Trash2 size={14} />
+            </button>
+          </div>
+        );
+      })}
+      <button type="button" onClick={addCondition} className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 mt-1">
+        <Plus size={14} /> Add condition
+      </button>
+    </div>
+  );
+}
 
 // ─── Tag Edit Dialog ───
-export function TagDialog({ tag, dataSources, allLabels, onSave, onClose, onLabelCreated }: {
+export function TagDialog({ tag, dataSources, allLabels, allTags, onSave, onClose, onLabelCreated }: {
   tag: Omit<Tag, 'id'> & { id?: number };
   dataSources: DataSourceData[];
   allLabels: TagLabel[];
+  allTags?: Tag[];
   onSave: (data: Omit<Tag, 'id'> & { id?: number }) => void;
   onClose: () => void;
   onLabelCreated?: () => void;
@@ -273,6 +419,23 @@ export function TagDialog({ tag, dataSources, allLabels, onSave, onClose, onLabe
             </div>
           </fieldset>
 
+          {/* Visibility Conditions */}
+          <fieldset className="border border-[var(--hmi-border)] rounded-lg p-3">
+            <legend className="text-xs text-[var(--hmi-text-secondary)] px-2">Visibility</legend>
+            <label className="flex items-center gap-2 text-sm text-[var(--hmi-text-secondary)] cursor-pointer">
+              <input type="checkbox" checked={form.visibility_enabled} onChange={e => set('visibility_enabled', e.target.checked)} className="accent-blue-500" />
+              Enable visibility conditions
+            </label>
+            <p className="text-xs text-[var(--hmi-text-muted)] mt-1">When enabled, widgets bound to this tag are hidden unless at least one condition is true.</p>
+            {form.visibility_enabled && (
+              <VisibilityConditionEditor
+                conditions={parseVisibilityConditions(form.visibility_conditions as string | null)}
+                allTags={allTags || []}
+                onChange={(conditions) => set('visibility_conditions', conditions.length > 0 ? JSON.stringify(conditions) as unknown as string | null : null)}
+              />
+            )}
+          </fieldset>
+
           {/* Enum Mapping */}
           {(form.data_type === 'int' || form.enum_mapping) && (
             <fieldset className="border border-[var(--hmi-border)] rounded-lg p-3">
@@ -321,11 +484,12 @@ function BulkEditDialog({ tagCount, dataSources, onApply, onClose }: {
     alarm_help_text:        { enabled: false, value: '' },
     simulation_enabled:     { enabled: false, value: false },
     simulation_behavior:    { enabled: false, value: null },
+    visibility_enabled:     { enabled: false, value: false },
   });
 
   // Boolean fields that default to true when first enabled (users enabling
   // "Alarm" in bulk edit almost always want alarm_enabled=true, not false).
-  const booleanKeys = new Set(['trending_enabled', 'alarm_enabled', 'alarm_help_enabled', 'simulation_enabled']);
+  const booleanKeys = new Set(['trending_enabled', 'alarm_enabled', 'alarm_help_enabled', 'simulation_enabled', 'visibility_enabled']);
 
   const toggle = useCallback((key: string) =>
     setFields(f => {
@@ -493,6 +657,7 @@ function BulkEditDialog({ tagCount, dataSources, onApply, onClose }: {
             ['trending_enabled', 'Trending'],
             ['alarm_enabled', 'Alarm'],
             ['simulation_enabled', 'Simulation'],
+            ['visibility_enabled', 'Visibility'],
           ] as [string, string][]).map(([key, label]) => (
             <div key={key} className={rowCls}>
               <button onClick={() => toggle(key)} className={checkCls}>
@@ -1638,6 +1803,8 @@ export function TagsSettings({ tags, dataSources, allLabels, tagValues, canManag
         if (tagFeatureFilter === 'no_trending' && t.trending_enabled) return false;
         if (tagFeatureFilter === 'no_alarm' && t.alarm_enabled) return false;
         if (tagFeatureFilter === 'no_simulation' && t.simulation_enabled) return false;
+        if (tagFeatureFilter === 'visibility' && !t.visibility_enabled) return false;
+        if (tagFeatureFilter === 'no_visibility' && t.visibility_enabled) return false;
       }
       if (tagSearch) {
         const q = tagSearch.toLowerCase();
@@ -1927,6 +2094,8 @@ export function TagsSettings({ tags, dataSources, allLabels, tagValues, canManag
             <option value="no_trending">Not Trending</option>
             <option value="no_alarm">Not Alarming</option>
             <option value="no_simulation">Not Simulated</option>
+            <option value="visibility">Has Visibility</option>
+            <option value="no_visibility">No Visibility</option>
           </select>
           {(tagTypeFilter !== 'all' || tagSourceFilter !== 'all' || tagFeatureFilter !== 'all') && (
             <button
@@ -2080,7 +2249,7 @@ export function TagsSettings({ tags, dataSources, allLabels, tagValues, canManag
         </table>
       </div>
 
-      {editTag && <TagDialog tag={editTag} dataSources={dataSources} allLabels={allLabels} onSave={handleSaveTag} onClose={() => setEditTag(null)} onLabelCreated={loadLabels} />}
+      {editTag && <TagDialog tag={editTag} dataSources={dataSources} allLabels={allLabels} allTags={tags} onSave={handleSaveTag} onClose={() => setEditTag(null)} onLabelCreated={loadLabels} />}
       {deleteTagTarget && <DeleteConfirmDialog title="Delete Tag" name={deleteTagTarget.name} onConfirm={handleDeleteTag} onCancel={() => setDeleteTagTarget(null)} />}
       {showTagImport && <TagImportDialog dataSources={dataSources} existingTagNames={new Set(tags.map(t => t.name))} onImportCsv={handleCsvImport} onImportCodesys={handleCodesysImport} onImportRslogix={handleRslogixImport} onClose={() => setShowTagImport(false)} />}
       {bulkDeleteConfirm && (
