@@ -20,6 +20,9 @@
     "recharts": "^3.7.0",
     "tailwindcss": "^4.2.1"
   },
+  "overrides": {
+    "flatted": ">=3.4.0"
+  },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@testing-library/jest-dom": "^6.9.1",
