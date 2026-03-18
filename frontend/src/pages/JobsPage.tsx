@@ -2,11 +2,15 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { ClipboardList, Download, Plus, Trash2, Edit, Copy, Upload, Save, X, Search, History, Shield, ChevronDown, ChevronRight, Tag as TagIcon, ArrowLeft } from 'lucide-react';
 import { api } from '../lib/api';
 import { getTagDisplayName, buildTagDisplayNameMap } from '../lib/tagDisplayName';
+import { isTagVisible } from '../lib/tagVisibility';
+import type { TagVisibilityMap } from '../lib/tagVisibility';
 import { NumericKeypad, AlphaKeyboard } from '../components/widgets/TouchInput';
-import type { JobData, JobHistoryEntry, Tag, UserData } from '../types';
+import type { JobData, JobHistoryEntry, Tag, TagValue, UserData } from '../types';
 
 interface Props {
   user: UserData | null;
+  tagVisibilityMap?: TagVisibilityMap;
+  tagValues?: Record<string, TagValue>;
 }
 
 const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-3 text-sm text-white outline-none focus:border-blue-500 min-h-[48px]';
@@ -647,7 +651,7 @@ function UploadDialog({ tags, onClose, onUploaded }: {
 }
 
 // ─── Main JobsPage ───
-export function JobsPage({ user }: Props) {
+export function JobsPage({ user, tagVisibilityMap = {}, tagValues = {} }: Props) {
   const [jobs, setJobs] = useState<JobData[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedJob, setSelectedJob] = useState<JobData | null>(null);
@@ -675,6 +679,12 @@ export function JobsPage({ user }: Props) {
 
   useEffect(() => { loadJobs(); }, [loadJobs]);
   useEffect(() => { api.getTags().then(setTags).catch(() => {}); }, []);
+
+  // Filter out tags whose visibility conditions are not met
+  const visibleTags = useMemo(
+    () => tags.filter(t => isTagVisible(t.name, tagVisibilityMap, tagValues)),
+    [tags, tagVisibilityMap, tagValues],
+  );
 
   const filteredJobs = useMemo(() => {
     if (!jobSearch) return jobs;
@@ -1010,8 +1020,8 @@ export function JobsPage({ user }: Props) {
                     className={inputCls + ' mt-1'}
                   />
                 </div>
-                <SetpointEditor value={editSetpoints} onChange={setEditSetpoints} tags={tags} />
-                <ConditionsEditor value={editConditions} onChange={setEditConditions} tags={tags} />
+                <SetpointEditor value={editSetpoints} onChange={setEditSetpoints} tags={visibleTags} />
+                <ConditionsEditor value={editConditions} onChange={setEditConditions} tags={visibleTags} />
                 <div className="flex gap-3 pt-2">
                   <button
                     onClick={handleSaveEdit}
@@ -1034,7 +1044,7 @@ export function JobsPage({ user }: Props) {
                 )}
 
                 <h3 className="text-base font-medium text-slate-300 mb-2">Setpoints</h3>
-                <JobSetpointDisplay setpoints={selectedJob.setpoints} tags={tags} />
+                <JobSetpointDisplay setpoints={selectedJob.setpoints} tags={visibleTags} />
 
                 {selectedJob.download_conditions && (() => {
                   const conds = JSON.parse(selectedJob.download_conditions);
@@ -1079,7 +1089,7 @@ export function JobsPage({ user }: Props) {
       </div>
 
       {/* Dialogs */}
-      {showUpload && <UploadDialog tags={tags} onClose={() => setShowUpload(false)} onUploaded={loadJobs} />}
+      {showUpload && <UploadDialog tags={visibleTags} onClose={() => setShowUpload(false)} onUploaded={loadJobs} />}
       {showHistory && selectedJob && (
         <HistoryDialog jobId={selectedJob.id} jobName={selectedJob.name} onRestore={handleRestore} onClose={() => setShowHistory(false)} />
       )}

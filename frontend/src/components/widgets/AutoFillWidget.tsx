@@ -1,5 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { api } from '../../lib/api';
+import { isTagVisible } from '../../lib/tagVisibility';
+import type { TagVisibilityMap } from '../../lib/tagVisibility';
 import type { Tag, TagValue, TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
 import { getContainerClasses, shouldShowTitle, getTitleClasses } from '../../lib/widgetChrome';
@@ -14,6 +16,7 @@ interface Props {
   decimalPlaces?: number;
   tagOrder?: string[];
   tagValues: Record<string, TagValue>;
+  tagVisibilityMap?: TagVisibilityMap;
   titleStyle?: TextStyle;
   valueStyle?: TextStyle;
   chrome?: 'full' | 'compact' | 'none';
@@ -65,7 +68,7 @@ function ValueDisplay({ tag, tagValues, decimalPlaces, valueStyle }: { tag: Tag;
   );
 }
 
-export function AutoFillWidget({ title, labelName, columns = 2, onColor = '#22c55e', offColor = '#6b7280', decimalPlaces = 1, tagOrder, tagValues, titleStyle, valueStyle, chrome = 'full' }: Props) {
+export function AutoFillWidget({ title, labelName, columns = 2, onColor = '#22c55e', offColor = '#6b7280', decimalPlaces = 1, tagOrder, tagValues, tagVisibilityMap = {}, titleStyle, valueStyle, chrome = 'full' }: Props) {
   const [fetchedTags, setFetchedTags] = useState<Tag[]>([]);
 
   useEffect(() => {
@@ -111,15 +114,18 @@ export function AutoFillWidget({ title, labelName, columns = 2, onColor = '#22c5
           alignContent: 'start',
         } : undefined}
       >
-        {matchedTags.map(tag => (
-          <div key={tag.id} className="border-b border-slate-700/50 last:border-0">
-            {tag.data_type === 'bool' ? (
-              <BoolIndicator tag={tag} tagValues={tagValues} onColor={onColor} offColor={offColor} />
-            ) : (
-              <ValueDisplay tag={tag} tagValues={tagValues} decimalPlaces={decimalPlaces} valueStyle={valueStyle} />
-            )}
-          </div>
-        ))}
+        {matchedTags.map(tag => {
+          if (!isTagVisible(tag.name, tagVisibilityMap, tagValues)) return null;
+          return (
+            <div key={tag.id} className="border-b border-slate-700/50 last:border-0">
+              {tag.data_type === 'bool' ? (
+                <BoolIndicator tag={tag} tagValues={tagValues} onColor={onColor} offColor={offColor} />
+              ) : (
+                <ValueDisplay tag={tag} tagValues={tagValues} decimalPlaces={decimalPlaces} valueStyle={valueStyle} />
+              )}
+            </div>
+          );
+        })}
         {matchedTags.length === 0 && (
           <div className="text-sm text-slate-600 italic text-center py-4">
             {labelName ? `No tags with label "${labelName}"` : 'Select a label to auto-fill'}

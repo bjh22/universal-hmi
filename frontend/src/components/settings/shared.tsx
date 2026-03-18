@@ -25,6 +25,8 @@ export const EMPTY_TAG: Omit<Tag, 'id'> = {
   simulation_behavior: null,
   simulation_config: null,
   enum_mapping: null,
+  visibility_enabled: false,
+  visibility_conditions: null,
   labels: [],
 };
 

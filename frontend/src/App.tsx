@@ -7,7 +7,7 @@
  *   - Authentication state (who is logged in, what role they have)
  *   - The application shell (sidebar, header) that wraps every page
  */
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { FaultHelpDialog } from './components/FaultHelpDialog';
@@ -16,7 +16,8 @@ import { useAuthState } from './hooks/useAuth';
 import { LoginPage } from './pages/LoginPage';
 import { api } from './lib/api';
 import { applyTheme } from './lib/theme';
-import type { AlarmData } from './types';
+import { buildTagVisibilityMap } from './lib/tagVisibility';
+import type { AlarmData, Tag } from './types';
 
 // lazy() enables "code splitting" — instead of bundling every page into one large
 // JavaScript file, each page is downloaded only when the user navigates to it.
@@ -80,6 +81,16 @@ export default function App() {
   // useAuthState manages login/logout and stores the current user (role, username, etc.)
   const auth = useAuthState();
 
+  // Tag definitions for visibility conditions — loaded once and refreshed after Settings edits
+  const [tags, setTags] = useState<Tag[]>([]);
+  const tagsVersionRef = useRef(0);
+  const refreshTags = useCallback(() => {
+    tagsVersionRef.current++;
+    api.getTags().then(setTags).catch(() => {});
+  }, []);
+
+  const tagVisibilityMap = useMemo(() => buildTagVisibilityMap(tags), [tags]);
+
   const [backendReady, setBackendReady] = useState(false);
   const [siteTitle, setSiteTitle] = useState('Industrial HMI');
   const [navTitle, setNavTitle] = useState('HMI');
@@ -131,6 +142,7 @@ export default function App() {
       const res = await fetch('/api/health');
       if (!res.ok) throw new Error();
       setBackendReady(true);
+      refreshTags();
       api.getBranding().then((b) => {
         setSiteTitle(b.site_title);
         setNavTitle(b.nav_title);
@@ -139,7 +151,7 @@ export default function App() {
     } catch {
       timerRef.current = setTimeout(checkHealth, 1500);
     }
-  }, []);
+  }, [refreshTags]);
 
   useEffect(() => {
     checkHealth();
@@ -186,17 +198,17 @@ export default function App() {
                   React shows the <PageLoader /> fallback instead of a blank screen. */}
               <Suspense fallback={<PageLoader />}>
                 <Routes>
-                  <Route path="/" element={<DashboardPage tagValues={tagValues} alarms={alarms} userRole={auth.user?.role} />} />
-                  <Route path="/screen/:slug" element={<DashboardPage tagValues={tagValues} alarms={alarms} userRole={auth.user?.role} />} />
+                  <Route path="/" element={<DashboardPage tagValues={tagValues} alarms={alarms} userRole={auth.user?.role} tagVisibilityMap={tagVisibilityMap} />} />
+                  <Route path="/screen/:slug" element={<DashboardPage tagValues={tagValues} alarms={alarms} userRole={auth.user?.role} tagVisibilityMap={tagVisibilityMap} />} />
                   <Route path="/alarms" element={<AlarmsPage realtimeAlarms={alarms} />} />
                   <Route path="/trends" element={<TrendsPage />} />
-                  <Route path="/jobs" element={<JobsPage user={auth.user} />} />
+                  <Route path="/jobs" element={<JobsPage user={auth.user} tagVisibilityMap={tagVisibilityMap} tagValues={tagValues} />} />
                   <Route path="/reports" element={<ReportsPage />} />
                   <Route path="/projects" element={<ProjectsPage user={auth.user} />} />
-                  <Route path="/settings" element={<SettingsPage user={auth.user} tagValues={tagValues} />} />
-                  <Route path="/factory-config" element={<FactoryConfigPage user={auth.user} tagValues={tagValues} />} />
-                  <Route path="/service" element={<ServicePage user={auth.user} tagValues={tagValues} />} />
-                  <Route path="/support" element={<SupportPage user={auth.user} tagValues={tagValues} alarms={alarms} userRole={auth.user?.role} />} />
+                  <Route path="/settings" element={<SettingsPage user={auth.user} tagValues={tagValues} onTagsChanged={refreshTags} />} />
+                  <Route path="/factory-config" element={<FactoryConfigPage user={auth.user} tagValues={tagValues} tagVisibilityMap={tagVisibilityMap} />} />
+                  <Route path="/service" element={<ServicePage user={auth.user} tagValues={tagValues} tagVisibilityMap={tagVisibilityMap} />} />
+                  <Route path="/support" element={<SupportPage user={auth.user} tagValues={tagValues} alarms={alarms} userRole={auth.user?.role} tagVisibilityMap={tagVisibilityMap} />} />
                 </Routes>
               </Suspense>
             </AppShell>

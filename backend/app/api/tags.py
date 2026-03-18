@@ -42,6 +42,8 @@ class TagCreate(BaseModel):
     simulation_behavior: str | None = None
     simulation_config: str | None = None
     enum_mapping: str | None = None
+    visibility_enabled: bool = False
+    visibility_conditions: str | None = None
 
 
 class TagLabelOut(BaseModel):
@@ -75,6 +77,8 @@ class TagOut(BaseModel):
     simulation_behavior: str | None
     simulation_config: str | None
     enum_mapping: str | None
+    visibility_enabled: bool = False
+    visibility_conditions: str | None = None
     labels: list[TagLabelOut] = []
     is_system: bool = False
 

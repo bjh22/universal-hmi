@@ -120,6 +120,11 @@ class Tag(Base):
         ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
     )
 
+    # Visibility conditions (JSON-encoded: [{"tag": "X", "operator": "==", "value": true}])
+    # When enabled, widgets bound to this tag are hidden unless at least one condition is true.
+    visibility_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    visibility_conditions: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # System tags are built-in (e.g. $CURRENT_TIME) — cannot be modified or deleted
     is_system: Mapped[bool] = mapped_column(Boolean, default=False)
 
