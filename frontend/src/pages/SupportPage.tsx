@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Download, RefreshCw, Pencil, Plus, ToggleLeft, ToggleRight } from 'lucide-react';
 import { api } from '../lib/api';
 import { SystemUpdateTab } from '../components/support/SystemUpdateTab';
+import { SupportInfoTab } from '../components/support/SupportInfoTab';
 import { ZplPreviewPage } from './ZplPreviewPage';
 import { WidgetRenderer } from '../components/widgets/WidgetRenderer';
 import { isTagVisible } from '../lib/tagVisibility';
@@ -17,7 +18,7 @@ interface Props {
   tagVisibilityMap?: TagVisibilityMap;
 }
 
-type SupportTab = 'dashboard' | 'logs' | 'update' | 'zpl-preview';
+type SupportTab = 'dashboard' | 'system-info' | 'logs' | 'update' | 'zpl-preview';
 
 export function SupportPage({ user, tagValues, alarms, userRole, tagVisibilityMap = {} }: Props) {
   const [tab, setTab] = useState<SupportTab>('dashboard');
@@ -25,6 +26,7 @@ export function SupportPage({ user, tagValues, alarms, userRole, tagVisibilityMa
 
   const tabList: { key: SupportTab; label: string }[] = [
     { key: 'dashboard', label: 'Dashboard' },
+    { key: 'system-info', label: 'System Info' },
     { key: 'logs', label: 'Application Logs' },
     { key: 'update', label: 'Software Update' },
     { key: 'zpl-preview', label: 'ZPL Preview' },
@@ -51,6 +53,7 @@ export function SupportPage({ user, tagValues, alarms, userRole, tagVisibilityMa
       {tab === 'dashboard' && (
         <SupportDashboard tagValues={tagValues} alarms={alarms} userRole={userRole} tagVisibilityMap={tagVisibilityMap} />
       )}
+      {tab === 'system-info' && <SupportInfoTab />}
       {tab === 'logs' && <LogsTab />}
       {tab === 'update' && <SystemUpdateTab canManage={canManage} />}
       {tab === 'zpl-preview' && <ZplPreviewPage />}

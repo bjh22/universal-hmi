@@ -454,6 +454,14 @@ export const api = {
   // System Update
   getSystemInfo: () =>
     request<{ app_version: string; platform: string; python_version: string; install_path: string; database_path: string; is_compiled: boolean; uptime_seconds: number | null }>('/system/info'),
+  getSupportInfo: () =>
+    request<{
+      hostname: string;
+      network_adapters: { name: string; ip_addresses: string[]; mac_address: string | null; is_up: boolean }[];
+      disks: { path: string; label: string | null; total_gb: number; used_gb: number; free_gb: number; percent_used: number }[];
+      removable_drives: { path: string; label: string | null; total_gb: number; free_gb: number }[];
+      teamviewer: { installed: boolean; id: string | null; version: string | null; is_running: boolean };
+    }>('/system/support-info'),
   validateUpdatePackage: async (file: File): Promise<{ valid: boolean; is_compiled: boolean; has_backend: boolean; has_frontend: boolean; has_wheels: boolean; has_windows_wheels: boolean; file_count: number; package_size_mb: number; error: string | null }> => {
     const form = new FormData();
     form.append('file', file);

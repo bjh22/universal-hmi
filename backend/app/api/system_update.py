@@ -16,11 +16,14 @@ Data preservation:
 
 import asyncio
 import hashlib
+import json
 import logging
 import os
 import platform
+import re
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import tarfile
@@ -207,6 +210,334 @@ async def get_system_info(
         database_path=_get_db_path(),
         is_compiled=FROZEN,
         uptime_seconds=round(uptime, 1),
+    )
+
+
+class NetworkAdapter(BaseModel):
+    name: str
+    ip_addresses: list[str] = []
+    mac_address: str | None = None
+    is_up: bool = True
+
+
+class DiskInfo(BaseModel):
+    path: str
+    label: str | None = None
+    total_gb: float
+    used_gb: float
+    free_gb: float
+    percent_used: float
+
+
+class RemovableDrive(BaseModel):
+    path: str
+    label: str | None = None
+    total_gb: float
+    free_gb: float
+
+
+class TeamViewerInfo(BaseModel):
+    installed: bool = False
+    id: str | None = None
+    version: str | None = None
+    is_running: bool = False
+
+
+class SupportInfoResponse(BaseModel):
+    hostname: str
+    network_adapters: list[NetworkAdapter] = []
+    disks: list[DiskInfo] = []
+    removable_drives: list[RemovableDrive] = []
+    teamviewer: TeamViewerInfo = TeamViewerInfo()
+
+    model_config = {"from_attributes": True}
+
+
+def _get_network_adapters() -> list[NetworkAdapter]:
+    """Get network adapter info using platform-appropriate methods."""
+    adapters: list[NetworkAdapter] = []
+
+    if platform.system() == "Windows":
+        try:
+            result = subprocess.run(
+                ["powershell", "-Command",
+                 "Get-NetAdapter | Select-Object Name, Status, MacAddress | ConvertTo-Json"],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                raw = json.loads(result.stdout)
+                if isinstance(raw, dict):
+                    raw = [raw]
+                for nic in raw:
+                    name = nic.get("Name", "")
+                    is_up = nic.get("Status", "") == "Up"
+                    mac = nic.get("MacAddress", "").replace("-", ":")
+                    ips: list[str] = []
+                    try:
+                        ip_result = subprocess.run(
+                            ["powershell", "-Command",
+                             f"(Get-NetIPAddress -InterfaceAlias '{name}' -ErrorAction SilentlyContinue).IPAddress"],
+                            capture_output=True, text=True, timeout=5,
+                        )
+                        if ip_result.returncode == 0:
+                            ips = [ip.strip() for ip in ip_result.stdout.strip().splitlines() if ip.strip()]
+                    except Exception:
+                        pass
+                    adapters.append(NetworkAdapter(name=name, ip_addresses=ips, mac_address=mac or None, is_up=is_up))
+        except Exception as e:
+            logger.debug(f"Failed to get Windows network adapters: {e}")
+    else:
+        # Linux/macOS: parse ip addr or ifconfig
+        try:
+            result = subprocess.run(["ip", "-j", "addr"], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0 and result.stdout.strip():
+                interfaces = json.loads(result.stdout)
+                for iface in interfaces:
+                    name = iface.get("ifname", "")
+                    if name == "lo":
+                        continue
+                    state = iface.get("operstate", "").upper()
+                    is_up = state in ("UP", "UNKNOWN")
+                    mac = iface.get("address")
+                    ips = []
+                    for addr_info in iface.get("addr_info", []):
+                        local = addr_info.get("local", "")
+                        if local:
+                            ips.append(local)
+                    adapters.append(NetworkAdapter(name=name, ip_addresses=ips, mac_address=mac, is_up=is_up))
+        except FileNotFoundError:
+            # Fallback: use socket to get hostname IP
+            try:
+                hostname = socket.gethostname()
+                ip = socket.gethostbyname(hostname)
+                adapters.append(NetworkAdapter(name="default", ip_addresses=[ip]))
+            except Exception:
+                pass
+        except Exception as e:
+            logger.debug(f"Failed to get network adapters: {e}")
+
+    return adapters
+
+
+def _get_disk_info() -> list[DiskInfo]:
+    """Get disk space information for main drives."""
+    disks: list[DiskInfo] = []
+
+    if platform.system() == "Windows":
+        # Check common drive letters
+        for letter in "CDEFGH":
+            path = f"{letter}:\\"
+            if os.path.exists(path):
+                try:
+                    usage = shutil.disk_usage(path)
+                    disks.append(DiskInfo(
+                        path=path,
+                        label=f"Drive {letter}:",
+                        total_gb=round(usage.total / (1024 ** 3), 1),
+                        used_gb=round(usage.used / (1024 ** 3), 1),
+                        free_gb=round(usage.free / (1024 ** 3), 1),
+                        percent_used=round(usage.used / usage.total * 100, 1) if usage.total > 0 else 0,
+                    ))
+                except (OSError, PermissionError):
+                    pass
+    else:
+        # Linux/macOS: check root and any additional mounts
+        for mount_path in ["/"]:
+            try:
+                usage = shutil.disk_usage(mount_path)
+                disks.append(DiskInfo(
+                    path=mount_path,
+                    label="System",
+                    total_gb=round(usage.total / (1024 ** 3), 1),
+                    used_gb=round(usage.used / (1024 ** 3), 1),
+                    free_gb=round(usage.free / (1024 ** 3), 1),
+                    percent_used=round(usage.used / usage.total * 100, 1) if usage.total > 0 else 0,
+                ))
+            except (OSError, PermissionError):
+                pass
+
+        # Check /home if it's a separate mount
+        try:
+            root_dev = os.stat("/").st_dev
+            home_dev = os.stat("/home").st_dev
+            if home_dev != root_dev:
+                usage = shutil.disk_usage("/home")
+                disks.append(DiskInfo(
+                    path="/home",
+                    label="Home",
+                    total_gb=round(usage.total / (1024 ** 3), 1),
+                    used_gb=round(usage.used / (1024 ** 3), 1),
+                    free_gb=round(usage.free / (1024 ** 3), 1),
+                    percent_used=round(usage.used / usage.total * 100, 1) if usage.total > 0 else 0,
+                ))
+        except (OSError, PermissionError):
+            pass
+
+    return disks
+
+
+def _get_removable_drives() -> list[RemovableDrive]:
+    """Detect removable/USB drives."""
+    drives: list[RemovableDrive] = []
+
+    if platform.system() == "Windows":
+        try:
+            result = subprocess.run(
+                ["powershell", "-Command",
+                 "Get-WmiObject Win32_LogicalDisk | Where-Object {$_.DriveType -eq 2} | Select-Object DeviceID, VolumeName, Size, FreeSpace | ConvertTo-Json"],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                raw = json.loads(result.stdout)
+                if isinstance(raw, dict):
+                    raw = [raw]
+                for d in raw:
+                    device_id = d.get("DeviceID", "")
+                    total = d.get("Size") or 0
+                    free = d.get("FreeSpace") or 0
+                    drives.append(RemovableDrive(
+                        path=device_id + "\\",
+                        label=d.get("VolumeName") or device_id,
+                        total_gb=round(total / (1024 ** 3), 1),
+                        free_gb=round(free / (1024 ** 3), 1),
+                    ))
+        except Exception as e:
+            logger.debug(f"Failed to detect Windows removable drives: {e}")
+    else:
+        # Linux: check /media/ and /mnt/ for mounted removable devices
+        for base_dir in ["/media", "/mnt"]:
+            base_path = Path(base_dir)
+            if not base_path.exists():
+                continue
+            # Check direct mounts and user subdirectories (e.g. /media/username/USB)
+            candidates: list[Path] = []
+            try:
+                for child in base_path.iterdir():
+                    if child.is_dir() and child.is_mount():
+                        candidates.append(child)
+                    elif child.is_dir():
+                        # Check subdirectories (e.g. /media/user/USBDRIVE)
+                        for sub in child.iterdir():
+                            if sub.is_dir() and sub.is_mount():
+                                candidates.append(sub)
+            except (PermissionError, OSError):
+                continue
+
+            for mount in candidates:
+                try:
+                    usage = shutil.disk_usage(str(mount))
+                    drives.append(RemovableDrive(
+                        path=str(mount),
+                        label=mount.name,
+                        total_gb=round(usage.total / (1024 ** 3), 1),
+                        free_gb=round(usage.free / (1024 ** 3), 1),
+                    ))
+                except (OSError, PermissionError):
+                    pass
+
+    return drives
+
+
+def _get_teamviewer_info() -> TeamViewerInfo:
+    """Detect TeamViewer installation, ID, and running status."""
+    info = TeamViewerInfo()
+
+    if platform.system() == "Windows":
+        # Check common install paths
+        tv_paths = [
+            Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "TeamViewer",
+            Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "TeamViewer",
+        ]
+        for tv_path in tv_paths:
+            if tv_path.exists():
+                info.installed = True
+                break
+
+        if info.installed:
+            # Try to get TeamViewer ID from registry or running process
+            try:
+                result = subprocess.run(
+                    ["powershell", "-Command",
+                     "Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\TeamViewer' -ErrorAction SilentlyContinue | Select-Object ClientID, Version | ConvertTo-Json"],
+                    capture_output=True, text=True, timeout=5,
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    data = json.loads(result.stdout)
+                    client_id = data.get("ClientID")
+                    if client_id:
+                        info.id = str(client_id)
+                    version = data.get("Version")
+                    if version:
+                        info.version = str(version)
+            except Exception:
+                pass
+
+            # Check if running
+            try:
+                result = subprocess.run(
+                    ["tasklist", "/FI", "IMAGENAME eq TeamViewer.exe"],
+                    capture_output=True, text=True, timeout=5,
+                )
+                info.is_running = "TeamViewer.exe" in result.stdout
+            except Exception:
+                pass
+    else:
+        # Linux: check for teamviewer binary
+        try:
+            result = subprocess.run(["which", "teamviewer"], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                info.installed = True
+        except Exception:
+            pass
+
+        if not info.installed:
+            # Check common Linux install paths
+            for p in ["/opt/teamviewer", "/usr/bin/teamviewer"]:
+                if os.path.exists(p):
+                    info.installed = True
+                    break
+
+        if info.installed:
+            # Get TeamViewer info
+            try:
+                result = subprocess.run(
+                    ["teamviewer", "info"], capture_output=True, text=True, timeout=10,
+                )
+                output = result.stdout + result.stderr
+                # Parse TeamViewer ID
+                id_match = re.search(r"TeamViewer\s+ID[:\s]+(\d+)", output)
+                if id_match:
+                    info.id = id_match.group(1)
+                # Parse version
+                ver_match = re.search(r"TeamViewer\s+version[:\s]+([\d.]+)", output, re.IGNORECASE)
+                if ver_match:
+                    info.version = ver_match.group(1)
+            except Exception:
+                pass
+
+            # Check if daemon is running
+            try:
+                result = subprocess.run(
+                    ["pgrep", "-x", "teamviewerd"], capture_output=True, text=True, timeout=5,
+                )
+                info.is_running = result.returncode == 0
+            except Exception:
+                pass
+
+    return info
+
+
+@router.get("/support-info", response_model=SupportInfoResponse)
+async def get_support_info(
+    _user: User = Depends(require_role(UserRole.SUPERVISOR, UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    """Get detailed system support information: network, disks, TeamViewer, removable drives."""
+    return SupportInfoResponse(
+        hostname=socket.gethostname(),
+        network_adapters=_get_network_adapters(),
+        disks=_get_disk_info(),
+        removable_drives=_get_removable_drives(),
+        teamviewer=_get_teamviewer_info(),
     )
 
 
