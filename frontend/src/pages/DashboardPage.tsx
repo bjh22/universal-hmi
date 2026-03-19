@@ -25,6 +25,7 @@ import { InfoButton } from '../components/widgets/InfoButton';
 import { WidgetPalette } from '../components/designer/WidgetPalette';
 import { PropertyPanel } from '../components/designer/PropertyPanel';
 import { EditorToolbar } from '../components/designer/EditorToolbar';
+import { SaveConfirmDialog } from '../components/designer/SaveConfirmDialog';
 import { DesignCanvas } from '../components/designer/DesignCanvas';
 import { useDesignMode, generateWidgetId } from '../hooks/useDesignMode';
 import type { WidgetTypeInfo } from '../components/designer/WidgetPalette';
@@ -57,6 +58,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
   const [newScreenCustomW, setNewScreenCustomW] = useState(1920);
   const [newScreenCustomH, setNewScreenCustomH] = useState(1080);
   const [createScreenError, setCreateScreenError] = useState<string | null>(null);
+  const [saveConfirm, setSaveConfirm] = useState<'save' | 'save-exit' | null>(null);
   const absContainerRef = useRef<HTMLDivElement>(null);
   const [absScale, setAbsScale] = useState(1);
   const [absOffset, setAbsOffset] = useState({ x: 0, y: 0 });
@@ -156,8 +158,8 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
     setAbsPlacementOffset(0);
   }, [activeScreen, runtimeWidgets, dm, screenLayoutMode]);
 
-  // Save
-  const handleSave = useCallback(async () => {
+  // Perform the actual save (called after confirmation)
+  const performSave = useCallback(async () => {
     if (!activeScreen) return;
     await api.saveScreen(activeScreen.id, {
       name: activeScreen.name,
@@ -171,11 +173,25 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
     setRuntimeWidgets(dm.widgets);
   }, [activeScreen, dm.widgets, screenLayoutMode]);
 
-  // Save & exit
-  const handleSaveAndExit = useCallback(async () => {
-    await handleSave();
-    dm.exitEditMode();
-  }, [handleSave, dm]);
+  // Save — show confirmation dialog
+  const handleSave = useCallback(() => {
+    if (!activeScreen || !dm.dirty) return;
+    setSaveConfirm('save');
+  }, [activeScreen, dm.dirty]);
+
+  // Save & exit — show confirmation dialog
+  const handleSaveAndExit = useCallback(() => {
+    if (!activeScreen || !dm.dirty) return;
+    setSaveConfirm('save-exit');
+  }, [activeScreen, dm.dirty]);
+
+  // Confirm save from dialog
+  const handleSaveConfirm = useCallback(async () => {
+    const mode = saveConfirm;
+    setSaveConfirm(null);
+    await performSave();
+    if (mode === 'save-exit') dm.exitEditMode();
+  }, [saveConfirm, performSave, dm]);
 
   // Discard
   const handleDiscard = useCallback(() => {
@@ -580,6 +596,17 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
             {isDesigner ? 'Press Ctrl+E or click Edit to design this screen' : 'Add widgets using the screen designer'}
           </p>
         </div>
+      )}
+
+      {/* Save Confirmation Dialog */}
+      {saveConfirm && (
+        <SaveConfirmDialog
+          originalWidgets={runtimeWidgets}
+          currentWidgets={dm.widgets}
+          onSave={handleSaveConfirm}
+          onCancel={() => setSaveConfirm(null)}
+          saveAndExit={saveConfirm === 'save-exit'}
+        />
       )}
 
       {/* New Screen Dialog */}
