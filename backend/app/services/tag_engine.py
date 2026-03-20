@@ -718,6 +718,9 @@ class TagEngine:
                     return values[0]
                 idx = int(elapsed / period) % len(values)
                 return values[idx]
+            case SimulationBehavior.ACCUMULATOR:
+                rate_per_second = config.get("rate", 1.0)
+                return (current.value or 0) + rate_per_second * 0.5
             case _:
                 return None
 
