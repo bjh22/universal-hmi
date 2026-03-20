@@ -19,7 +19,7 @@ from typing import Any
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.alarm import Alarm, AlarmHistory, AlarmState
+from app.models.alarm import Alarm, AlarmHistory, AlarmSeverity, AlarmState
 from app.models.downtime_annotation import DowntimeAnnotation
 from app.models.trend import TrendData
 from app.models.tag import Tag
