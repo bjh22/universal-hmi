@@ -12,13 +12,21 @@ A web-based Human-Machine Interface (HMI) for industrial automation. Connects to
 |:------:|:------:|:----:|
 | ![Alarms](screenshots/02-alarms.png) | ![Trends](screenshots/03-trends.png) | ![Jobs](screenshots/04-jobs.png) |
 
-| Reports | Settings — Tags | Settings — Users |
-|:-------:|:---------------:|:----------------:|
-| ![Reports](screenshots/05-reports.png) | ![Settings Tags](screenshots/06-settings-tags.png) | ![Settings Users](screenshots/12-settings-users.png) |
+| Reports | Projects | Service |
+|:-------:|:--------:|:-------:|
+| ![Reports](screenshots/05-reports.png) | ![Projects](screenshots/10-projects.png) | ![Service](screenshots/17-service.png) |
 
-| Settings — Audit Trail |
-|:-----------------------:|
-| ![Audit Trail](screenshots/11-settings-audit.png) |
+| Settings — Tags | Settings — Users | Settings — Audit Trail |
+|:---------------:|:----------------:|:----------------------:|
+| ![Settings Tags](screenshots/06-settings-tags.png) | ![Settings Users](screenshots/12-settings-users.png) | ![Audit Trail](screenshots/11-settings-audit.png) |
+
+| Settings — Data Sources | Settings — Integrations | Settings — System |
+|:-----------------------:|:-----------------------:|:-----------------:|
+| ![Data Sources](screenshots/13-settings-datasources.png) | ![Integrations](screenshots/14-settings-integrations.png) | ![System](screenshots/15-settings-system.png) |
+
+| Factory Config | Support |
+|:--------------:|:-------:|
+| ![Factory Config](screenshots/16-factory-config.png) | ![Support](screenshots/18-support.png) |
 
 ## Features
 
