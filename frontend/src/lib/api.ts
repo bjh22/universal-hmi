@@ -175,7 +175,7 @@ export const api = {
   // Tag Labels
   getTagLabels: () => request<TagLabel[]>('/tags/labels'),
   createTagLabel: (data: { name: string; color?: string; description?: string }) =>
-    request('/tags/labels', { method: 'POST', body: JSON.stringify(data) }),
+    request<TagLabel>('/tags/labels', { method: 'POST', body: JSON.stringify(data) }),
   updateTagLabel: (id: number, data: { name: string; color?: string; description?: string }) =>
     request(`/tags/labels/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteTagLabel: (id: number) =>
