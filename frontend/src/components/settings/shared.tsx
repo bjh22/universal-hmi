@@ -35,7 +35,7 @@ export const LABEL_COLORS = [
   '#ec4899', '#06b6d4', '#f97316', '#6366f1', '#14b8a6',
 ];
 
-export const inputCls = 'w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-md px-3 py-2 text-sm text-white outline-none focus:border-blue-500';
+export const inputCls = 'w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-md px-3 py-2 text-sm text-[var(--hmi-text-primary)] outline-none focus:border-[var(--hmi-accent)]';
 
 export function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (

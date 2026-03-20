@@ -2,6 +2,7 @@
 
 export interface ThemePreset {
   label: string;
+  group: 'dark' | 'light';
   bgBody: string;
   bgSurface: string;
   bgElevated: string;
@@ -14,8 +15,10 @@ export interface ThemePreset {
 }
 
 export const THEME_PRESETS: Record<string, ThemePreset> = {
+  // ── Dark themes ──
   slate: {
     label: 'Slate',
+    group: 'dark',
     bgBody: '#0f172a',
     bgSurface: '#0f172a',
     bgElevated: '#1e293b',
@@ -28,6 +31,7 @@ export const THEME_PRESETS: Record<string, ThemePreset> = {
   },
   zinc: {
     label: 'Zinc',
+    group: 'dark',
     bgBody: '#18181b',
     bgSurface: '#18181b',
     bgElevated: '#27272a',
@@ -40,6 +44,7 @@ export const THEME_PRESETS: Record<string, ThemePreset> = {
   },
   neutral: {
     label: 'Neutral',
+    group: 'dark',
     bgBody: '#171717',
     bgSurface: '#171717',
     bgElevated: '#262626',
@@ -52,6 +57,7 @@ export const THEME_PRESETS: Record<string, ThemePreset> = {
   },
   midnight: {
     label: 'Midnight',
+    group: 'dark',
     bgBody: '#020617',
     bgSurface: '#020617',
     bgElevated: '#0f172a',
@@ -64,6 +70,7 @@ export const THEME_PRESETS: Record<string, ThemePreset> = {
   },
   charcoal: {
     label: 'Charcoal',
+    group: 'dark',
     bgBody: '#111827',
     bgSurface: '#111827',
     bgElevated: '#1f2937',
@@ -73,6 +80,59 @@ export const THEME_PRESETS: Record<string, ThemePreset> = {
     textPrimary: '#f3f4f6',
     textSecondary: '#9ca3af',
     textMuted: '#6b7280',
+  },
+  // ── Light themes ──
+  light: {
+    label: 'Light',
+    group: 'light',
+    bgBody: '#f8fafc',
+    bgSurface: '#ffffff',
+    bgElevated: '#f1f5f9',
+    bgInput: '#e2e8f0',
+    border: '#cbd5e1',
+    borderSubtle: '#94a3b8',
+    textPrimary: '#0f172a',
+    textSecondary: '#475569',
+    textMuted: '#94a3b8',
+  },
+  stone: {
+    label: 'Stone',
+    group: 'light',
+    bgBody: '#fafaf9',
+    bgSurface: '#ffffff',
+    bgElevated: '#f5f5f4',
+    bgInput: '#e7e5e4',
+    border: '#d6d3d1',
+    borderSubtle: '#a8a29e',
+    textPrimary: '#1c1917',
+    textSecondary: '#57534e',
+    textMuted: '#a8a29e',
+  },
+  cloud: {
+    label: 'Cloud',
+    group: 'light',
+    bgBody: '#f0f4ff',
+    bgSurface: '#ffffff',
+    bgElevated: '#e0e7ff',
+    bgInput: '#c7d2fe',
+    border: '#a5b4fc',
+    borderSubtle: '#818cf8',
+    textPrimary: '#1e1b4b',
+    textSecondary: '#4338ca',
+    textMuted: '#818cf8',
+  },
+  paper: {
+    label: 'Paper',
+    group: 'light',
+    bgBody: '#fffbeb',
+    bgSurface: '#ffffff',
+    bgElevated: '#fef3c7',
+    bgInput: '#fde68a',
+    border: '#fbbf24',
+    borderSubtle: '#d97706',
+    textPrimary: '#1c1917',
+    textSecondary: '#78350f',
+    textMuted: '#a16207',
   },
 };
 
@@ -115,19 +175,32 @@ function darken(hex: string, amount: number): string {
   return `#${dr.toString(16).padStart(2, '0')}${dg.toString(16).padStart(2, '0')}${db.toString(16).padStart(2, '0')}`;
 }
 
+/** Resolve a preset by name — checks built-in presets first, then custom themes from localStorage. */
+export function resolvePreset(presetName: string): ThemePreset | undefined {
+  if (THEME_PRESETS[presetName]) return THEME_PRESETS[presetName];
+  const customs = getCustomThemes();
+  return customs[presetName];
+}
+
 /**
  * Apply theme CSS custom properties to document root.
  * Call on app startup and on live preview in settings.
  */
 export function applyTheme(accent: string, presetName: string): void {
-  const preset = THEME_PRESETS[presetName] || THEME_PRESETS.slate;
+  const preset = resolvePreset(presetName) || THEME_PRESETS.slate;
   const s = document.documentElement.style;
 
-  // Accent colors
+  // Accent colors — for light themes, darken instead of lighten for hover
   s.setProperty('--hmi-accent', accent);
-  s.setProperty('--hmi-accent-hover', lighten(accent, 0.15));
-  s.setProperty('--hmi-accent-text', lighten(accent, 0.3));
-  s.setProperty('--hmi-accent-dark', darken(accent, 0.15));
+  if (preset.group === 'light') {
+    s.setProperty('--hmi-accent-hover', darken(accent, 0.15));
+    s.setProperty('--hmi-accent-text', darken(accent, 0.2));
+    s.setProperty('--hmi-accent-dark', darken(accent, 0.25));
+  } else {
+    s.setProperty('--hmi-accent-hover', lighten(accent, 0.15));
+    s.setProperty('--hmi-accent-text', lighten(accent, 0.3));
+    s.setProperty('--hmi-accent-dark', darken(accent, 0.15));
+  }
   const [r, g, b] = hexToRgb(accent);
   s.setProperty('--hmi-accent-bg', `rgba(${r},${g},${b},0.2)`);
 
@@ -147,3 +220,33 @@ export function applyTheme(accent: string, presetName: string): void {
 
 export const DEFAULT_ACCENT = '#2563eb';
 export const DEFAULT_PRESET = 'slate';
+
+// ─── Custom themes (stored in localStorage + synced to backend) ───
+
+const CUSTOM_THEMES_KEY = 'hmi_custom_themes';
+
+export function getCustomThemes(): Record<string, ThemePreset> {
+  try {
+    const raw = localStorage.getItem(CUSTOM_THEMES_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+export function saveCustomThemes(themes: Record<string, ThemePreset>): void {
+  localStorage.setItem(CUSTOM_THEMES_KEY, JSON.stringify(themes));
+}
+
+export function addCustomTheme(key: string, preset: ThemePreset): void {
+  const themes = getCustomThemes();
+  themes[key] = preset;
+  saveCustomThemes(themes);
+}
+
+export function deleteCustomTheme(key: string): void {
+  const themes = getCustomThemes();
+  delete themes[key];
+  saveCustomThemes(themes);
+}

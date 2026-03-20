@@ -441,6 +441,13 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
+  getCustomThemes: () =>
+    request<{ themes: Record<string, { label: string; group: string; bgBody: string; bgSurface: string; bgElevated: string; bgInput: string; border: string; borderSubtle: string; textPrimary: string; textSecondary: string; textMuted: string }> }>('/branding/custom-themes'),
+  updateCustomThemes: (themes: Record<string, { label: string; group: string; bgBody: string; bgSurface: string; bgElevated: string; bgInput: string; border: string; borderSubtle: string; textPrimary: string; textSecondary: string; textMuted: string }>) =>
+    request<{ themes: Record<string, unknown> }>('/branding/custom-themes', {
+      method: 'PUT',
+      body: JSON.stringify({ themes }),
+    }),
 
   // Preferences
   getPreferences: () =>
