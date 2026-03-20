@@ -96,7 +96,7 @@ async def create_demo_resources(session: AsyncSession):
             access_mode=TagAccessMode.READ_WRITE,
             simulation_enabled=True,
             simulation_behavior=SimulationBehavior.ACCUMULATOR,
-            simulation_config=json.dumps({"rate": 0.0333}),
+            simulation_config=json.dumps({"rate": 0.0833}),
             trending_enabled=True,
             trending_sample_rate_ms=5000,
         ),
