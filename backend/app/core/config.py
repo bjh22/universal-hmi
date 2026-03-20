@@ -7,11 +7,28 @@ needed. This is a 12-factor app best practice: keep config in the environment.
 """
 
 import logging
+import subprocess
 from pydantic_settings import BaseSettings
 
 from app.core.paths import data_dir
 
 _logger = logging.getLogger(__name__)
+
+
+def _dev_version() -> str:
+    """Build a dev version string from git branch + last commit date."""
+    try:
+        branch = subprocess.check_output(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            stderr=subprocess.DEVNULL, text=True,
+        ).strip()
+        commit_date = subprocess.check_output(
+            ["git", "log", "-1", "--format=%cs"],
+            stderr=subprocess.DEVNULL, text=True,
+        ).strip()
+        return f"dev ({branch}@{commit_date})"
+    except Exception:
+        return "dev"
 
 
 # BaseSettings (from pydantic-settings) automatically reads environment
@@ -20,7 +37,7 @@ _logger = logging.getLogger(__name__)
 # the integer 480. Invalid values raise clear validation errors at startup.
 class Settings(BaseSettings):
     app_name: str = "Industrial HMI"
-    app_version: str = "0.1.0"
+    app_version: str = _dev_version()
     debug: bool = False
 
     # Database — resolve relative to the backend/ directory so the same DB is used

@@ -34,11 +34,13 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_role
 from app.core.config import settings
 from app.core.database import get_db
+from app.models.app_setting import AppSetting
 from app.models.user import User, UserRole
 from app.services.audit_service import log_audit
 from app.models.audit import AuditAction
@@ -192,6 +194,51 @@ def _validate_package(release_root: Path, archive_size: int) -> UpdateValidation
         file_count=file_count,
         package_size_mb=round(archive_size / (1024 * 1024), 1),
     )
+
+
+@router.get("/version")
+async def get_version():
+    """Get app version (no auth required)."""
+    return {"version": settings.app_version}
+
+
+# ── System settings (stored in app_settings table) ──
+
+_SYSTEM_SETTINGS_KEY = "system.plc_version_tag"
+
+
+class SystemSettingsBody(BaseModel):
+    plc_version_tag: str | None = None
+
+
+@router.get("/settings")
+async def get_system_settings(
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    result = await session.execute(
+        select(AppSetting).where(AppSetting.key == _SYSTEM_SETTINGS_KEY)
+    )
+    row = result.scalar_one_or_none()
+    return {"plc_version_tag": row.value if row else None}
+
+
+@router.put("/settings")
+async def update_system_settings(
+    body: SystemSettingsBody,
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    result = await session.execute(
+        select(AppSetting).where(AppSetting.key == _SYSTEM_SETTINGS_KEY)
+    )
+    row = result.scalar_one_or_none()
+    if row:
+        row.value = body.plc_version_tag
+    else:
+        session.add(AppSetting(key=_SYSTEM_SETTINGS_KEY, value=body.plc_version_tag))
+    await session.commit()
+    return {"plc_version_tag": body.plc_version_tag}
 
 
 @router.get("/info", response_model=SystemInfoResponse)
