@@ -57,6 +57,22 @@ class AlarmService:
     def active_alarms(self) -> list[Alarm]:
         return list(self._active_alarms.values())
 
+    def _update_alarm_count_tags(self):
+        """Push active/critical/unacked alarm counts into system tags."""
+        active = 0
+        critical = 0
+        unacked = 0
+        for alarm in self._active_alarms.values():
+            if alarm.state in (AlarmState.ACTIVE_UNACKED, AlarmState.ACTIVE_ACKED, AlarmState.INACTIVE_UNACKED):
+                active += 1
+                if alarm.severity == AlarmSeverity.CRITICAL:
+                    critical += 1
+                if alarm.state in (AlarmState.ACTIVE_UNACKED, AlarmState.INACTIVE_UNACKED):
+                    unacked += 1
+        self._tag_engine.set_value("$ACTIVE_ALARM_COUNT", active)
+        self._tag_engine.set_value("$CRITICAL_ALARM_COUNT", critical)
+        self._tag_engine.set_value("$UNACKED_ALARM_COUNT", unacked)
+
     async def load_alarm_configs(self, session: AsyncSession):
         result = await session.execute(select(Tag).where(Tag.alarm_enabled == True))  # noqa: E712
         tags = result.scalars().all()
@@ -110,6 +126,7 @@ class AlarmService:
         self._active_alarms = new_active_alarms
         self._help_cache = new_help_cache
         self._last_eval_values = {}
+        self._update_alarm_count_tags()
 
     async def reload_alarm_configs(self):
         """Reload alarm configs from DB (call after tag alarm settings change).
@@ -183,6 +200,7 @@ class AlarmService:
             await self.load_alarm_configs(session)
             # Push a fresh snapshot so all frontends have consistent alarm state
             self.broadcast_alarms_snapshot()
+            self._update_alarm_count_tags()
 
     def broadcast_alarms_snapshot(self):
         """Push current active alarms to all WS subscribers, replacing stale state."""
@@ -255,6 +273,7 @@ class AlarmService:
             self._active_alarms[alarm.tag_id] = alarm
 
         self._broadcast_alarm(alarm)
+        self._update_alarm_count_tags()
         return alarm
 
     # ------------------------------------------------------------------
@@ -360,6 +379,7 @@ class AlarmService:
                 self._broadcast_alarm(alarm)
 
             await session.commit()
+            self._update_alarm_count_tags()
 
     def _check_condition(self, config: dict, value) -> bool:
         """Boolean alarm check — compare tag value against trigger_on (default True).
