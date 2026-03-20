@@ -508,6 +508,13 @@ async def _build_snapshot(session: AsyncSession, project: Project) -> dict:
     service_config_row = service_config_result.scalar_one_or_none()
     service_config = _safe_json_parse(service_config_row.value) if service_config_row and service_config_row.value else None
 
+    # System settings (e.g. PLC version tag binding)
+    system_settings_keys = ["system.plc_version_tag"]
+    system_settings_result = await session.execute(
+        select(AppSetting).where(AppSetting.key.in_(system_settings_keys))
+    )
+    system_settings = {s.key: s.value for s in system_settings_result.scalars().all() if s.value}
+
     return {
         "format_version": EXPORT_FORMAT_VERSION,
         "project": {
@@ -518,6 +525,7 @@ async def _build_snapshot(session: AsyncSession, project: Project) -> dict:
         "exported_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "branding": branding,
         "service_config": service_config,
+        "system_settings": system_settings,
         "data_sources": data_sources,
         "tag_labels": tag_labels,
         "tags": tags,
@@ -670,6 +678,16 @@ async def load_project(
     await session.flush()
     if service_config:
         session.add(AppSetting(key="service.config", value=json.dumps(service_config)))
+
+    # Restore system settings (e.g. PLC version tag binding)
+    system_settings = data.get("system_settings", {})
+    system_settings_keys = ["system.plc_version_tag"]
+    await session.execute(delete(AppSetting).where(AppSetting.key.in_(system_settings_keys)))
+    await session.flush()
+    for key in system_settings_keys:
+        val = system_settings.get(key)
+        if val:
+            session.add(AppSetting(key=key, value=val))
 
     await session.flush()
 
@@ -1490,6 +1508,17 @@ async def import_project(
             await session.execute(delete(AppSetting).where(AppSetting.key == "service.config"))
             await session.flush()
             session.add(AppSetting(key="service.config", value=json.dumps(service_config)))
+
+        # Restore system settings if present (e.g. PLC version tag binding)
+        system_settings = data.get("system_settings", {})
+        if system_settings:
+            system_settings_keys = ["system.plc_version_tag"]
+            await session.execute(delete(AppSetting).where(AppSetting.key.in_(system_settings_keys)))
+            await session.flush()
+            for key in system_settings_keys:
+                val = system_settings.get(key)
+                if val:
+                    session.add(AppSetting(key=key, value=val))
 
     await session.flush()
     await session.refresh(project)

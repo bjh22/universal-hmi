@@ -20,7 +20,15 @@ set -euo pipefail
 #
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
-VERSION=$(date +%Y%m%d-%H%M%S)
+# CalVer: YYYY.MM.DD.N where N = number of git commits today + 1
+CALVER_DATE=$(date +%Y.%m.%d)
+if [ -d "$ROOT_DIR/.git" ]; then
+    DAILY_COMMITS=$(git -C "$ROOT_DIR" log --oneline --since="$(date +%Y-%m-%d)" 2>/dev/null | wc -l | tr -d ' ')
+else
+    DAILY_COMMITS=0
+fi
+APP_VERSION="${CALVER_DATE}.$((DAILY_COMMITS + 1))"
+VERSION="$APP_VERSION"
 DIST_DIR="$ROOT_DIR/dist"
 RELEASE_DIR="$DIST_DIR/hmi-release"
 BUILD_WINDOWS=false
@@ -298,10 +306,17 @@ HMI_SECRET_KEY=$SECRET_KEY
 HMI_HOST=0.0.0.0
 HMI_PORT=8080
 HMI_DEBUG=false
+HMI_APP_VERSION=$APP_VERSION
 ENV_EOF
     echo "    Created .env with generated secret key."
 else
     echo "    Existing .env preserved."
+fi
+# Always update version in .env (even on upgrades)
+if grep -q "^HMI_APP_VERSION=" "$INSTALL_DIR/.env" 2>/dev/null; then
+    sed -i.bak "s/^HMI_APP_VERSION=.*/HMI_APP_VERSION=$APP_VERSION/" "$INSTALL_DIR/.env" && rm -f "$INSTALL_DIR/.env.bak"
+else
+    echo "HMI_APP_VERSION=$APP_VERSION" >> "$INSTALL_DIR/.env"
 fi
 
 # Create systemd service
@@ -401,11 +416,14 @@ if not exist "%INSTALL_DIR%\.env" (
         echo HMI_HOST=0.0.0.0
         echo HMI_PORT=8080
         echo HMI_DEBUG=false
+        echo HMI_APP_VERSION=$APP_VERSION
     ) > "%INSTALL_DIR%\.env"
     echo     Created .env with generated secret key.
 ) else (
     echo     Existing .env preserved.
 )
+:: Always update version in .env (even on upgrades)
+powershell -Command "$f='%INSTALL_DIR%\.env'; $c=Get-Content $f; if($c -match 'HMI_APP_VERSION='){$c=$c -replace 'HMI_APP_VERSION=.*','HMI_APP_VERSION=$APP_VERSION'}else{$c+='HMI_APP_VERSION=$APP_VERSION'}; Set-Content $f $c"
 
 :: Create convenience scripts
 (
@@ -548,10 +566,17 @@ HMI_SECRET_KEY=$SECRET_KEY
 HMI_HOST=0.0.0.0
 HMI_PORT=8080
 HMI_DEBUG=false
+HMI_APP_VERSION=$APP_VERSION
 ENV_EOF
     echo "    Created .env with generated secret key."
 else
     echo "    Existing .env preserved."
+fi
+# Always update version in .env (even on upgrades)
+if grep -q "^HMI_APP_VERSION=" "$INSTALL_DIR/.env" 2>/dev/null; then
+    sed -i.bak "s/^HMI_APP_VERSION=.*/HMI_APP_VERSION=$APP_VERSION/" "$INSTALL_DIR/.env" && rm -f "$INSTALL_DIR/.env.bak"
+else
+    echo "HMI_APP_VERSION=$APP_VERSION" >> "$INSTALL_DIR/.env"
 fi
 
 # Create systemd service
@@ -734,11 +759,14 @@ if not exist "%INSTALL_DIR%\.env" (
         echo HMI_HOST=0.0.0.0
         echo HMI_PORT=8080
         echo HMI_DEBUG=false
+        echo HMI_APP_VERSION=$APP_VERSION
     ) > "%INSTALL_DIR%\.env"
     echo     Created .env with generated secret key.
 ) else (
     echo     Existing .env preserved.
 )
+:: Always update version in .env (even on upgrades)
+powershell -Command "$f='%INSTALL_DIR%\.env'; $c=Get-Content $f; if($c -match 'HMI_APP_VERSION='){$c=$c -replace 'HMI_APP_VERSION=.*','HMI_APP_VERSION=$APP_VERSION'}else{$c+='HMI_APP_VERSION=$APP_VERSION'}; Set-Content $f $c"
 
 :: Create convenience scripts
 (

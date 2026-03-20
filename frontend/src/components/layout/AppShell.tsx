@@ -35,6 +35,7 @@ interface AppShellProps {
   navTitle?: string;
   activeJobName?: string | null;
   datasourceStatuses?: DatasourceStatus[];
+  plcVersion?: string | null;
 }
 
 // Declarative navigation config — each item defines its URL path, icon, label,
@@ -57,7 +58,7 @@ const NAV_ITEMS = [
 
 // SeverityIcon is now imported from shared/SeverityIcon
 
-export function AppShell({ children, user, wsConnected, alarms, onLogout, navTitle = 'HMI', activeJobName, datasourceStatuses = [] }: AppShellProps) {
+export function AppShell({ children, user, wsConnected, alarms, onLogout, navTitle = 'HMI', activeJobName, datasourceStatuses = [], plcVersion }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     const saved = localStorage.getItem('hmi_sidebar_open');
     if (saved !== null) return saved === 'true';
@@ -65,6 +66,11 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
     return window.innerWidth > 1280;
   });
   const [ackingAll, setAckingAll] = useState(false);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.getVersion().then(info => setAppVersion(info.version)).catch(() => {});
+  }, []);
 
   // Persist sidebar state
   useEffect(() => {
@@ -138,6 +144,18 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
             );
           })}
         </nav>
+        {appVersion && (
+          <div className="px-4 py-2 border-t border-[var(--hmi-border)]" title={`HMI: v${appVersion}${plcVersion ? `\nPLC: ${plcVersion}` : ''}`}>
+            {sidebarOpen ? (
+              <div className="space-y-0.5">
+                <div className="text-xs text-[var(--hmi-text-muted)]">HMI: v{appVersion}</div>
+                {plcVersion && <div className="text-xs text-[var(--hmi-text-muted)]">PLC: {plcVersion}</div>}
+              </div>
+            ) : (
+              <div className="text-xs text-[var(--hmi-text-muted)] text-center">v</div>
+            )}
+          </div>
+        )}
       </aside>
 
       {/* Main content */}

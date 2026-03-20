@@ -94,8 +94,11 @@ export default function App() {
   const [backendReady, setBackendReady] = useState(false);
   const [siteTitle, setSiteTitle] = useState('Industrial HMI');
   const [navTitle, setNavTitle] = useState('HMI');
+  const [plcVersionTag, setPlcVersionTag] = useState<string | null>(null);
   const activeJobRaw = tagValues['$ACTIVE_JOB']?.value;
   const activeJobName = activeJobRaw && activeJobRaw !== 'None' ? String(activeJobRaw) : null;
+  const plcVersionRaw = plcVersionTag ? tagValues[plcVersionTag]?.value : null;
+  const plcVersion = plcVersionRaw != null && plcVersionRaw !== 'None' ? String(plcVersionRaw) : null;
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Fault help dialog auto-popup state
@@ -154,6 +157,7 @@ export default function App() {
         setNavTitle(b.nav_title);
         applyBranding(b);
       }).catch(() => {});
+      api.getSystemSettings().then(s => setPlcVersionTag(s.plc_version_tag)).catch(() => {});
     } catch {
       timerRef.current = setTimeout(checkHealth, 1500);
     }
@@ -199,6 +203,7 @@ export default function App() {
               navTitle={navTitle}
               activeJobName={activeJobName}
               datasourceStatuses={datasourceStatuses}
+              plcVersion={plcVersion}
             >
               {/* Suspense wraps lazy-loaded pages. While a page's code is downloading,
                   React shows the <PageLoader /> fallback instead of a blank screen. */}
