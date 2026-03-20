@@ -96,7 +96,7 @@ async def annotate_downtime(
         require_role(UserRole.OPERATOR, UserRole.SUPERVISOR, UserRole.ENGINEER, UserRole.DESIGNER)
     ),
 ):
-    start_dt = _parse_iso(body.start_time)
+    start_dt = _parse_iso(body.start_time).replace(tzinfo=None)
 
     # Upsert annotation keyed on start_time (merged downtime period key)
     result = await session.execute(
