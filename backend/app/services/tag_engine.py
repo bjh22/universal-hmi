@@ -488,7 +488,8 @@ class TagEngine:
             case "$CURRENT_TIMESTAMP":
                 value = int(now.timestamp())
             case "$APP_VERSION":
-                value = "0.1.0"
+                from app.core.config import settings
+                value = settings.app_version
             case "$APP_UPTIME":
                 value = int(time.time() - self._start_time)
             case "$ACTIVE_ALARM_COUNT":
