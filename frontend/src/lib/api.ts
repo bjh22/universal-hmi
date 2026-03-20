@@ -175,7 +175,7 @@ export const api = {
   // Tag Labels
   getTagLabels: () => request<TagLabel[]>('/tags/labels'),
   createTagLabel: (data: { name: string; color?: string; description?: string }) =>
-    request('/tags/labels', { method: 'POST', body: JSON.stringify(data) }),
+    request<TagLabel>('/tags/labels', { method: 'POST', body: JSON.stringify(data) }),
   updateTagLabel: (id: number, data: { name: string; color?: string; description?: string }) =>
     request(`/tags/labels/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteTagLabel: (id: number) =>
@@ -440,6 +440,13 @@ export const api = {
     request<{ site_title: string; nav_title: string; has_favicon: boolean; theme_accent: string; theme_preset: string }>('/branding/', {
       method: 'PUT',
       body: JSON.stringify(data),
+    }),
+  getCustomThemes: () =>
+    request<{ themes: Record<string, { label: string; group: string; bgBody: string; bgSurface: string; bgElevated: string; bgInput: string; border: string; borderSubtle: string; textPrimary: string; textSecondary: string; textMuted: string }> }>('/branding/custom-themes'),
+  updateCustomThemes: (themes: Record<string, { label: string; group: string; bgBody: string; bgSurface: string; bgElevated: string; bgInput: string; border: string; borderSubtle: string; textPrimary: string; textSecondary: string; textMuted: string }>) =>
+    request<{ themes: Record<string, unknown> }>('/branding/custom-themes', {
+      method: 'PUT',
+      body: JSON.stringify({ themes }),
     }),
 
   // Preferences

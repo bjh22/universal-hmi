@@ -1,6 +1,7 @@
 """Branding API — site title, favicon, and theme configuration."""
 
 import base64
+import json
 import re
 from typing import Optional
 
@@ -20,7 +21,10 @@ DEFAULT_SITE_TITLE = "Industrial HMI"
 DEFAULT_NAV_TITLE = "HMI"
 DEFAULT_THEME_ACCENT = "#2563eb"
 DEFAULT_THEME_PRESET = "slate"
-VALID_PRESETS = {"slate", "zinc", "neutral", "midnight", "charcoal"}
+VALID_PRESETS = {
+    "slate", "zinc", "neutral", "midnight", "charcoal",
+    "light", "stone", "cloud", "paper",
+}
 
 
 class BrandingResponse(BaseModel):
@@ -48,9 +52,32 @@ class BrandingUpdate(BaseModel):
     @field_validator("theme_preset")
     @classmethod
     def validate_preset(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and v not in VALID_PRESETS:
-            raise ValueError(f"theme_preset must be one of {sorted(VALID_PRESETS)}")
+        # Allow built-in presets and custom theme keys (custom_*)
+        if v is not None and v not in VALID_PRESETS and not v.startswith("custom_"):
+            raise ValueError(f"theme_preset must be one of {sorted(VALID_PRESETS)} or a custom_* key")
         return v
+
+
+class CustomThemePreset(BaseModel):
+    label: str
+    group: str  # 'dark' or 'light'
+    bgBody: str
+    bgSurface: str
+    bgElevated: str
+    bgInput: str
+    border: str
+    borderSubtle: str
+    textPrimary: str
+    textSecondary: str
+    textMuted: str
+
+
+class CustomThemesResponse(BaseModel):
+    themes: dict[str, CustomThemePreset]
+
+
+class CustomThemesUpdate(BaseModel):
+    themes: dict[str, CustomThemePreset]
 
 
 async def _get_setting(session: AsyncSession, key: str) -> str | None:
@@ -74,12 +101,14 @@ async def _read_branding(session: AsyncSession) -> BrandingResponse:
     favicon = await _get_setting(session, "favicon")
     accent = await _get_setting(session, "theme_accent")
     preset = await _get_setting(session, "theme_preset")
+    # Accept built-in presets and custom_* keys
+    valid_preset = preset in VALID_PRESETS or (preset and preset.startswith("custom_"))
     return BrandingResponse(
         site_title=title or DEFAULT_SITE_TITLE,
         nav_title=nav_title or DEFAULT_NAV_TITLE,
         has_favicon=bool(favicon),
         theme_accent=accent or DEFAULT_THEME_ACCENT,
-        theme_preset=preset if preset in VALID_PRESETS else DEFAULT_THEME_PRESET,
+        theme_preset=preset if valid_preset else DEFAULT_THEME_PRESET,
     )
 
 
@@ -126,3 +155,30 @@ async def get_favicon(session: AsyncSession = Depends(get_db)):
         return Response(status_code=404)
 
     return Response(content=image_bytes, media_type=mime)
+
+
+# ─── Custom Themes ───
+
+@router.get("/custom-themes", response_model=CustomThemesResponse)
+async def get_custom_themes(session: AsyncSession = Depends(get_db)):
+    """Get custom theme presets. No auth required (needed before login)."""
+    raw = await _get_setting(session, "custom_themes")
+    if not raw:
+        return CustomThemesResponse(themes={})
+    try:
+        themes = json.loads(raw)
+        return CustomThemesResponse(themes=themes)
+    except Exception:
+        return CustomThemesResponse(themes={})
+
+
+@router.put("/custom-themes", response_model=CustomThemesResponse)
+async def update_custom_themes(
+    body: CustomThemesUpdate,
+    session: AsyncSession = Depends(get_db),
+    _user=Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    """Save custom theme presets. Requires engineer or designer role."""
+    data = {k: v.model_dump() for k, v in body.themes.items()}
+    await _set_setting(session, "custom_themes", json.dumps(data))
+    return CustomThemesResponse(themes=body.themes)

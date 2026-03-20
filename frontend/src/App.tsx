@@ -15,7 +15,7 @@ import { useWebSocket } from './hooks/useWebSocket';
 import { useAuthState } from './hooks/useAuth';
 import { LoginPage } from './pages/LoginPage';
 import { api } from './lib/api';
-import { applyTheme } from './lib/theme';
+import { applyTheme, saveCustomThemes } from './lib/theme';
 import { buildTagVisibilityMap } from './lib/tagVisibility';
 import type { AlarmData, Tag } from './types';
 
@@ -143,6 +143,12 @@ export default function App() {
       if (!res.ok) throw new Error();
       setBackendReady(true);
       refreshTags();
+      // Load custom themes first so they're available when applyTheme runs
+      api.getCustomThemes().then((ct) => {
+        if (ct.themes && Object.keys(ct.themes).length > 0) {
+          saveCustomThemes(ct.themes as Record<string, import('./lib/theme').ThemePreset>);
+        }
+      }).catch(() => {});
       api.getBranding().then((b) => {
         setSiteTitle(b.site_title);
         setNavTitle(b.nav_title);
