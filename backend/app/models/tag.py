@@ -48,6 +48,7 @@ class SimulationBehavior(str, enum.Enum):
     RANDOM = "random"
     TOGGLE = "toggle"
     ENUM_CYCLE = "enum_cycle"
+    ACCUMULATOR = "accum"
     SCRIPT = "script"
 
 

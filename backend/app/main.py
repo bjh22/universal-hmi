@@ -28,6 +28,7 @@ from app.models.app_setting import AppSetting  # noqa: F401 — ensure table cre
 from app.models.integration import Integration  # noqa: F401 — ensure table creation
 from app.models.downtime_annotation import DowntimeAnnotation  # noqa: F401 — ensure table creation
 from app.models.reason_code import ReasonCode  # noqa: F401 — ensure table creation
+from app.api.production_settings import load_production_settings
 from app.services.alarm_service import AlarmService
 from app.services.tag_engine import tag_engine
 from app.services.script_engine import shutdown_executor as shutdown_script_executor
@@ -80,6 +81,20 @@ async def lifespan(app: FastAPI):
     tag_engine.set_driver_manager(driver_manager)
     async with async_session() as session:
         await tag_engine.load_datasource_meta(session)
+
+    # Warn if reporting tags are configured but lack trending
+    async with async_session() as session:
+        prod_settings = await load_production_settings(session)
+        for key in ("good_count_tag", "cycling_tag"):
+            tag_name = prod_settings.get(key)
+            if not tag_name:
+                continue
+            tag = tag_engine._tags.get(tag_name)
+            if tag and not tag.trending_enabled:
+                logger.warning(
+                    f"Reporting tag '{tag_name}' (production.{key}) does not have "
+                    f"trending enabled — report data for this tag will be unavailable"
+                )
     # Attach services to app.state so route handlers can access them
     app.state.alarm_service = alarm_service
     app.state.trend_service = trend_service

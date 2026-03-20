@@ -95,8 +95,10 @@ async def create_demo_resources(session: AsyncSession):
             data_type=TagDataType.INT,
             access_mode=TagAccessMode.READ_WRITE,
             simulation_enabled=True,
-            simulation_behavior=SimulationBehavior.RAMP,
-            simulation_config=json.dumps({"min": 0, "max": 10000, "period": 600}),
+            simulation_behavior=SimulationBehavior.ACCUMULATOR,
+            simulation_config=json.dumps({"rate": 0.0333}),
+            trending_enabled=True,
+            trending_sample_rate_ms=5000,
         ),
         Tag(
             name="Machine.RejectCount",
@@ -133,6 +135,8 @@ async def create_demo_resources(session: AsyncSession):
             simulation_enabled=True,
             simulation_behavior=SimulationBehavior.TOGGLE,
             simulation_config=json.dumps({"period": 60}),
+            trending_enabled=True,
+            trending_sample_rate_ms=2000,
         ),
         Tag(
             name="Machine.TempAlarm",
