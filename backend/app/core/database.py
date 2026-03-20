@@ -129,6 +129,9 @@ async def init_db():
         await _create_index_if_missing(conn, "ix_alarm_history_tag_name", "alarm_history", "tag_name")
         await _create_index_if_missing(conn, "ix_alarm_history_triggered_at", "alarm_history", "triggered_at")
         await _create_index_if_missing(conn, "ix_alarm_history_cleared_at", "alarm_history", "cleared_at")
+        # Fix downtime_annotations.alarm_history_id: must be nullable for merged
+        # downtime periods that don't map to a single alarm history row.
+        await _make_column_nullable(conn, "downtime_annotations", "alarm_history_id")
 
 
 async def _add_column_if_missing(conn, table: str, column: str, col_type: str):
@@ -149,6 +152,39 @@ async def _create_index_if_missing(conn, index_name: str, table: str, column: st
     )
     if not result.fetchone():
         await conn.execute(text(f"CREATE INDEX {index_name} ON {table} ({column})"))
+
+
+async def _make_column_nullable(conn, table: str, column: str):
+    """Rebuild a table to make a NOT NULL column nullable (SQLite has no ALTER COLUMN)."""
+    result = await conn.execute(text(f"PRAGMA table_info({table})"))
+    cols = result.fetchall()
+    # Find the target column; cols are (cid, name, type, notnull, dflt, pk)
+    target = next((c for c in cols if c[1] == column), None)
+    if target is None or target[3] == 0:
+        return  # Column missing or already nullable — nothing to do
+    col_names = [c[1] for c in cols]
+    col_list = ", ".join(col_names)
+    # Build column defs, dropping NOT NULL from the target column
+    defs = []
+    for c in cols:
+        cid, name, ctype, notnull, dflt, pk = c
+        parts = [name, ctype or "TEXT"]
+        if pk:
+            parts.append("PRIMARY KEY")
+        if notnull and name != column:
+            parts.append("NOT NULL")
+        if dflt is not None:
+            parts.append(f"DEFAULT {dflt}")
+        defs.append(" ".join(parts))
+    col_defs = ", ".join(defs)
+    tmp = f"_{table}_tmp"
+    await conn.execute(text(f"CREATE TABLE {tmp} ({col_defs})"))
+    await conn.execute(text(f"INSERT INTO {tmp} ({col_list}) SELECT {col_list} FROM {table}"))
+    await conn.execute(text(f"DROP TABLE {table}"))
+    await conn.execute(text(f"ALTER TABLE {tmp} RENAME TO {table}"))
+    # Recreate indexes (create_all won't touch existing tables, but indexes
+    # on the old table were dropped with it; the index migration steps that
+    # follow will re-add any needed indexes).
 
 
 async def _rename_column_if_needed(conn, table: str, old_name: str, new_name: str):

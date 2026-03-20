@@ -548,17 +548,23 @@ async def get_downtime_periods(
 
     merged = _merge_fault_intervals(fault_intervals, exception_tags)
 
-    # Load annotations in the timeframe; key by start_time ISO string
+    # Load annotations for all merged periods.  Periods may start before
+    # frame_start (active faults that began earlier), so use the earliest
+    # merged period start as the lower bound instead of frame_start.
+    ann_lower = min(
+        (mp["original_start"].replace(tzinfo=None) for mp in merged),
+        default=frame_start,
+    )
     ann_result = await session.execute(
         select(DowntimeAnnotation)
         .where(
-            DowntimeAnnotation.start_time >= frame_start,
+            DowntimeAnnotation.start_time >= ann_lower,
             DowntimeAnnotation.start_time < frame_end,
         )
     )
     annotations: dict[str, DowntimeAnnotation] = {}
     for ann in ann_result.scalars().all():
-        annotations[ann.start_time.isoformat()] = ann
+        annotations[_normalize_dt(ann.start_time).isoformat()] = ann
 
     periods: list[dict] = []
     for mp in merged:
