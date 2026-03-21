@@ -317,7 +317,7 @@ export function DesignCanvas({
   }), [gridSettings.cellSize]);
 
   return (
-    <div className="flex-1 overflow-auto bg-slate-950 p-4 flex flex-col">
+    <div className="flex-1 overflow-auto bg-slate-950 p-4 flex flex-col select-none touch-manipulation">
       {/* Alignment toolbar - shows when multiple selected */}
       {hasMultipleSelected && (
         <div className="flex items-center gap-1 mb-2 px-1">
