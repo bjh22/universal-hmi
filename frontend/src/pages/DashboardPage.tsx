@@ -18,7 +18,8 @@
  */
 import { useEffect, useState, useCallback, useRef, useMemo, memo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Pencil, Plus, Trash2, GripVertical } from 'lucide-react';
+import { Pencil, Plus, Trash2, GripVertical, ChevronLeft, ChevronRight } from 'lucide-react';
+import { TouchTextInput } from '../components/widgets/TouchTextInput';
 import { api } from '../lib/api';
 import { WidgetRenderer } from '../components/widgets/WidgetRenderer';
 import { InfoButton } from '../components/widgets/InfoButton';
@@ -403,6 +404,35 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
     return map;
   }, [runtimeWidgets]);
 
+  // ─── Swipe navigation between screens ───
+  const visibleScreens = useMemo(() => screens.filter(s => s.slug !== 'support'), [screens]);
+  const activeScreenIndex = useMemo(() => {
+    if (!activeScreen) return -1;
+    return visibleScreens.findIndex(s => s.id === activeScreen.id);
+  }, [activeScreen, visibleScreens]);
+
+  const swipeRef = useRef({ startX: 0, startY: 0, swiping: false });
+
+  const handleSwipeStart = useCallback((e: React.TouchEvent) => {
+    swipeRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, swiping: true };
+  }, []);
+
+  const handleSwipeEnd = useCallback((e: React.TouchEvent) => {
+    if (!swipeRef.current.swiping) return;
+    swipeRef.current.swiping = false;
+    const dx = e.changedTouches[0].clientX - swipeRef.current.startX;
+    const dy = e.changedTouches[0].clientY - swipeRef.current.startY;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) {
+      if (dx < 0 && activeScreenIndex < visibleScreens.length - 1) {
+        navigate(`/screen/${visibleScreens[activeScreenIndex + 1].slug}`);
+      } else if (dx > 0 && activeScreenIndex > 0) {
+        navigate(`/screen/${visibleScreens[activeScreenIndex - 1].slug}`);
+      }
+    }
+  }, [activeScreenIndex, visibleScreens, navigate]);
+
+  const [showDesignerTabs, setShowDesignerTabs] = useState(false);
+
   // ─── DESIGN MODE ───
   if (dm.editing) {
     return (
@@ -476,16 +506,75 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
 
   // ─── RUNTIME MODE ───
   return (
-    <div className={screenLayoutMode === 'absolute' && screenResolution ? 'flex flex-col h-full overflow-hidden' : ''}>
-      {/* Screen tabs + edit button */}
-      <div className="flex items-center gap-2 mb-4">
-        {screens.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {screens.filter(s => s.slug !== 'support').map((s) => (
+    <div
+      className={screenLayoutMode === 'absolute' && screenResolution ? 'flex flex-col h-full overflow-hidden' : ''}
+      onTouchStart={handleSwipeStart}
+      onTouchEnd={handleSwipeEnd}
+    >
+      {/* Screen carousel indicators + designer controls */}
+      {visibleScreens.length > 1 && (
+        <div className="flex items-center justify-center gap-2 mb-2">
+          {/* Prev arrow */}
+          <button
+            onClick={() => activeScreenIndex > 0 && navigate(`/screen/${visibleScreens[activeScreenIndex - 1].slug}`)}
+            disabled={activeScreenIndex <= 0}
+            className="p-1 text-slate-500 hover:text-slate-300 disabled:opacity-30 disabled:cursor-default"
+          >
+            <ChevronLeft size={16} />
+          </button>
+
+          {/* Dot indicators */}
+          <div className="flex items-center gap-1.5">
+            {visibleScreens.map((s, i) => (
+              <button
+                key={s.id}
+                onClick={() => navigate(`/screen/${s.slug}`)}
+                title={s.name}
+                className={`rounded-full transition-all ${
+                  i === activeScreenIndex
+                    ? 'w-3 h-3 bg-[var(--hmi-accent)]'
+                    : 'w-2 h-2 bg-slate-600 hover:bg-slate-400'
+                }`}
+              />
+            ))}
+          </div>
+
+          {/* Next arrow */}
+          <button
+            onClick={() => activeScreenIndex < visibleScreens.length - 1 && navigate(`/screen/${visibleScreens[activeScreenIndex + 1].slug}`)}
+            disabled={activeScreenIndex >= visibleScreens.length - 1}
+            className="p-1 text-slate-500 hover:text-slate-300 disabled:opacity-30 disabled:cursor-default"
+          >
+            <ChevronRight size={16} />
+          </button>
+
+          {/* Screen name */}
+          {activeScreen && (
+            <span className="text-xs text-slate-500 ml-1">{activeScreen.name}</span>
+          )}
+
+          {/* Designer toggle */}
+          {isDesigner && (
+            <button
+              onClick={() => setShowDesignerTabs(prev => !prev)}
+              className="ml-auto px-2 py-1 text-xs text-slate-500 hover:text-slate-300"
+              title="Show screen tabs"
+            >
+              <GripVertical size={14} />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Collapsible designer tab bar */}
+      {isDesigner && showDesignerTabs && (
+        <div className="flex items-center gap-2 mb-2 overflow-x-auto pb-1 transition-all">
+          <div className="flex gap-2 overflow-x-auto">
+            {visibleScreens.map((s) => (
               <Link
                 key={s.id}
                 to={`/screen/${s.slug}`}
-                draggable={isDesigner}
+                draggable
                 onDragStart={e => {
                   setDragTabId(s.id);
                   e.dataTransfer.effectAllowed = 'move';
@@ -504,50 +593,48 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
                   setDropTargetId(null);
                 }}
                 onDragEnd={() => { setDragTabId(null); setDropTargetId(null); }}
-                className={`flex items-center gap-1 px-3 py-2.5 min-h-[44px] rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
+                className={`flex items-center gap-1 px-3 py-2 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${
                   activeScreen?.id === s.id
                     ? 'bg-[var(--hmi-accent)] text-white'
                     : 'bg-slate-800 text-slate-400 hover:text-slate-200'
                 } ${dragTabId === s.id ? 'opacity-40' : ''} ${dropTargetId === s.id ? 'ring-2 ring-blue-400' : ''}`}
               >
-                {isDesigner && <GripVertical size={12} className="text-slate-600 flex-shrink-0 cursor-grab" />}
+                <GripVertical size={12} className="text-slate-600 flex-shrink-0 cursor-grab" />
                 {s.name}
               </Link>
             ))}
           </div>
-        )}
-        <div className="flex-1" />
-        {isDesigner && (
-          <div className="flex items-center gap-2">
+          <div className="flex-1" />
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               onClick={() => { setShowNewScreenDialog(true); setCreateScreenError(null); }}
-              className="flex items-center justify-center min-w-[44px] min-h-[44px] p-2.5 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
+              className="flex items-center justify-center min-w-[36px] min-h-[36px] p-2 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
               title="New screen"
             >
-              <Plus size={16} />
+              <Plus size={14} />
             </button>
             {activeScreen && (
               <button
                 onClick={handleDeleteScreen}
-                className="flex items-center justify-center min-w-[44px] min-h-[44px] p-2.5 rounded-md text-xs font-medium text-slate-400 hover:text-red-400 hover:bg-red-600/10 transition-colors"
+                className="flex items-center justify-center min-w-[36px] min-h-[36px] p-2 rounded-md text-slate-400 hover:text-red-400 hover:bg-red-600/10 transition-colors"
                 title="Delete screen"
               >
-                <Trash2 size={16} />
+                <Trash2 size={14} />
               </button>
             )}
             {activeScreen && (
               <button
                 onClick={handleEnterEdit}
-                className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] rounded-md text-xs font-medium bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
+                className="flex items-center gap-1 px-2.5 py-2 min-h-[36px] rounded-md text-xs font-medium bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
                 title="Edit screen (Ctrl+E)"
               >
-                <Pencil size={16} />
+                <Pencil size={14} />
                 Edit
               </button>
             )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Widget rendering */}
       {screenLayoutMode === 'absolute' && screenResolution ? (
@@ -614,14 +701,12 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowNewScreenDialog(false)}>
           <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 w-96 shadow-2xl" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-slate-200 mb-4">New Screen</h3>
-            <input
-              type="text"
+            <TouchTextInput
               value={newScreenName}
-              onChange={e => setNewScreenName(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleCreateScreen(); if (e.key === 'Escape') setShowNewScreenDialog(false); }}
+              onChange={setNewScreenName}
               placeholder="Screen name"
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 min-h-[44px] text-sm text-white outline-none focus:border-blue-500 mb-1"
-              autoFocus
+              title="Screen Name"
+              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 min-h-[44px] text-sm text-white flex items-center mb-1"
             />
             {createScreenError && (
               <p className="text-xs text-red-400 mb-3">{createScreenError}</p>

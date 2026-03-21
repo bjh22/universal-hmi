@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import { TouchTextInput } from '../components/widgets/TouchTextInput';
 import type { UserData } from '../types';
 
 interface Props {
@@ -16,8 +17,8 @@ export function LoginPage({ onLogin, siteTitle }: Props) {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  const handlePasswordLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handlePasswordLogin = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     setError('');
     try {
       const res = await api.login(username, password);
@@ -79,26 +80,26 @@ export function LoginPage({ onLogin, siteTitle }: Props) {
         )}
 
         {mode === 'password' ? (
-          <form onSubmit={handlePasswordLogin} className="space-y-3">
-            <input
-              type="text"
-              placeholder="Username"
+          <div className="space-y-3">
+            <TouchTextInput
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-[var(--hmi-accent)]"
-              autoFocus
+              onChange={setUsername}
+              placeholder="Username"
+              title="Username"
+              className="w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-lg px-3 py-2.5 min-h-[44px] text-sm text-white flex items-center"
             />
-            <input
-              type="password"
-              placeholder="Password"
+            <TouchTextInput
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-[var(--hmi-accent)]"
+              onChange={setPassword}
+              placeholder="Password"
+              title="Password"
+              type="password"
+              className="w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-lg px-3 py-2.5 min-h-[44px] text-sm text-white flex items-center"
             />
-            <button type="submit" className="w-full bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-dark)] text-white py-3 min-h-[48px] rounded-lg text-sm font-medium">
+            <button onClick={handlePasswordLogin} className="w-full bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-dark)] text-white py-3 min-h-[48px] rounded-lg text-sm font-medium">
               Sign In
             </button>
-          </form>
+          </div>
         ) : (
           <form onSubmit={handlePinLogin} className="space-y-3">
             <input

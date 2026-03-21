@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Bell, Check, CheckCheck, AlertTriangle, Info, Download, Search, ArrowUpDown } from 'lucide-react';
 import { api } from '../lib/api';
+import { TouchTextInput } from '../components/widgets/TouchTextInput';
 import type { AlarmData } from '../types';
 
 interface Props {
@@ -180,13 +181,13 @@ export function AlarmsPage({ realtimeAlarms }: Props) {
       {/* Filters */}
       <div className="flex gap-3 mb-4">
         <div className="relative flex-1 max-w-xs">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
-          <input
-            type="text"
-            placeholder="Search alarms..."
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+          <TouchTextInput
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-8 pr-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+            onChange={setSearchQuery}
+            placeholder="Search alarms..."
+            title="Search Alarms"
+            className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-8 pr-3 py-2 text-sm text-white min-h-[44px] flex items-center"
           />
         </div>
         <select
