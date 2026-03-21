@@ -11,6 +11,7 @@ set -euo pipefail
 #   ./deploy.sh --arm                 # Also include Linux aarch64 (ARM)
 #   ./deploy.sh --no-bundle-python    # Skip bundling Python (target must have Python)
 #   ./deploy.sh --python-version 3.12.8  # Override Python version (default: 3.11.13)
+#   ./deploy.sh --chromium             # Bundle Chromium browser for kiosk mode
 #
 # Output: dist/hmi-<version>.tar.gz  (always)
 #         dist/hmi-<version>.zip     (when --windows)
@@ -35,9 +36,12 @@ BUILD_WINDOWS=false
 BUILD_ARM=false
 BUNDLE_PYTHON=true
 COMPILE=false
+BUNDLE_CHROMIUM=false
 PYTHON_VERSION="3.11.13"
 # python-build-standalone release tag (date-based)
 PBS_RELEASE="20250828"
+# Chrome for Testing version (stable channel)
+CHROMIUM_VERSION="136.0.7103.92"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -45,13 +49,18 @@ while [[ $# -gt 0 ]]; do
         --arm) BUILD_ARM=true ;;
         --compile) COMPILE=true ;;
         --no-bundle-python) BUNDLE_PYTHON=false ;;
+        --chromium) BUNDLE_CHROMIUM=true ;;
         --python-version)
             shift
             PYTHON_VERSION="$1"
             ;;
+        --chromium-version)
+            shift
+            CHROMIUM_VERSION="$1"
+            ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: ./deploy.sh [--compile] [--windows] [--arm] [--no-bundle-python] [--python-version X.Y.Z]"
+            echo "Usage: ./deploy.sh [--compile] [--windows] [--arm] [--no-bundle-python] [--python-version X.Y.Z] [--chromium] [--chromium-version X.Y.Z.W]"
             exit 1
             ;;
     esac
@@ -75,6 +84,9 @@ echo "  Python:  $PYTHON_VERSION (bundled)"
 else
 echo "  Python:  not bundled (target must have Python $PYTHON_MAJOR_MINOR+)"
 fi
+if $BUNDLE_CHROMIUM; then
+echo "  Chromium: $CHROMIUM_VERSION (bundled for kiosk mode)"
+fi
 echo "============================================"
 echo
 
@@ -89,6 +101,7 @@ STEP_TOTAL=5
 $BUILD_ARM && STEP_TOTAL=$((STEP_TOTAL + 1))
 $BUILD_WINDOWS && STEP_TOTAL=$((STEP_TOTAL + 1))
 $BUNDLE_PYTHON && STEP_TOTAL=$((STEP_TOTAL + 1))
+$BUNDLE_CHROMIUM && STEP_TOTAL=$((STEP_TOTAL + 1))
 STEP=1
 
 # ──────────────────────────────────────────────
@@ -279,6 +292,54 @@ elif $BUNDLE_PYTHON; then
 fi
 
 # ──────────────────────────────────────────────
+# 4b. Bundle Chromium browser (if enabled)
+#     Downloads Chrome for Testing — a standalone build that needs no installation.
+#     Used for kiosk mode on panel PCs without a pre-installed browser.
+# ──────────────────────────────────────────────
+if $BUNDLE_CHROMIUM; then
+    STEP=$((STEP + 1))
+    echo "==> [$STEP/$STEP_TOTAL] Bundling Chromium $CHROMIUM_VERSION..."
+
+    CFT_BASE_URL="https://storage.googleapis.com/chrome-for-testing-public/${CHROMIUM_VERSION}"
+
+    # Helper: download and extract Chrome for Testing
+    download_chromium() {
+        local PLATFORM="$1"   # e.g. linux64, win64
+        local DEST_DIR="$2"
+        local ARCHIVE_EXT="$3" # zip for all platforms
+        local ARCHIVE_NAME="chrome-${PLATFORM}.${ARCHIVE_EXT}"
+        local URL="${CFT_BASE_URL}/${PLATFORM}/${ARCHIVE_NAME}"
+
+        echo "    Downloading $ARCHIVE_NAME..."
+        mkdir -p "$DEST_DIR"
+        if ! curl -fSL --retry 4 --retry-delay 2 -o "/tmp/$ARCHIVE_NAME" "$URL"; then
+            echo "    ERROR: Failed to download $URL"
+            echo "    Check that Chromium $CHROMIUM_VERSION exists for $PLATFORM at:"
+            echo "      https://googlechromelabs.github.io/chrome-for-testing/"
+            exit 1
+        fi
+
+        # Extract — Chrome for Testing ships as zip for all platforms
+        unzip -qo "/tmp/$ARCHIVE_NAME" -d "$DEST_DIR"
+        rm -f "/tmp/$ARCHIVE_NAME"
+
+        echo "    Extracted to $DEST_DIR/"
+    }
+
+    # Always bundle Linux x86_64
+    echo "    --- Linux x86_64 ---"
+    download_chromium "linux64" "$RELEASE_DIR/chromium-linux-x86_64" "zip"
+
+    # Optionally bundle Windows x86_64
+    if $BUILD_WINDOWS; then
+        echo "    --- Windows x86_64 ---"
+        download_chromium "win64" "$RELEASE_DIR/chromium-windows" "zip"
+    fi
+
+    echo "    Chromium bundling complete."
+fi
+
+# ──────────────────────────────────────────────
 # 5. Create install scripts for target machines
 # ──────────────────────────────────────────────
 STEP=$((STEP + 1))
@@ -385,6 +446,115 @@ cd "$(dirname "$0")"
 START_EOF
 chmod +x "$INSTALL_DIR/start.sh"
 
+# ── Install bundled Chromium (if present) ──
+ARCH=$(uname -m)
+CHROMIUM_SRC=""
+if [ "$ARCH" = "x86_64" ] && [ -d "$SCRIPT_DIR/chromium-linux-x86_64" ]; then
+    CHROMIUM_SRC="$SCRIPT_DIR/chromium-linux-x86_64/chrome-linux64"
+fi
+
+if [ -n "$CHROMIUM_SRC" ] && [ -d "$CHROMIUM_SRC" ]; then
+    echo "==> Installing bundled Chromium..."
+    cp -r "$CHROMIUM_SRC" "$INSTALL_DIR/chromium"
+    chmod +x "$INSTALL_DIR/chromium/chrome"
+    echo "    Chromium installed to $INSTALL_DIR/chromium/"
+
+    # Create kiosk launcher script
+    cat > "$INSTALL_DIR/start-kiosk.sh" << 'KIOSK_EOF'
+#!/usr/bin/env bash
+#
+# start-kiosk.sh — Launch HMI server + Chromium in kiosk mode
+#
+# Usage:
+#   ./start-kiosk.sh                    # Fullscreen kiosk on http://localhost:8080
+#   ./start-kiosk.sh --windowed         # Non-fullscreen window (for testing)
+#   HMI_KIOSK_URL=http://x:8080 ./start-kiosk.sh  # Custom URL
+#
+cd "$(dirname "$0")"
+
+HMI_URL="${HMI_KIOSK_URL:-http://localhost:8080}"
+KIOSK_FLAGS="--kiosk"
+CHROMIUM_DIR="$(pwd)/chromium"
+CHROMIUM_DATA="$(pwd)/data/chromium-profile"
+
+for arg in "$@"; do
+    case "$arg" in
+        --windowed) KIOSK_FLAGS="--start-maximized" ;;
+    esac
+done
+
+# Start the HMI server in the background
+./hmi-server &
+HMI_PID=$!
+
+# Wait for the server to become ready
+echo "Waiting for HMI server to start..."
+for i in $(seq 1 30); do
+    if curl -sf http://localhost:8080/api/system/info > /dev/null 2>&1; then
+        echo "HMI server is ready."
+        break
+    fi
+    sleep 1
+done
+
+# Launch Chromium in kiosk mode
+echo "Launching Chromium kiosk at $HMI_URL..."
+mkdir -p "$CHROMIUM_DATA"
+"$CHROMIUM_DIR/chrome" \
+    $KIOSK_FLAGS \
+    --no-first-run \
+    --disable-infobars \
+    --disable-session-crashed-bubble \
+    --disable-features=TranslateUI \
+    --autoplay-policy=no-user-gesture-required \
+    --user-data-dir="$CHROMIUM_DATA" \
+    --disable-background-networking \
+    --disable-sync \
+    --disable-default-apps \
+    --noerrdialogs \
+    --disable-pinch \
+    --overscroll-history-navigation=0 \
+    "$HMI_URL" &
+CHROME_PID=$!
+
+# Wait for either process to exit, then clean up the other
+cleanup() {
+    kill $CHROME_PID 2>/dev/null
+    kill $HMI_PID 2>/dev/null
+    wait
+}
+trap cleanup EXIT INT TERM
+wait -n $HMI_PID $CHROME_PID 2>/dev/null || true
+KIOSK_EOF
+    chmod +x "$INSTALL_DIR/start-kiosk.sh"
+
+    # Create systemd kiosk service (auto-login + chromium)
+    if [ -d /etc/systemd/system ]; then
+        cat > /etc/systemd/system/hmi-kiosk.service << SERVICE_EOF
+[Unit]
+Description=Industrial HMI Kiosk (Server + Chromium)
+After=network.target graphical.target
+Wants=graphical.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=$INSTALL_DIR
+EnvironmentFile=$INSTALL_DIR/.env
+Environment=DISPLAY=:0
+ExecStart=$INSTALL_DIR/start-kiosk.sh
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical.target
+SERVICE_EOF
+        echo "    Created systemd service: hmi-kiosk.service"
+    fi
+fi
+
 echo
 echo "============================================"
 echo "  Installation complete!"
@@ -396,6 +566,11 @@ echo "  Config:           $INSTALL_DIR/.env"
 echo
 echo "  Start manually:   $INSTALL_DIR/start.sh"
 echo "  Start as service: systemctl enable --now hmi"
+if [ -n "$CHROMIUM_SRC" ] && [ -d "$CHROMIUM_SRC" ]; then
+echo
+echo "  Kiosk mode:       $INSTALL_DIR/start-kiosk.sh"
+echo "  Kiosk service:    systemctl enable --now hmi-kiosk"
+fi
 echo
 echo "  Default login:    admin / admin"
 echo "  URL:              http://localhost:8080"
@@ -471,6 +646,36 @@ powershell -Command "$f='%INSTALL_DIR%\.env'; $c=Get-Content $f; if($c -match 'H
     echo hmi-server.exe
 ) > "%INSTALL_DIR%\start.bat"
 
+:: Install bundled Chromium (if present)
+if exist "%SCRIPT_DIR%chromium-windows\chrome-win64\" (
+    echo ==^> Installing bundled Chromium...
+    xcopy /E /I /Y "%SCRIPT_DIR%chromium-windows\chrome-win64\*" "%INSTALL_DIR%\chromium\" >nul
+    echo     Chromium installed to %INSTALL_DIR%\chromium\
+
+    :: Create kiosk launcher script
+    (
+        echo @echo off
+        echo :: start-kiosk.bat — Launch HMI server + Chromium in kiosk mode
+        echo cd /d "%%~dp0"
+        echo.
+        echo :: Start HMI server in background
+        echo start "" /B hmi-server.exe
+        echo.
+        echo :: Wait for server to be ready
+        echo echo Waiting for HMI server to start...
+        echo :wait_loop
+        echo timeout /t 1 /nobreak ^>nul
+        echo powershell -Command "try { $r = Invoke-WebRequest -Uri 'http://localhost:8080/api/system/info' -UseBasicParsing -TimeoutSec 2; if($r.StatusCode -eq 200){exit 0} } catch { exit 1 }"
+        echo if errorlevel 1 goto wait_loop
+        echo echo HMI server is ready.
+        echo.
+        echo :: Launch Chromium in kiosk mode
+        echo echo Launching Chromium kiosk...
+        echo start "" "%%~dp0chromium\chrome.exe" --kiosk --no-first-run --disable-infobars --disable-session-crashed-bubble --disable-features=TranslateUI --autoplay-policy=no-user-gesture-required --user-data-dir="%%~dp0data\chromium-profile" --disable-background-networking --disable-sync --disable-default-apps --noerrdialogs --disable-pinch --overscroll-history-navigation=0 "http://localhost:8080"
+    ) > "%INSTALL_DIR%\start-kiosk.bat"
+    echo     Created start-kiosk.bat
+)
+
 :: Windows Service setup
 echo.
 echo     NOTE: To run as a Windows Service, use NSSM (recommended):
@@ -504,6 +709,9 @@ echo   Database:         %INSTALL_DIR%\data\hmi.db
 echo   Config:           %INSTALL_DIR%\.env
 echo.
 echo   Start manually:   %INSTALL_DIR%\start.bat
+if exist "%INSTALL_DIR%\chromium\chrome.exe" (
+echo   Kiosk mode:       %INSTALL_DIR%\start-kiosk.bat
+)
 echo.
 echo   Default login:    admin / admin
 echo   URL:              http://localhost:8080
@@ -677,6 +885,117 @@ echo "==> Seeding database with defaults..."
 cd "$INSTALL_DIR"
 python -m app.seed
 
+# ── Install bundled Chromium (if present) ──
+ARCH=$(uname -m)
+CHROMIUM_SRC=""
+if [ "$ARCH" = "x86_64" ] && [ -d "$SCRIPT_DIR/chromium-linux-x86_64" ]; then
+    CHROMIUM_SRC="$SCRIPT_DIR/chromium-linux-x86_64/chrome-linux64"
+fi
+
+if [ -n "$CHROMIUM_SRC" ] && [ -d "$CHROMIUM_SRC" ]; then
+    echo "==> Installing bundled Chromium..."
+    cp -r "$CHROMIUM_SRC" "$INSTALL_DIR/chromium"
+    chmod +x "$INSTALL_DIR/chromium/chrome"
+    echo "    Chromium installed to $INSTALL_DIR/chromium/"
+
+    # Create kiosk launcher script
+    cat > "$INSTALL_DIR/start-kiosk.sh" << 'KIOSK_EOF'
+#!/usr/bin/env bash
+#
+# start-kiosk.sh — Launch HMI server + Chromium in kiosk mode
+#
+# Usage:
+#   ./start-kiosk.sh                    # Fullscreen kiosk on http://localhost:8080
+#   ./start-kiosk.sh --windowed         # Non-fullscreen window (for testing)
+#   HMI_KIOSK_URL=http://x:8080 ./start-kiosk.sh  # Custom URL
+#
+cd "$(dirname "$0")"
+
+HMI_URL="${HMI_KIOSK_URL:-http://localhost:8080}"
+KIOSK_FLAGS="--kiosk"
+CHROMIUM_DIR="$(pwd)/chromium"
+CHROMIUM_DATA="$(pwd)/data/chromium-profile"
+
+for arg in "$@"; do
+    case "$arg" in
+        --windowed) KIOSK_FLAGS="--start-maximized" ;;
+    esac
+done
+
+# Start the HMI server in the background
+source venv/bin/activate
+python run.py &
+HMI_PID=$!
+
+# Wait for the server to become ready
+echo "Waiting for HMI server to start..."
+for i in $(seq 1 30); do
+    if curl -sf http://localhost:8080/api/system/info > /dev/null 2>&1; then
+        echo "HMI server is ready."
+        break
+    fi
+    sleep 1
+done
+
+# Launch Chromium in kiosk mode
+echo "Launching Chromium kiosk at $HMI_URL..."
+mkdir -p "$CHROMIUM_DATA"
+"$CHROMIUM_DIR/chrome" \
+    $KIOSK_FLAGS \
+    --no-first-run \
+    --disable-infobars \
+    --disable-session-crashed-bubble \
+    --disable-features=TranslateUI \
+    --autoplay-policy=no-user-gesture-required \
+    --user-data-dir="$CHROMIUM_DATA" \
+    --disable-background-networking \
+    --disable-sync \
+    --disable-default-apps \
+    --noerrdialogs \
+    --disable-pinch \
+    --overscroll-history-navigation=0 \
+    "$HMI_URL" &
+CHROME_PID=$!
+
+# Wait for either process to exit, then clean up the other
+cleanup() {
+    kill $CHROME_PID 2>/dev/null
+    kill $HMI_PID 2>/dev/null
+    wait
+}
+trap cleanup EXIT INT TERM
+wait -n $HMI_PID $CHROME_PID 2>/dev/null || true
+KIOSK_EOF
+    chmod +x "$INSTALL_DIR/start-kiosk.sh"
+
+    # Create systemd kiosk service (auto-login + chromium)
+    if [ -d /etc/systemd/system ]; then
+        cat > /etc/systemd/system/hmi-kiosk.service << SERVICE_EOF
+[Unit]
+Description=Industrial HMI Kiosk (Server + Chromium)
+After=network.target graphical.target
+Wants=graphical.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=$INSTALL_DIR
+Environment=PATH=$INSTALL_DIR/venv/bin:/usr/bin:/bin
+Environment=DISPLAY=:0
+EnvironmentFile=$INSTALL_DIR/.env
+ExecStart=$INSTALL_DIR/start-kiosk.sh
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical.target
+SERVICE_EOF
+        echo "    Created systemd service: hmi-kiosk.service"
+    fi
+fi
+
 echo
 echo "============================================"
 echo "  Installation complete!"
@@ -688,6 +1007,11 @@ echo "  Config:           $INSTALL_DIR/.env"
 echo
 echo "  Start manually:   $INSTALL_DIR/start.sh"
 echo "  Start as service: systemctl enable --now hmi"
+if [ -n "$CHROMIUM_SRC" ] && [ -d "$CHROMIUM_SRC" ]; then
+echo
+echo "  Kiosk mode:       $INSTALL_DIR/start-kiosk.sh"
+echo "  Kiosk service:    systemctl enable --now hmi-kiosk"
+fi
 echo
 echo "  Default login:    admin / admin"
 echo "  URL:              http://localhost:8080"
@@ -876,6 +1200,36 @@ echo ==^> Seeding database with defaults...
 cd /d "%INSTALL_DIR%"
 python -m app.seed
 
+:: Install bundled Chromium (if present)
+if exist "%SCRIPT_DIR%chromium-windows\chrome-win64\" (
+    echo ==^> Installing bundled Chromium...
+    xcopy /E /I /Y "%SCRIPT_DIR%chromium-windows\chrome-win64\*" "%INSTALL_DIR%\chromium\" >nul
+    echo     Chromium installed to %INSTALL_DIR%\chromium\
+
+    :: Create kiosk launcher script
+    (
+        echo @echo off
+        echo :: start-kiosk.bat — Launch HMI server + Chromium in kiosk mode
+        echo cd /d "%%~dp0"
+        echo.
+        echo :: Start HMI server in background
+        echo start "" /B cmd /c "call venv\Scripts\activate.bat ^&^& python run.py"
+        echo.
+        echo :: Wait for server to be ready
+        echo echo Waiting for HMI server to start...
+        echo :wait_loop
+        echo timeout /t 1 /nobreak ^>nul
+        echo powershell -Command "try { $r = Invoke-WebRequest -Uri 'http://localhost:8080/api/system/info' -UseBasicParsing -TimeoutSec 2; if($r.StatusCode -eq 200){exit 0} } catch { exit 1 }"
+        echo if errorlevel 1 goto wait_loop
+        echo echo HMI server is ready.
+        echo.
+        echo :: Launch Chromium in kiosk mode
+        echo echo Launching Chromium kiosk...
+        echo start "" "%%~dp0chromium\chrome.exe" --kiosk --no-first-run --disable-infobars --disable-session-crashed-bubble --disable-features=TranslateUI --autoplay-policy=no-user-gesture-required --user-data-dir="%%~dp0data\chromium-profile" --disable-background-networking --disable-sync --disable-default-apps --noerrdialogs --disable-pinch --overscroll-history-navigation=0 "http://localhost:8080"
+    ) > "%INSTALL_DIR%\start-kiosk.bat"
+    echo     Created start-kiosk.bat
+)
+
 :: Configure Windows Firewall rule
 echo ==^> Configuring firewall...
 netsh advfirewall firewall show rule name="HMI Server" >nul 2>&1
@@ -901,6 +1255,9 @@ echo   Config:           %INSTALL_DIR%\.env
 echo.
 echo   Start manually:   %INSTALL_DIR%\start.bat
 echo   Seed database:    %INSTALL_DIR%\seed.bat
+if exist "%INSTALL_DIR%\chromium\chrome.exe" (
+echo   Kiosk mode:       %INSTALL_DIR%\start-kiosk.bat
+)
 echo.
 echo   Default login:    admin / admin
 echo   URL:              http://localhost:8080
@@ -952,12 +1309,18 @@ echo "  Python $PYTHON_VERSION is bundled — no prerequisites on target machine
 else
 echo "  Python NOT bundled — target must have Python ${PYTHON_MAJOR_MINOR}+ installed."
 fi
+if $BUNDLE_CHROMIUM; then
+echo "  Chromium $CHROMIUM_VERSION is bundled — use start-kiosk.sh for full kiosk mode."
+fi
 echo
 echo "  Linux deployment:"
 echo "    1. Copy $ARCHIVE_NAME to the panel PC"
 echo "    2. tar -xzf $ARCHIVE_NAME"
 echo "    3. cd hmi-release"
 echo "    4. sudo ./install.sh"
+if $BUNDLE_CHROMIUM; then
+echo "    5. (optional) systemctl enable --now hmi-kiosk  # auto-start kiosk"
+fi
 echo
 if $BUILD_WINDOWS; then
 echo "  Windows deployment:"
@@ -965,5 +1328,8 @@ echo "    1. Copy $ZIP_NAME to the panel PC"
 echo "    2. Extract the archive"
 echo "    3. Open cmd as Administrator in hmi-release\\"
 echo "    4. install.bat"
+if $BUNDLE_CHROMIUM; then
+echo "    5. (optional) start-kiosk.bat  # launch with Chromium kiosk"
+fi
 echo
 fi
