@@ -172,7 +172,8 @@ export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, 
 }, (prev, next) => {
   // If the widget config itself changed (e.g. designer edited it), always re-render
   if (prev.widget !== next.widget) return false;
-  if (prev.alarms !== next.alarms) return false;
+  // Only re-render for alarm changes if this widget actually uses alarms
+  if (prev.alarms !== next.alarms && prev.widget.type === 'alarm_summary') return false;
   if (prev.tagVisibilityMap !== next.tagVisibilityMap) return false;
   if (prev.collapsed !== next.collapsed) return false;
   if (prev.pageCount !== next.pageCount) return false;

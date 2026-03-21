@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { TagValue, TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
 import { api } from '../../lib/api';
@@ -19,7 +20,7 @@ interface Props {
 
 const SIZES: Record<string, number> = { small: 12, medium: 20, large: 32 };
 
-export function LightIndicator({ title, tag, writeTag, onColor = '#22c55e', offColor = '#6b7280', size = 'medium', tagValues, titleStyle, valueStyle, chrome = 'full' }: Props) {
+export const LightIndicator = memo(function LightIndicator({ title, tag, writeTag, onColor = '#22c55e', offColor = '#6b7280', size = 'medium', tagValues, titleStyle, valueStyle, chrome = 'full' }: Props) {
   const tv = tagValues[tag];
   const value = Boolean(tv?.value);
   const color = value ? onColor : offColor;
@@ -62,4 +63,4 @@ export function LightIndicator({ title, tag, writeTag, onColor = '#22c55e', offC
       </div>
     </div>
   );
-}
+});

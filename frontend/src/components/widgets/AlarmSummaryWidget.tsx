@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react';
 import type { AlarmData, TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
 import { getContainerClasses, shouldShowTitle, getTitleClasses } from '../../lib/widgetChrome';
@@ -9,11 +10,16 @@ interface Props {
   chrome?: 'full' | 'compact' | 'none';
 }
 
-export function AlarmSummaryWidget({ title, alarms, titleStyle, chrome = 'full' }: Props) {
-  const active = alarms.filter(a => a.state !== 'inactive');
-  const critical = active.filter(a => a.severity === 'critical').length;
-  const warning = active.filter(a => a.severity === 'warning').length;
-  const info = active.filter(a => a.severity === 'info').length;
+export const AlarmSummaryWidget = memo(function AlarmSummaryWidget({ title, alarms, titleStyle, chrome = 'full' }: Props) {
+  const { active, critical, warning, info } = useMemo(() => {
+    const active = alarms.filter(a => a.state !== 'inactive');
+    return {
+      active,
+      critical: active.filter(a => a.severity === 'critical').length,
+      warning: active.filter(a => a.severity === 'warning').length,
+      info: active.filter(a => a.severity === 'info').length,
+    };
+  }, [alarms]);
 
   return (
     <div
@@ -32,7 +38,7 @@ export function AlarmSummaryWidget({ title, alarms, titleStyle, chrome = 'full' 
       )}
     </div>
   );
-}
+});
 
 function Badge({ count, color, label }: { count: number; color: string; label: string }) {
   return (

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { memo, useState, useEffect, useRef, useCallback } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { api } from '../../lib/api';
 import type { Tag, TrendDataPoint } from '../../types';
@@ -36,7 +36,7 @@ interface Props {
   chrome?: 'full' | 'compact' | 'none';
 }
 
-export function TrendWidget({ title, tags: tagConfigs = [], hours = 24, refreshSeconds = 30, chrome = 'full' }: Props) {
+export const TrendWidget = memo(function TrendWidget({ title, tags: tagConfigs = [], hours = 24, refreshSeconds = 30, chrome = 'full' }: Props) {
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [chartData, setChartData] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(true);
@@ -192,4 +192,4 @@ export function TrendWidget({ title, tags: tagConfigs = [], hours = 24, refreshS
       </div>
     </div>
   );
-}
+});

@@ -826,7 +826,8 @@ const RuntimeWidget = memo(function RuntimeWidget({ widget: w, index, isAbsolute
   if (prev.widget !== next.widget) return false;
   if (prev.index !== next.index) return false;
   if (prev.isAbsolute !== next.isAbsolute) return false;
-  if (prev.alarms !== next.alarms) return false;
+  // Only re-render for alarm changes if this widget actually uses alarms
+  if (prev.alarms !== next.alarms && prev.widget.type === 'alarm_summary') return false;
   if (prev.userRole !== next.userRole) return false;
   if (prev.tagVisibilityMap !== next.tagVisibilityMap) return false;
   if (prev.childrenByParent !== next.childrenByParent) return false;

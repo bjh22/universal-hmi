@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { memo, useState, useCallback, useEffect, useRef } from 'react';
 import { ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react';
 import type { TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
@@ -25,7 +25,7 @@ interface Props {
   showArrows?: boolean;
 }
 
-export function ContainerWidget({
+export const ContainerWidget = memo(function ContainerWidget({
   title, titleStyle, chrome = 'full',
   containerMode = 'standard',
   defaultCollapsed = false, collapsed: controlledCollapsed, onToggleCollapsed,
@@ -137,4 +137,4 @@ export function ContainerWidget({
       )}
     </div>
   );
-}
+});

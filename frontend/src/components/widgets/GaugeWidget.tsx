@@ -1,3 +1,4 @@
+import { memo } from 'react';
 /**
  * GaugeWidget — a versatile gauge with multiple display modes:
  *   - 'bar'      — horizontal fill bar (like a progress bar)
@@ -74,7 +75,7 @@ function BarGauge({ value, pct, color, min, max, units, decimalPlaces, valueFont
       </div>
       <div className="w-full bg-slate-700 rounded-full overflow-hidden mt-2" style={{ height: `${barThickness}px` }}>
         <div
-          className="h-full rounded-full transition-all duration-300"
+          className="h-full rounded-full transition-[width,stroke-dashoffset,cx,cy,height] duration-300"
           style={{ width: `${pct}%`, backgroundColor: color }}
         />
       </div>
@@ -131,8 +132,8 @@ function RadialGauge({ value, pct, color, min, max, units, decimalPlaces, valueF
         <svg viewBox="0 0 100 100" style={{ height: '100%', width: 'auto', maxWidth: `${gaugeSize}%`, display: 'block' }}>
           <path d={arcPath(CX, CY, R, startAngle, endAngle)} fill="none" stroke="#334155" strokeWidth={barThickness} strokeLinecap="round" />
           <path d={arcPath(CX, CY, R, startAngle, needleAngle)} fill="none" stroke={color} strokeWidth={barThickness} strokeLinecap="round"
-            className="transition-all duration-300" />
-          <circle cx={needleX} cy={needleY} r={dotR} fill={color} className="transition-all duration-300" />
+            className="transition-[width,stroke-dashoffset,cx,cy,height] duration-300" />
+          <circle cx={needleX} cy={needleY} r={dotR} fill={color} className="transition-[width,stroke-dashoffset,cx,cy,height] duration-300" />
           <text x={CX} y={CY + 2} textAnchor="middle" fill={color} fontSize={valueFontSize} fontWeight="bold" style={textStyleToCSS(valueStyle)}>
             {value.toFixed(decimalPlaces)}
           </text>
@@ -165,7 +166,7 @@ function DonutGauge({ value, pct, color, units, decimalPlaces, valueFontSize, ba
           <circle cx="50" cy="50" r={R} fill="none" stroke={color} strokeWidth={barThickness} strokeLinecap="round"
             strokeDasharray={circumference} strokeDashoffset={offset}
             transform="rotate(-90 50 50)"
-            className="transition-all duration-300" />
+            className="transition-[width,stroke-dashoffset,cx,cy,height] duration-300" />
           <text x="50" y="48" textAnchor="middle" fill={color} fontSize={valueFontSize} fontWeight="bold" style={textStyleToCSS(valueStyle)}>
             {value.toFixed(decimalPlaces)}
           </text>
@@ -198,7 +199,7 @@ function VerticalGauge({ value, pct, color, min, max, units, decimalPlaces, warn
         </div>
         <div className="relative flex-1 bg-slate-700 rounded-full overflow-hidden" style={{ width: `${barThickness}px` }}>
           <div
-            className="absolute bottom-0 left-0 right-0 rounded-full transition-all duration-300"
+            className="absolute bottom-0 left-0 right-0 rounded-full transition-[width,stroke-dashoffset,cx,cy,height] duration-300"
             style={{ height: `${pct}%`, backgroundColor: color }}
           />
           {warnPct != null && (
@@ -245,7 +246,7 @@ const DEFAULTS: Record<GaugeDisplayMode, { valueFontSize: number; barThickness: 
 };
 
 // ─── Main component ───
-export function GaugeWidget({
+export const GaugeWidget = memo(function GaugeWidget({
   title, tag, tagValues, min = 0, max = 100, units = '', warning, critical,
   targetTag, targetValue,
   decimalPlaces = 1, displayMode = 'bar', valueFontSize, barThickness, gaugeSize,
@@ -278,6 +279,6 @@ export function GaugeWidget({
       </div>
     </div>
   );
-}
+});
 
 export { DEFAULTS as GAUGE_DEFAULTS };

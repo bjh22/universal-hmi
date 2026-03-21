@@ -118,6 +118,10 @@ class TagEngine:
         # Buffered persistence: collect dirty internal tag values and flush periodically
         # to reduce SD card write pressure on low-end hardware (e.g. Raspberry Pi)
         self._persist_dirty: dict[int, object] = {}  # tag_id -> value
+        # Coalesced broadcasts: individual set_value calls accumulate here and are
+        # drained into the next simulation/polling cycle broadcast, reducing the
+        # number of WebSocket messages on constrained hardware.
+        self._pending_broadcasts: dict[str, dict] = {}
 
     @property
     def values(self) -> dict[str, TagValue]:
@@ -430,8 +434,14 @@ class TagEngine:
             logger.error("Background task failed: %s", task.exception())
 
     def _notify_change(self, tag_name: str, tv: TagValue):
-        msg = {"type": "tag_update", "data": {tag_name: tv.to_dict()}}
-        self._broadcast(msg)
+        """Coalesce individual tag writes into the next broadcast cycle.
+
+        Instead of sending a separate WebSocket message for every tag write,
+        changes are buffered and sent in a single message during the next
+        simulation/polling cycle. This dramatically reduces WS message count
+        on constrained hardware like Raspberry Pi.
+        """
+        self._pending_broadcasts[tag_name] = tv.to_dict()
 
     def _broadcast(self, msg: dict):
         """Send a message to all subscribed WebSocket clients.
@@ -544,13 +554,15 @@ class TagEngine:
         await self._flush_persisted_values()
 
     async def _simulation_loop(self):
-        """Runs every 500ms, computing new values for simulated tags (sine waves,
-        ramps, random values, toggles, etc.). This lets the HMI show realistic
-        behavior during development without connecting to real PLCs/sensors.
+        """Runs every ws_update_interval_ms, computing new values for simulated tags
+        (sine waves, ramps, random values, toggles, etc.). This lets the HMI show
+        realistic behavior during development without connecting to real PLCs/sensors.
 
         Only tags whose values actually changed are broadcast — this minimizes
         network traffic to WebSocket clients.
         """
+        from app.core.config import settings
+        interval = settings.ws_update_interval_ms / 1000.0
         while self._running:
             changed = {}
             elapsed = time.time() - self._start_time
@@ -576,22 +588,30 @@ class TagEngine:
                     changed[sname] = tv.to_dict()
                     self._last_system_broadcast[sname] = cur_value
 
+            # Drain any coalesced individual tag writes into this cycle's broadcast
+            if self._pending_broadcasts:
+                changed.update(self._pending_broadcasts)
+                self._pending_broadcasts = {}
+
             if changed:
                 self._invalidate_snapshot()
                 self._broadcast({"type": "tag_update", "data": changed})
 
             # asyncio.sleep yields control back to the event loop, allowing other
             # async tasks (WebSocket handlers, HTTP requests) to run between cycles
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(interval)
 
     async def _polling_loop(self):
         """Poll connected data source drivers (OPC-UA, Modbus, EtherNet/IP, MQTT)
-        for real hardware tag values. Runs every 500ms alongside the simulation loop.
+        for real hardware tag values. Runs every ws_update_interval_ms alongside
+        the simulation loop.
 
         Deadband filtering: for numeric values, ignores changes smaller than the
         configured threshold. This reduces noise from sensor jitter (e.g., a
         temperature reading flickering between 72.01 and 72.02 won't trigger updates).
         """
+        from app.core.config import settings
+        interval = settings.ws_update_interval_ms / 1000.0
         while self._running:
             ds_tags = self._build_poll_tags()
 
@@ -648,7 +668,7 @@ class TagEngine:
             # Broadcast datasource status changes
             self._check_datasource_status_changes()
 
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(interval)
 
     def _check_datasource_status_changes(self):
         """Detect and broadcast datasource connection state changes."""

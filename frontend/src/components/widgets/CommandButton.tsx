@@ -13,7 +13,7 @@
  *   - shape: rectangle (default), pill, circle
  *   - icon: optional Lucide icon name displayed beside (or instead of) the title
  */
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { api } from '../../lib/api';
 import type { TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
@@ -71,7 +71,7 @@ function getLucideIcon(name: string): React.ComponentType<{ size?: number; class
   return Icon || null;
 }
 
-export function CommandButton({
+export const CommandButton = memo(function CommandButton({
   title, tag, value, script, color = 'blue',
   variant = 'filled', shape = 'rectangle', icon, iconPosition = 'left',
   confirm: needsConfirm, titleStyle, chrome = 'full',
@@ -126,4 +126,4 @@ export function CommandButton({
       </button>
     </div>
   );
-}
+});

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 /**
  * StatusIndicator — displays a tag's current value with color-coded status mapping.
  * Designers configure a mapping dictionary like { "Running": { label: "Running", color: "#22c55e" } }
@@ -28,7 +29,7 @@ interface Props {
   chrome?: 'full' | 'compact' | 'none';
 }
 
-export function StatusIndicator({ title, tag, tagValues, mapping = {}, titleStyle, valueStyle, chrome = 'full' }: Props) {
+export const StatusIndicator = memo(function StatusIndicator({ title, tag, tagValues, mapping = {}, titleStyle, valueStyle, chrome = 'full' }: Props) {
   // Look up the current tag value from the tagValues dictionary
   const tv = tagValues[tag];
   const value = tv?.value;            // `?.` is optional chaining — safely returns undefined if tv is null
@@ -49,4 +50,4 @@ export function StatusIndicator({ title, tag, tagValues, mapping = {}, titleStyl
       {shouldShowExtras(chrome) && tv && <div className="text-sm text-slate-500 mt-2">{tv.display_name || tag}</div>}
     </div>
   );
-}
+});

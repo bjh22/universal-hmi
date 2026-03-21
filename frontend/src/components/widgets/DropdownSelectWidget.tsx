@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { api } from '../../lib/api';
 import type { TagValue, TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
@@ -18,7 +19,7 @@ interface Props {
   chrome?: 'full' | 'compact' | 'none';
 }
 
-export function DropdownSelectWidget({ title, tag, tagValues, options = [], titleStyle, valueStyle, chrome = 'full' }: Props) {
+export const DropdownSelectWidget = memo(function DropdownSelectWidget({ title, tag, tagValues, options = [], titleStyle, valueStyle, chrome = 'full' }: Props) {
   const tv = tagValues[tag];
   const currentValue = tv?.value;
 
@@ -50,4 +51,4 @@ export function DropdownSelectWidget({ title, tag, tagValues, options = [], titl
       )}
     </div>
   );
-}
+});

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { TagValue, TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
 import { getContainerClasses, shouldShowTitle, getTitleClasses } from '../../lib/widgetChrome';
@@ -15,7 +16,7 @@ interface Props {
   chrome?: 'full' | 'compact' | 'none';
 }
 
-export function OeeWidget({ title, availabilityTag, performanceTag, qualityTag, oeeTag, tagValues, decimalPlaces = 1, titleStyle, valueStyle, chrome = 'full' }: Props) {
+export const OeeWidget = memo(function OeeWidget({ title, availabilityTag, performanceTag, qualityTag, oeeTag, tagValues, decimalPlaces = 1, titleStyle, valueStyle, chrome = 'full' }: Props) {
   const getVal = (tag?: string) => {
     if (!tag) return null;
     const tv = tagValues[tag];
@@ -76,7 +77,7 @@ export function OeeWidget({ title, availabilityTag, performanceTag, qualityTag, 
               </div>
               <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
                 <div
-                  className="h-full rounded-full transition-all duration-300"
+                  className="h-full rounded-full transition-[width] duration-300"
                   style={{
                     width: `${Math.min(100, Math.max(0, m.value ?? 0))}%`,
                     backgroundColor: barColor(m.value),
@@ -89,4 +90,4 @@ export function OeeWidget({ title, availabilityTag, performanceTag, qualityTag, 
       </div>
     </div>
   );
-}
+});

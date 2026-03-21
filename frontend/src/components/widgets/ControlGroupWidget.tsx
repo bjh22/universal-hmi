@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { api } from '../../lib/api';
 import { isTagVisible } from '../../lib/tagVisibility';
 import type { TagVisibilityMap } from '../../lib/tagVisibility';
@@ -235,7 +235,7 @@ function DropdownControl({ item, tagValues, valueStyle }: { item: ControlItem & 
 
 // ─── Main Component ───
 
-export function ControlGroupWidget({ title, controls = [], tagValues, tagVisibilityMap = {}, columns = 1, titleStyle, valueStyle, chrome = 'full' }: Props) {
+export const ControlGroupWidget = memo(function ControlGroupWidget({ title, controls = [], tagValues, tagVisibilityMap = {}, columns = 1, titleStyle, valueStyle, chrome = 'full' }: Props) {
   return (
     <div className={`${getContainerClasses(chrome)} h-full flex flex-col`}>
       {shouldShowTitle(chrome) && <div className={getTitleClasses(chrome)} style={textStyleToCSS(titleStyle)}>
@@ -269,4 +269,4 @@ export function ControlGroupWidget({ title, controls = [], tagValues, tagVisibil
       </div>
     </div>
   );
-}
+});

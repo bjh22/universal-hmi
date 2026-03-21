@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { TagValue, TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
 import { getContainerClasses, shouldShowTitle, shouldShowExtras, getTitleClasses } from '../../lib/widgetChrome';
@@ -22,7 +23,7 @@ function formatValue(raw: unknown, format?: string): string {
   return String(raw);
 }
 
-export function TextValueWidget({ title, tag, tagValues, units, format, titleStyle, valueStyle, chrome = 'full' }: Props) {
+export const TextValueWidget = memo(function TextValueWidget({ title, tag, tagValues, units, format, titleStyle, valueStyle, chrome = 'full' }: Props) {
   const tv = tagValues[tag];
   const display = formatValue(tv?.value, format);
 
@@ -36,4 +37,4 @@ export function TextValueWidget({ title, tag, tagValues, units, format, titleSty
       {shouldShowExtras(chrome) && tv && <div className="text-sm text-slate-500 mt-1">{tv.display_name || tag}</div>}
     </div>
   );
-}
+});
