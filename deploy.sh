@@ -236,6 +236,9 @@ elif $BUNDLE_PYTHON; then
         tar -xzf "/tmp/$ARCHIVE_NAME" -C "$DEST_DIR"
         rm -f "/tmp/$ARCHIVE_NAME"
 
+        # Remove macOS resource fork files (._*) that break venv on Linux
+        find "$DEST_DIR" -name '._*' -delete 2>/dev/null || true
+
         # Verify the extracted Python works (for native platform only)
         if [ -x "$DEST_DIR/python/bin/python3" ]; then
             local PY_VER
