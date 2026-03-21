@@ -131,31 +131,51 @@ fi
 # 3. Download Linux Python wheels for offline install
 #    (skipped when --compile: dependencies are inside the executable)
 # ──────────────────────────────────────────────
+
+# Helper: download wheels for a given set of platform tags.
+# Downloads each requirement individually so one sdist-only package
+# (e.g. pyftpdlib) doesn't block all others. Falls back to source
+# distributions for packages without binary wheels.
+download_wheels_for_platforms() {
+    local DEST_DIR="$1"
+    shift
+    local PLATFORM_ARGS=("$@")
+
+    mkdir -p "$DEST_DIR"
+    while IFS= read -r req; do
+        # Skip empty lines and comments
+        [[ -z "$req" || "$req" =~ ^[[:space:]]*# ]] && continue
+        # Try binary wheel with platform tags
+        pip download "$req" \
+            -d "$DEST_DIR" \
+            "${PLATFORM_ARGS[@]}" \
+            --python-version "$PYTHON_MAJOR_MINOR" \
+            --only-binary=:all: \
+            --no-deps \
+            2>/dev/null || \
+        # Fallback: source distribution (platform-independent, built on target)
+        pip download "$req" \
+            -d "$DEST_DIR" \
+            --no-deps \
+            --no-binary=:all: \
+            2>/dev/null || \
+        echo "    WARNING: Could not download $req"
+    done < "$ROOT_DIR/backend/requirements.txt"
+    echo "    Downloaded $(ls -1 "$DEST_DIR/" 2>/dev/null | wc -l | tr -d ' ') packages."
+}
+
 if $COMPILE; then
     echo "    Skipping wheel download (compiled mode)."
 elif true; then
 STEP=$((STEP + 1))
 echo "==> [$STEP/$STEP_TOTAL] Downloading Linux x86_64 Python dependencies (wheels)..."
-mkdir -p "$RELEASE_DIR/wheels"
-
-# Download all wheels for Linux x86_64 in one pass.
-# Multiple --platform flags let pip resolve each package from whichever
-# platform matches (native binary OR pure-python 'any').
-pip download \
-    -r "$ROOT_DIR/backend/requirements.txt" \
-    -d "$RELEASE_DIR/wheels" \
+download_wheels_for_platforms "$RELEASE_DIR/wheels" \
     --platform manylinux_2_28_x86_64 \
     --platform manylinux_2_24_x86_64 \
     --platform manylinux_2_17_x86_64 \
     --platform manylinux2014_x86_64 \
     --platform linux_x86_64 \
-    --platform any \
-    --python-version "$PYTHON_MAJOR_MINOR" \
-    --only-binary=:all: \
-    2>&1 | tail -5 || true
-
-WHEEL_COUNT=$(ls -1 "$RELEASE_DIR/wheels/" | wc -l)
-echo "    Downloaded $WHEEL_COUNT Linux x86_64 packages."
+    --platform any
 
 # ──────────────────────────────────────────────
 # 3b. Download Linux aarch64 (ARM) wheels (if requested)
@@ -163,24 +183,13 @@ echo "    Downloaded $WHEEL_COUNT Linux x86_64 packages."
 if $BUILD_ARM; then
     STEP=$((STEP + 1))
     echo "==> [$STEP/$STEP_TOTAL] Downloading Linux aarch64 Python dependencies (wheels)..."
-    mkdir -p "$RELEASE_DIR/wheels-arm"
-
-    # Download all wheels for Linux aarch64 in one pass
-    pip download \
-        -r "$ROOT_DIR/backend/requirements.txt" \
-        -d "$RELEASE_DIR/wheels-arm" \
+    download_wheels_for_platforms "$RELEASE_DIR/wheels-arm" \
         --platform manylinux_2_28_aarch64 \
         --platform manylinux_2_24_aarch64 \
         --platform manylinux_2_17_aarch64 \
         --platform manylinux2014_aarch64 \
         --platform linux_aarch64 \
-        --platform any \
-        --python-version "$PYTHON_MAJOR_MINOR" \
-        --only-binary=:all: \
-        2>&1 | tail -5 || true
-
-    ARM_WHEEL_COUNT=$(ls -1 "$RELEASE_DIR/wheels-arm/" 2>/dev/null | wc -l)
-    echo "    Downloaded $ARM_WHEEL_COUNT Linux aarch64 packages."
+        --platform any
 fi
 
 # ──────────────────────────────────────────────
@@ -189,38 +198,9 @@ fi
 if $BUILD_WINDOWS; then
     STEP=$((STEP + 1))
     echo "==> [$STEP/$STEP_TOTAL] Downloading Windows Python dependencies (wheels)..."
-    mkdir -p "$RELEASE_DIR/wheels-windows"
-
-    # Download platform-specific (binary) wheels for Windows
-    # --no-deps avoids resolution conflicts across platforms;
-    # pure-python deps are already in the Linux wheels and work on both.
-    pip download \
-        -r "$ROOT_DIR/backend/requirements.txt" \
-        -d "$RELEASE_DIR/wheels-windows" \
+    download_wheels_for_platforms "$RELEASE_DIR/wheels-windows" \
         --platform win_amd64 \
-        --python-version "$PYTHON_MAJOR_MINOR" \
-        --only-binary=:all: \
-        --no-deps \
-        2>&1 | tail -3 || true
-
-    # Also grab pure-python (any) wheels that work cross-platform.
-    # These cover packages without platform-specific builds.
-    pip download \
-        -r "$ROOT_DIR/backend/requirements.txt" \
-        -d "$RELEASE_DIR/wheels-windows" \
-        --platform any \
-        --python-version "$PYTHON_MAJOR_MINOR" \
-        --only-binary=:all: \
-        --no-deps \
-        2>&1 | tail -3 || true
-
-    WIN_WHEEL_COUNT=$(ls -1 "$RELEASE_DIR/wheels-windows/" 2>/dev/null | wc -l)
-    echo "    Downloaded $WIN_WHEEL_COUNT Windows packages."
-    if [ "$WIN_WHEEL_COUNT" -eq 0 ]; then
-        echo "    WARNING: No Windows wheels downloaded. The install.bat will"
-        echo "    fall back to the Linux wheels directory (pure-python packages"
-        echo "    are cross-platform, but native extensions may not work)."
-    fi
+        --platform any
 fi
 fi  # end of: if $COMPILE ... elif true
 
