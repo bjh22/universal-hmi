@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { memo, useState, useEffect, useCallback } from 'react';
 import { Camera, RefreshCw, ScanBarcode } from 'lucide-react';
 import type { TagValue, TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
@@ -16,7 +16,7 @@ interface Props {
   chrome?: 'full' | 'compact' | 'none';
 }
 
-export function CognexViewerWidget({
+export const CognexViewerWidget = memo(function CognexViewerWidget({
   title, tagPrefix, showImage = true, showTrigger = false,
   tagValues, titleStyle, valueStyle, chrome = 'full',
 }: Props) {
@@ -153,4 +153,4 @@ export function CognexViewerWidget({
       </div>
     </div>
   );
-}
+});

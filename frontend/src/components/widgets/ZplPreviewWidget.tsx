@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { memo, useState, useEffect, useCallback, useRef } from 'react';
 import { Printer, RefreshCw } from 'lucide-react';
 import type { TagValue, TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
@@ -16,7 +16,7 @@ interface Props {
   chrome?: 'full' | 'compact' | 'none';
 }
 
-export function ZplPreviewWidget({
+export const ZplPreviewWidget = memo(function ZplPreviewWidget({
   title, tag, staticZpl, dpi = 203, refreshOnTagChange = true,
   tagValues, titleStyle, chrome = 'full',
 }: Props) {
@@ -126,4 +126,4 @@ export function ZplPreviewWidget({
       </div>
     </div>
   );
-}
+});

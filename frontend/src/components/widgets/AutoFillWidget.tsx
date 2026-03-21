@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { memo, useEffect, useState, useMemo } from 'react';
 import { api } from '../../lib/api';
 import { isTagVisible } from '../../lib/tagVisibility';
 import type { TagVisibilityMap } from '../../lib/tagVisibility';
@@ -68,7 +68,7 @@ function ValueDisplay({ tag, tagValues, decimalPlaces, valueStyle }: { tag: Tag;
   );
 }
 
-export function AutoFillWidget({ title, labelName, columns = 2, onColor = '#22c55e', offColor = '#6b7280', decimalPlaces = 1, tagOrder, tagValues, tagVisibilityMap = {}, titleStyle, valueStyle, chrome = 'full' }: Props) {
+export const AutoFillWidget = memo(function AutoFillWidget({ title, labelName, columns = 2, onColor = '#22c55e', offColor = '#6b7280', decimalPlaces = 1, tagOrder, tagValues, tagVisibilityMap = {}, titleStyle, valueStyle, chrome = 'full' }: Props) {
   const [fetchedTags, setFetchedTags] = useState<Tag[]>([]);
 
   useEffect(() => {
@@ -134,4 +134,4 @@ export function AutoFillWidget({ title, labelName, columns = 2, onColor = '#22c5
       </div>
     </div>
   );
-}
+});

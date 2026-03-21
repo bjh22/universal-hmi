@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { memo, useState, useCallback } from 'react';
 import { AlertTriangle, Pause, Send } from 'lucide-react';
 import type { TagValue, TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
@@ -16,7 +16,7 @@ interface Props {
   chrome?: 'full' | 'compact' | 'none';
 }
 
-export function ZebraPrinterWidget({
+export const ZebraPrinterWidget = memo(function ZebraPrinterWidget({
   title, tagPrefix, showControls = false, showFaults = true,
   tagValues, titleStyle, valueStyle, chrome = 'full',
 }: Props) {
@@ -181,4 +181,4 @@ export function ZebraPrinterWidget({
       </div>
     </div>
   );
-}
+});

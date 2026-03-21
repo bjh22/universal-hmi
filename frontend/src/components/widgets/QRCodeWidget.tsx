@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { memo, useEffect, useState, useRef } from 'react';
 import QRCode from 'qrcode';
 import type { TagValue, TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
@@ -15,7 +15,7 @@ interface Props {
   chrome?: 'full' | 'compact' | 'none';
 }
 
-export function QRCodeWidget({ title, tag, tagValues, staticContent, fgColor = '#ffffff', bgColor = 'transparent', titleStyle, chrome = 'full' }: Props) {
+export const QRCodeWidget = memo(function QRCodeWidget({ title, tag, tagValues, staticContent, fgColor = '#ffffff', bgColor = 'transparent', titleStyle, chrome = 'full' }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -82,4 +82,4 @@ export function QRCodeWidget({ title, tag, tagValues, staticContent, fgColor = '
       </div>
     </div>
   );
-}
+});

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
 import { getContainerClasses, shouldShowTitle, getTitleClasses } from '../../lib/widgetChrome';
@@ -10,7 +11,7 @@ interface Props {
   chrome?: 'full' | 'compact' | 'none';
 }
 
-export function TextLabelWidget({ title, text, titleStyle, valueStyle, chrome = 'full' }: Props) {
+export const TextLabelWidget = memo(function TextLabelWidget({ title, text, titleStyle, valueStyle, chrome = 'full' }: Props) {
   const displayText = text ?? title;
 
   // For 'none' chrome, TextLabel uses its own lighter styling instead of the standard container
@@ -30,4 +31,4 @@ export function TextLabelWidget({ title, text, titleStyle, valueStyle, chrome = 
       )}
     </div>
   );
-}
+});

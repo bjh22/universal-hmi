@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { api } from '../../lib/api';
 import type { TagValue, TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
@@ -19,7 +19,7 @@ interface Props {
   chrome?: 'full' | 'compact' | 'none';
 }
 
-export function ParameterInput({ title, tag, tagValues, min = 0, max = 100, units = '', decimalPlaces = 1, titleStyle, valueStyle, chrome = 'full' }: Props) {
+export const ParameterInput = memo(function ParameterInput({ title, tag, tagValues, min = 0, max = 100, units = '', decimalPlaces = 1, titleStyle, valueStyle, chrome = 'full' }: Props) {
   const tv = tagValues[tag];
   const currentValue = Number(tv?.value ?? 0);
   const [showKeypad, setShowKeypad] = useState(false);
@@ -62,4 +62,4 @@ export function ParameterInput({ title, tag, tagValues, min = 0, max = 100, unit
       )}
     </div>
   );
-}
+});

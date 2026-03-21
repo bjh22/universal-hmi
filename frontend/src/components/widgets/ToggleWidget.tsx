@@ -1,3 +1,4 @@
+import { memo, useCallback } from 'react';
 /**
  * ToggleWidget — an on/off toggle switch that reads and writes a boolean tag value.
  *
@@ -23,15 +24,15 @@ interface Props {
   chrome?: 'full' | 'compact' | 'none';
 }
 
-export function ToggleWidget({ title, tag, tagValues, titleStyle, valueStyle, chrome = 'full' }: Props) {
+export const ToggleWidget = memo(function ToggleWidget({ title, tag, tagValues, titleStyle, valueStyle, chrome = 'full' }: Props) {
   // Read the current value from the tag store and convert to boolean
   const tv = tagValues[tag];
   const value = Boolean(tv?.value);
 
   // Write the INVERTED value — if currently on (true), write off (false), and vice versa
-  const handleToggle = async () => {
+  const handleToggle = useCallback(async () => {
     await api.writeTag(tag, !value);
-  };
+  }, [tag, value]);
 
   const isNone = chrome === 'none';
 
@@ -60,4 +61,4 @@ export function ToggleWidget({ title, tag, tagValues, titleStyle, valueStyle, ch
       </div>
     </div>
   );
-}
+});

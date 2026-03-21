@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { TagValue, TextStyle } from '../../types';
 import { textStyleToCSS } from '../../lib/textStyle';
 import { getContainerClasses, shouldShowTitle, getTitleClasses } from '../../lib/widgetChrome';
@@ -12,7 +13,7 @@ interface Props {
   chrome?: 'full' | 'compact' | 'none';
 }
 
-export function CounterWidget({ title, tag, tagValues, titleStyle, valueStyle, chrome = 'full' }: Props) {
+export const CounterWidget = memo(function CounterWidget({ title, tag, tagValues, titleStyle, valueStyle, chrome = 'full' }: Props) {
   const tv = tagValues[tag];
   const raw = tv?.value ?? 0;
   const value = typeof raw === 'number' ? Math.round(raw) : raw;
@@ -23,4 +24,4 @@ export function CounterWidget({ title, tag, tagValues, titleStyle, valueStyle, c
       <div className="text-5xl font-bold text-slate-100" style={textStyleToCSS(valueStyle)}>{String(value)}</div>
     </div>
   );
-}
+});
