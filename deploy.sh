@@ -880,12 +880,9 @@ python -m app.seed
 SEED_EOF
 chmod +x "$INSTALL_DIR/seed.sh"
 
-# Seed database
-echo "==> Seeding database with defaults..."
-cd "$INSTALL_DIR"
-python -m app.seed
-
 # ── Install bundled Chromium (if present) ──
+# NOTE: This must run BEFORE the seed step so that a seed failure
+#       (which exits the script via set -e) does not skip kiosk setup.
 ARCH=$(uname -m)
 CHROMIUM_SRC=""
 if [ "$ARCH" = "x86_64" ] && [ -d "$SCRIPT_DIR/chromium-linux-x86_64" ]; then
@@ -995,6 +992,11 @@ SERVICE_EOF
         echo "    Created systemd service: hmi-kiosk.service"
     fi
 fi
+
+# Seed database
+echo "==> Seeding database with defaults..."
+cd "$INSTALL_DIR"
+python -m app.seed
 
 echo
 echo "============================================"
