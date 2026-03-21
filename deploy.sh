@@ -325,9 +325,11 @@ echo "==> Installing compiled application..."
 cp -r "$SCRIPT_DIR/hmi-server/"* "$INSTALL_DIR/"
 chmod +x "$INSTALL_DIR/hmi-server"
 
-# Create data directories
+# Create data directories (writable by all so the app
+# can run as any user, not just root)
 mkdir -p "$INSTALL_DIR/data"
 mkdir -p "$INSTALL_DIR/media/fault_help"
+chmod 777 "$INSTALL_DIR/data" "$INSTALL_DIR/media" "$INSTALL_DIR/media/fault_help"
 
 # Create environment file
 if [ ! -f "$INSTALL_DIR/.env" ]; then
@@ -598,8 +600,13 @@ pip install --no-index --find-links="$WHEEL_DIR" \
 echo "==> Installing application files..."
 cp -r "$SCRIPT_DIR/backend/"* "$INSTALL_DIR/"
 
-# Create data directory for database
+# Create data directories (writable by all so the app
+# can run as any user, not just root)
 mkdir -p "$INSTALL_DIR/data"
+mkdir -p "$INSTALL_DIR/media/fault_help"
+chmod 777 "$INSTALL_DIR/data" "$INSTALL_DIR/media" "$INSTALL_DIR/media/fault_help"
+# If database already exists from a prior install, ensure it's writable
+[ -f "$INSTALL_DIR/data/hmi.db" ] && chmod 666 "$INSTALL_DIR/data/hmi.db"
 
 # Create environment file
 if [ ! -f "$INSTALL_DIR/.env" ]; then
