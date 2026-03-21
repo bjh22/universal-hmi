@@ -8,7 +8,8 @@ import { ZplPreviewPage } from './ZplPreviewPage';
 import { WidgetRenderer } from '../components/widgets/WidgetRenderer';
 import { isTagVisible } from '../lib/tagVisibility';
 import type { TagVisibilityMap } from '../lib/tagVisibility';
-import type { ScreenData, Widget, TagValue, AlarmData, UserData, LogEntry } from '../types';
+import { Circle } from 'lucide-react';
+import type { ScreenData, Widget, TagValue, AlarmData, UserData, LogEntry, DatasourceStatus } from '../types';
 
 interface Props {
   user: UserData | null;
@@ -16,11 +17,12 @@ interface Props {
   alarms: AlarmData[];
   userRole?: string;
   tagVisibilityMap?: TagVisibilityMap;
+  datasourceStatuses?: DatasourceStatus[];
 }
 
 type SupportTab = 'dashboard' | 'system-info' | 'logs' | 'update' | 'zpl-preview';
 
-export function SupportPage({ user, tagValues, alarms, userRole, tagVisibilityMap = {} }: Props) {
+export function SupportPage({ user, tagValues, alarms, userRole, tagVisibilityMap = {}, datasourceStatuses = [] }: Props) {
   const [tab, setTab] = useState<SupportTab>('dashboard');
   const canManage = ['supervisor', 'engineer', 'designer'].includes(user?.role || '');
 
@@ -51,7 +53,7 @@ export function SupportPage({ user, tagValues, alarms, userRole, tagVisibilityMa
       </div>
 
       {tab === 'dashboard' && (
-        <SupportDashboard tagValues={tagValues} alarms={alarms} userRole={userRole} tagVisibilityMap={tagVisibilityMap} />
+        <SupportDashboard tagValues={tagValues} alarms={alarms} userRole={userRole} tagVisibilityMap={tagVisibilityMap} datasourceStatuses={datasourceStatuses} />
       )}
       {tab === 'system-info' && <SupportInfoTab />}
       {tab === 'logs' && <LogsTab />}
@@ -63,11 +65,12 @@ export function SupportPage({ user, tagValues, alarms, userRole, tagVisibilityMa
 
 // ─── Support Dashboard Tab ──────────────────────────────────────────────────
 
-function SupportDashboard({ tagValues, alarms, userRole, tagVisibilityMap = {} }: {
+function SupportDashboard({ tagValues, alarms, userRole, tagVisibilityMap = {}, datasourceStatuses = [] }: {
   tagValues: Record<string, TagValue>;
   alarms: AlarmData[];
   userRole?: string;
   tagVisibilityMap?: TagVisibilityMap;
+  datasourceStatuses?: DatasourceStatus[];
 }) {
   const navigate = useNavigate();
   const [screen, setScreen] = useState<ScreenData | null>(null);
@@ -133,6 +136,29 @@ function SupportDashboard({ tagValues, alarms, userRole, tagVisibilityMap = {} }
 
   return (
     <div>
+      {/* Data source connection status */}
+      {datasourceStatuses.length > 0 && (
+        <div className="mb-4 p-3 rounded-lg bg-[var(--hmi-bg-elevated)] border border-[var(--hmi-border)]">
+          <div className="text-xs font-semibold text-[var(--hmi-text-muted)] uppercase tracking-wider mb-2">Data Sources</div>
+          <div className="flex flex-wrap gap-3">
+            {datasourceStatuses.map((ds) => (
+              <div
+                key={ds.id}
+                className="flex items-center gap-2 px-3 py-2 rounded border border-[var(--hmi-border-subtle)]"
+                title={`${ds.name} (${ds.protocol}) — ${ds.connected ? 'Connected' : 'Disconnected'}`}
+              >
+                <Circle
+                  size={10}
+                  className={ds.connected ? 'fill-green-400 text-green-400' : 'fill-red-400 text-red-400'}
+                />
+                <span className="text-sm text-[var(--hmi-text-primary)]">{ds.name}</span>
+                <span className="text-xs text-[var(--hmi-text-muted)]">({ds.protocol})</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {isDesigner && (
         <div className="flex justify-end mb-4">
           <button

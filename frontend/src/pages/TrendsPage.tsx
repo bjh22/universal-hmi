@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Download, Save, FolderOpen } from 'lucide-react';
 import { api } from '../lib/api';
+import { TouchTextInput } from '../components/widgets/TouchTextInput';
 import type { Tag, TrendDataPoint } from '../types';
 
 const COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#f97316'];
@@ -182,13 +183,12 @@ export function TrendsPage() {
         <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 mb-4">
           <div className="text-sm font-medium text-slate-300 mb-2">Save Trend View</div>
           <div className="flex gap-2">
-            <input
+            <TouchTextInput
               value={viewName}
-              onChange={e => setViewName(e.target.value)}
+              onChange={setViewName}
               placeholder="View name"
-              className="flex-1 bg-slate-700 border border-slate-600 rounded-md px-3 py-2.5 min-h-[44px] text-sm text-white outline-none focus:border-blue-500"
-              autoFocus
-              onKeyDown={e => { if (e.key === 'Enter') handleSaveView(); }}
+              title="Trend View Name"
+              className="flex-1 bg-slate-700 border border-slate-600 rounded-md px-3 py-2.5 min-h-[44px] text-sm text-white flex items-center"
             />
             <button onClick={handleSaveView} className="px-4 py-2.5 min-h-[44px] bg-[var(--hmi-accent)] rounded-md text-sm text-white">Save</button>
             <button onClick={() => setShowSaveDialog(false)} className="px-4 py-2.5 min-h-[44px] bg-slate-700 rounded-md text-sm text-slate-300">Cancel</button>

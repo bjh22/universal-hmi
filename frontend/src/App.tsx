@@ -219,7 +219,7 @@ export default function App() {
                   <Route path="/settings" element={<SettingsPage user={auth.user} tagValues={tagValues} onTagsChanged={refreshTags} />} />
                   <Route path="/factory-config" element={<FactoryConfigPage user={auth.user} tagValues={tagValues} tagVisibilityMap={tagVisibilityMap} />} />
                   <Route path="/service" element={<ServicePage user={auth.user} tagValues={tagValues} tagVisibilityMap={tagVisibilityMap} />} />
-                  <Route path="/support" element={<SupportPage user={auth.user} tagValues={tagValues} alarms={alarms} userRole={auth.user?.role} tagVisibilityMap={tagVisibilityMap} />} />
+                  <Route path="/support" element={<SupportPage user={auth.user} tagValues={tagValues} alarms={alarms} userRole={auth.user?.role} tagVisibilityMap={tagVisibilityMap} datasourceStatuses={datasourceStatuses} />} />
                 </Routes>
               </Suspense>
             </AppShell>

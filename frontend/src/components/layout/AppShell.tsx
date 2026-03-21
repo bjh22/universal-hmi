@@ -1,7 +1,7 @@
 /**
  * AppShell — the main application layout wrapper that provides the persistent
- * UI chrome around every page: sidebar navigation, top header bar, alarm banner,
- * and WebSocket connection status indicator.
+ * UI chrome around every page: sidebar navigation, top header bar with inline
+ * alarm display, and WebSocket connection status indicator.
  *
  * Every page except Login is rendered inside this shell. The `children` prop
  * receives the current page content (Dashboard, Alarms, Trends, etc.) and
@@ -9,9 +9,8 @@
  *
  * Key features:
  *   - Sidebar navigation with role-based filtering (operators see fewer pages)
- *   - Alarm banner: scrollable horizontal list of active alarms with color-coded
- *     severity and an "Acknowledge All" button
- *   - Data source connection indicators: per-source green/red dots showing equipment connectivity
+ *   - Inline alarm display in header: scrollable alarm pills with "Ack All"
+ *   - User info and system controls in sidebar footer
  *   - Collapsible sidebar for more screen real estate
  */
 import { useState, useCallback, useEffect } from 'react';
@@ -19,8 +18,8 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, TrendingUp, Bell, ClipboardList, BarChart3,
   Settings, User, Menu, X, FolderOpen, CheckCheck,
-  AlertTriangle, AlertCircle, Info, Cog, LifeBuoy, Wrench,
-  Circle, Minus, Power,
+  Cog, LifeBuoy, Wrench,
+  Minus, Power, LogOut,
 } from 'lucide-react';
 import type { UserData, AlarmData, DatasourceStatus } from '../../types';
 import { api } from '../../lib/api';
@@ -56,9 +55,8 @@ const NAV_ITEMS = [
   { to: '/support', icon: LifeBuoy, label: 'Support', roles: null },
 ];
 
-// SeverityIcon is now imported from shared/SeverityIcon
-
-export function AppShell({ children, user, wsConnected, alarms, onLogout, navTitle = 'HMI', activeJobName, datasourceStatuses = [], plcVersion }: AppShellProps) {
+export function AppShell({ children, user, wsConnected, alarms, onLogout, navTitle = 'HMI', activeJobName, datasourceStatuses: _ds = [], plcVersion }: AppShellProps) {
+  void _ds; // Datasource statuses are now shown on the Support page, but prop kept for API compat
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     const saved = localStorage.getItem('hmi_sidebar_open');
     if (saved !== null) return saved === 'true';
@@ -81,9 +79,6 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
   const activeAlarms = alarms.filter(a => a.state === 'active_unacked' || a.state === 'active_acked' || a.state === 'inactive_unacked');
   const unackedAlarms = alarms.filter(a => a.state === 'active_unacked' || a.state === 'inactive_unacked');
   const activeAlarmCount = unackedAlarms.length;
-  const criticalCount = unackedAlarms.filter(a => a.severity === 'critical').length;
-  const warningCount = unackedAlarms.filter(a => a.severity === 'warning').length;
-  const infoCount = unackedAlarms.filter(a => a.severity === 'info').length;
 
   const handleAcknowledgeAll = useCallback(async () => {
     if (ackingAll || unackedAlarms.length === 0) return;
@@ -124,16 +119,16 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
       {/* Sidebar */}
       <aside
         className={`bg-[var(--hmi-bg-surface)] border-r border-[var(--hmi-border)] flex flex-col transition-all duration-200 ${
-          sidebarOpen ? 'w-56' : 'w-16'
+          sidebarOpen ? 'w-56' : 'w-20'
         }`}
       >
-        <div className="flex items-center gap-2 px-4 h-14 border-b border-[var(--hmi-border)]">
+        <div className={`flex items-center ${sidebarOpen ? 'gap-2 px-4' : 'justify-center px-2'} h-14 border-b border-[var(--hmi-border)]`}>
           {sidebarOpen && <span className="font-bold text-[var(--hmi-accent-text)] text-lg">{navTitle}</span>}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="ml-auto p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-md hover:bg-[var(--hmi-bg-elevated)] text-[var(--hmi-text-secondary)]"
+            className={`${sidebarOpen ? 'ml-auto' : ''} p-2.5 min-w-[48px] min-h-[48px] flex items-center justify-center rounded-md hover:bg-[var(--hmi-bg-elevated)] text-[var(--hmi-text-secondary)]`}
           >
-            {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
+            {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
         </div>
 
@@ -147,13 +142,17 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
               <Link
                 key={item.to}
                 to={item.to}
-                className={`relative flex items-center gap-3 px-4 py-3 mx-2 rounded-lg transition-colors ${
+                className={`relative flex items-center rounded-lg transition-colors ${
+                  sidebarOpen
+                    ? 'gap-3 px-4 py-3 mx-2'
+                    : 'justify-center mx-auto w-[56px] h-[56px]'
+                } ${
                   active
                     ? 'bg-[var(--hmi-accent-bg)] text-[var(--hmi-accent-text)]'
                     : 'text-[var(--hmi-text-secondary)] hover:bg-[var(--hmi-bg-elevated)] hover:text-[var(--hmi-text-primary)]'
                 }`}
               >
-                <item.icon size={20} className="shrink-0" />
+                <item.icon size={sidebarOpen ? 20 : 24} className="shrink-0" />
                 {sidebarOpen && <span className="text-sm font-medium">{item.label}</span>}
                 {item.to === '/alarms' && activeAlarmCount > 0 && (
                   <span className={`bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full ${
@@ -166,6 +165,83 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
             );
           })}
         </nav>
+
+        {/* User info — moved from header to sidebar bottom */}
+        {user && (
+          <div className="border-t border-[var(--hmi-border)] px-2 py-2">
+            {sidebarOpen ? (
+              <div className="px-2">
+                <div className="flex items-center gap-2 mb-2">
+                  <User size={16} className="text-[var(--hmi-text-secondary)] shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-[var(--hmi-text-primary)] truncate">{user.display_name}</div>
+                    <div className="text-xs text-[var(--hmi-text-secondary)] capitalize">{user.role}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={onLogout}
+                    title="Logout"
+                    className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 min-h-[40px] rounded text-xs text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)] hover:bg-[var(--hmi-bg-elevated)] border border-[var(--hmi-border-subtle)]"
+                  >
+                    <LogOut size={14} />
+                    Logout
+                  </button>
+                  {canManageSystem && (
+                    <>
+                      <button
+                        onClick={handleMinimize}
+                        title="Minimize"
+                        className="flex items-center justify-center min-w-[40px] min-h-[40px] rounded text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)] hover:bg-[var(--hmi-bg-elevated)] border border-[var(--hmi-border-subtle)]"
+                      >
+                        <Minus size={14} />
+                      </button>
+                      <button
+                        onClick={handleClose}
+                        title="Shut Down"
+                        className="flex items-center justify-center min-w-[40px] min-h-[40px] rounded text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/30"
+                      >
+                        <Power size={14} />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-1.5">
+                <div className="text-xs text-[var(--hmi-text-muted)] truncate text-center" title={`${user.display_name} (${user.role})`}>
+                  <User size={16} className="mx-auto text-[var(--hmi-text-secondary)]" />
+                </div>
+                <button
+                  onClick={onLogout}
+                  title={`Logout (${user.display_name})`}
+                  className="flex items-center justify-center w-[48px] h-[48px] rounded text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)] hover:bg-[var(--hmi-bg-elevated)]"
+                >
+                  <LogOut size={20} />
+                </button>
+                {canManageSystem && (
+                  <>
+                    <button
+                      onClick={handleMinimize}
+                      title="Minimize"
+                      className="flex items-center justify-center w-[48px] h-[48px] rounded text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)] hover:bg-[var(--hmi-bg-elevated)]"
+                    >
+                      <Minus size={20} />
+                    </button>
+                    <button
+                      onClick={handleClose}
+                      title="Shut Down"
+                      className="flex items-center justify-center w-[48px] h-[48px] rounded text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                    >
+                      <Power size={20} />
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {appVersion && (
           <div className="px-4 py-2 border-t border-[var(--hmi-border)]" title={`HMI: v${appVersion}${plcVersion ? `\nPLC: ${plcVersion}` : ''}`}>
             {sidebarOpen ? (
@@ -182,118 +258,27 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top bar */}
-        <header className="h-16 bg-[var(--hmi-bg-surface)] border-b border-[var(--hmi-border)] flex items-center px-4 gap-4 shrink-0">
-          {/* Data source connection status */}
-          {datasourceStatuses.length > 0 ? (
-            <div className="flex items-center gap-2">
-              {datasourceStatuses.map((ds) => (
-                <div
-                  key={ds.id}
-                  className="flex items-center gap-1.5 px-2 py-1 rounded border border-[var(--hmi-border-subtle)]"
-                  title={`${ds.name} (${ds.protocol}) — ${ds.connected ? 'Connected' : 'Disconnected'}`}
-                >
-                  <Circle
-                    size={8}
-                    className={ds.connected ? 'fill-green-400 text-green-400' : 'fill-red-400 text-red-400'}
-                  />
-                  <span className="text-xs text-[var(--hmi-text-secondary)]">{ds.name}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5">
-              <Circle size={8} className="fill-[var(--hmi-text-muted)] text-[var(--hmi-text-muted)]" />
-              <span className="text-xs text-[var(--hmi-text-muted)]">No data sources</span>
-            </div>
-          )}
-
-          {/* Alarm badges by severity */}
-          {criticalCount > 0 && (
-            <Link to="/alarms" className="flex items-center gap-1.5 bg-red-500/20 text-red-400 px-3 py-2 min-h-[44px] rounded-md text-xs font-medium">
-              <AlertCircle size={16} />
-              {criticalCount} Alarm{criticalCount !== 1 ? 's' : ''}
-            </Link>
-          )}
-          {warningCount > 0 && (
-            <Link to="/alarms" className="flex items-center gap-1.5 bg-yellow-500/20 text-yellow-400 px-3 py-2 min-h-[44px] rounded-md text-xs font-medium">
-              <AlertTriangle size={16} />
-              {warningCount} Warning{warningCount !== 1 ? 's' : ''}
-            </Link>
-          )}
-          {infoCount > 0 && (
-            <Link to="/alarms" className="flex items-center gap-1.5 bg-blue-500/20 text-blue-400 px-3 py-2 min-h-[44px] rounded-md text-xs font-medium">
-              <Info size={16} />
-              {infoCount} Info
-            </Link>
-          )}
-
+        {/* Top bar — compact header with inline alarm display */}
+        <header className="h-12 bg-[var(--hmi-bg-surface)] border-b border-[var(--hmi-border)] flex items-center px-3 gap-2 shrink-0">
           {/* Active job */}
           {activeJobName && (
             <Link
               to="/jobs"
-              className="flex items-center gap-1.5 text-sm text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)] px-3 py-2 min-h-[44px] rounded border border-[var(--hmi-border-subtle)] hover:border-[var(--hmi-text-muted)] transition-colors"
+              className="flex items-center gap-1.5 text-sm text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)] px-2 py-1.5 rounded border border-[var(--hmi-border-subtle)] hover:border-[var(--hmi-text-muted)] transition-colors shrink-0"
             >
               <ClipboardList size={14} />
               {activeJobName}
             </Link>
           )}
 
-          <div className="flex-1" />
-
-          {/* User info */}
-          {user ? (
-            <div className="flex items-center gap-3">
-              <div className="text-right">
-                <div className="text-sm font-medium text-[var(--hmi-text-primary)]">{user.display_name}</div>
-                <div className="text-xs text-[var(--hmi-text-secondary)] capitalize">{user.role}</div>
-              </div>
-              {canManageSystem && (
-                <>
-                  <button
-                    onClick={handleMinimize}
-                    title="Minimize"
-                    className="text-xs text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)] px-3 py-2 min-h-[44px] flex items-center rounded border border-[var(--hmi-border-subtle)] hover:border-[var(--hmi-text-muted)]"
-                  >
-                    <Minus size={16} />
-                  </button>
-                  <button
-                    onClick={handleClose}
-                    title="Shut Down"
-                    className="text-xs text-red-400 hover:text-red-300 px-3 py-2 min-h-[44px] flex items-center rounded border border-red-500/30 hover:border-red-400/50 hover:bg-red-500/10"
-                  >
-                    <Power size={16} />
-                  </button>
-                </>
-              )}
-              <button
-                onClick={onLogout}
-                className="text-xs text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)] px-3 py-2 min-h-[44px] flex items-center rounded border border-[var(--hmi-border-subtle)] hover:border-[var(--hmi-text-muted)]"
-              >
-                Logout
-              </button>
-            </div>
-          ) : (
-            <Link
-              to="/login"
-              className="flex items-center gap-1 text-sm text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)] py-2 min-h-[44px]"
-            >
-              <User size={16} />
-              Login
-            </Link>
-          )}
-        </header>
-
-        {/* Active alarm banner */}
-        {activeAlarms.length > 0 && (
-          <div className="bg-[var(--hmi-bg-surface)]/80 border-b border-red-500/30 flex items-center shrink-0">
-            {/* Scrolling alarm list */}
-            <div className="min-w-0 flex-1 overflow-x-auto flex items-center gap-2 px-3 py-1.5 scrollbar-thin">
+          {/* Inline alarm display — scrollable list of all active alarms */}
+          {activeAlarms.length > 0 ? (
+            <div className="min-w-0 flex-1 overflow-x-auto flex items-center gap-1.5 scrollbar-thin" style={{ touchAction: 'pan-x' }}>
               {activeAlarms.map((alarm) => (
                 <Link
                   key={alarm.id}
                   to="/alarms"
-                  className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded text-sm font-medium whitespace-nowrap shrink-0 transition-colors ${
+                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-medium whitespace-nowrap shrink-0 transition-colors ${
                     alarm.state === 'active_unacked'
                       ? alarm.severity === 'critical'
                         ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
@@ -306,28 +291,30 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
                   <SeverityIcon severity={alarm.severity} />
                   <span>{alarm.message}</span>
                   {alarm.state === 'active_acked' && (
-                    <span className="text-xs opacity-60 ml-1">(Acked)</span>
+                    <span className="text-xs opacity-60 ml-0.5">(Acked)</span>
                   )}
                   {alarm.state === 'inactive_unacked' && (
-                    <span className="text-xs opacity-60 ml-1">(Cleared)</span>
+                    <span className="text-xs opacity-60 ml-0.5">(Cleared)</span>
                   )}
                 </Link>
               ))}
             </div>
+          ) : (
+            <div className="flex-1" />
+          )}
 
-            {/* Acknowledge All button */}
-            <div className="px-3 py-1.5 border-l border-[var(--hmi-border)]/50 shrink-0">
-              <button
-                onClick={handleAcknowledgeAll}
-                disabled={ackingAll || unackedAlarms.length === 0}
-                className="flex items-center gap-1.5 px-4 py-2.5 min-h-[44px] rounded bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
-              >
-                <CheckCheck size={16} />
-                {ackingAll ? 'Acknowledging...' : 'Ack All'}
-              </button>
-            </div>
-          </div>
-        )}
+          {/* Acknowledge All button — only when unacked alarms exist */}
+          {unackedAlarms.length > 0 && (
+            <button
+              onClick={handleAcknowledgeAll}
+              disabled={ackingAll}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium transition-colors shrink-0"
+            >
+              <CheckCheck size={14} />
+              {ackingAll ? 'Acking...' : 'Ack All'}
+            </button>
+          )}
+        </header>
 
         {/* Connection lost banner */}
         {!wsConnected && (
@@ -337,7 +324,7 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
         )}
 
         {/* Page content */}
-        <main className="flex-1 overflow-auto p-4">
+        <main className="flex-1 overflow-auto p-4" style={{ touchAction: 'pan-y pinch-zoom' }}>
           {children}
         </main>
       </div>
