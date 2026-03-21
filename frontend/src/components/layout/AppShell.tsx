@@ -148,6 +148,15 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
   const unackedAlarms = alarms.filter(a => a.state === 'active_unacked' || a.state === 'inactive_unacked');
   const activeAlarmCount = unackedAlarms.length;
 
+  // Screen tint: red for unacked critical, yellow for unacked warning
+  const hasUnackedCritical = alarms.some(a => a.state === 'active_unacked' && a.severity === 'critical');
+  const hasUnackedWarning = alarms.some(a => a.state === 'active_unacked' && a.severity === 'warning');
+  const tintClass = hasUnackedCritical
+    ? 'bg-red-500/10'
+    : hasUnackedWarning
+      ? 'bg-amber-500/10'
+      : null;
+
   const handleAcknowledgeAll = useCallback(async () => {
     if (ackingAll || unackedAlarms.length === 0) return;
     setAckingAll(true);
@@ -390,6 +399,11 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
           {children}
         </main>
       </div>
+
+      {/* Alarm severity tint — full-screen color wash for at-a-glance awareness */}
+      {tintClass && (
+        <div className={`fixed inset-0 z-40 pointer-events-none transition-colors duration-500 ${tintClass}`} />
+      )}
     </div>
   );
 }
