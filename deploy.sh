@@ -86,6 +86,7 @@ mkdir -p "$RELEASE_DIR"
 # Calculate total steps
 # ──────────────────────────────────────────────
 STEP_TOTAL=5
+$BUILD_ARM && STEP_TOTAL=$((STEP_TOTAL + 1))
 $BUILD_WINDOWS && STEP_TOTAL=$((STEP_TOTAL + 1))
 $BUNDLE_PYTHON && STEP_TOTAL=$((STEP_TOTAL + 1))
 STEP=1
@@ -131,64 +132,85 @@ fi
 # 3. Download Linux Python wheels for offline install
 #    (skipped when --compile: dependencies are inside the executable)
 # ──────────────────────────────────────────────
+
+# Helper: download wheels for a given set of platform tags.
+# Downloads each requirement individually so one sdist-only package
+# (e.g. pyftpdlib) doesn't block all others. Falls back to source
+# distributions for packages without binary wheels.
+download_wheels_for_platforms() {
+    local DEST_DIR="$1"
+    shift
+    local PLATFORM_ARGS=("$@")
+
+    mkdir -p "$DEST_DIR"
+    while IFS= read -r req; do
+        # Skip empty lines and comments
+        [[ -z "$req" || "$req" =~ ^[[:space:]]*# ]] && continue
+        # Try binary wheel with platform tags (includes transitive deps)
+        pip download "$req" \
+            -d "$DEST_DIR" \
+            "${PLATFORM_ARGS[@]}" \
+            --python-version "$PYTHON_MAJOR_MINOR" \
+            --only-binary=:all: \
+            2>/dev/null || \
+        # Fallback: download source and build into a wheel so the target
+        # doesn't need setuptools or a compiler
+        {
+            local TMPSDIST
+            TMPSDIST=$(mktemp -d)
+            pip download "$req" \
+                -d "$TMPSDIST" \
+                --no-deps \
+                --no-binary=:all: \
+                2>/dev/null && \
+            pip wheel "$TMPSDIST"/*.tar.gz \
+                --no-deps \
+                --wheel-dir "$DEST_DIR" \
+                2>/dev/null && \
+            rm -rf "$TMPSDIST"
+        } || \
+        echo "    WARNING: Could not download $req"
+    done < "$ROOT_DIR/backend/requirements.txt"
+    echo "    Downloaded $(ls -1 "$DEST_DIR/" 2>/dev/null | wc -l | tr -d ' ') packages."
+}
+
 if $COMPILE; then
     echo "    Skipping wheel download (compiled mode)."
 elif true; then
 STEP=$((STEP + 1))
-echo "==> [$STEP/$STEP_TOTAL] Downloading Linux Python dependencies (wheels)..."
-mkdir -p "$RELEASE_DIR/wheels"
-pip download \
-    -r "$ROOT_DIR/backend/requirements.txt" \
-    -d "$RELEASE_DIR/wheels" \
-    --only-binary=:all: \
-    2>&1 | tail -1 || {
-    echo "    Some wheels unavailable as binary, retrying with source..."
-    pip download \
-        -r "$ROOT_DIR/backend/requirements.txt" \
-        -d "$RELEASE_DIR/wheels" \
-        2>&1 | tail -1
-}
-WHEEL_COUNT=$(ls -1 "$RELEASE_DIR/wheels/" | wc -l)
-echo "    Downloaded $WHEEL_COUNT Linux packages."
+echo "==> [$STEP/$STEP_TOTAL] Downloading Linux x86_64 Python dependencies (wheels)..."
+download_wheels_for_platforms "$RELEASE_DIR/wheels" \
+    --platform manylinux_2_28_x86_64 \
+    --platform manylinux_2_24_x86_64 \
+    --platform manylinux_2_17_x86_64 \
+    --platform manylinux2014_x86_64 \
+    --platform linux_x86_64 \
+    --platform any
 
 # ──────────────────────────────────────────────
-# 3b. Download Windows Python wheels (if requested)
+# 3b. Download Linux aarch64 (ARM) wheels (if requested)
+# ──────────────────────────────────────────────
+if $BUILD_ARM; then
+    STEP=$((STEP + 1))
+    echo "==> [$STEP/$STEP_TOTAL] Downloading Linux aarch64 Python dependencies (wheels)..."
+    download_wheels_for_platforms "$RELEASE_DIR/wheels-arm" \
+        --platform manylinux_2_28_aarch64 \
+        --platform manylinux_2_24_aarch64 \
+        --platform manylinux_2_17_aarch64 \
+        --platform manylinux2014_aarch64 \
+        --platform linux_aarch64 \
+        --platform any
+fi
+
+# ──────────────────────────────────────────────
+# 3c. Download Windows Python wheels (if requested)
 # ──────────────────────────────────────────────
 if $BUILD_WINDOWS; then
     STEP=$((STEP + 1))
     echo "==> [$STEP/$STEP_TOTAL] Downloading Windows Python dependencies (wheels)..."
-    mkdir -p "$RELEASE_DIR/wheels-windows"
-
-    # Download platform-specific (binary) wheels for Windows
-    # --no-deps avoids resolution conflicts across platforms;
-    # pure-python deps are already in the Linux wheels and work on both.
-    pip download \
-        -r "$ROOT_DIR/backend/requirements.txt" \
-        -d "$RELEASE_DIR/wheels-windows" \
+    download_wheels_for_platforms "$RELEASE_DIR/wheels-windows" \
         --platform win_amd64 \
-        --python-version "$PYTHON_MAJOR_MINOR" \
-        --only-binary=:all: \
-        --no-deps \
-        2>&1 | tail -3 || true
-
-    # Also grab pure-python (any) wheels that work cross-platform.
-    # These cover packages without platform-specific builds.
-    pip download \
-        -r "$ROOT_DIR/backend/requirements.txt" \
-        -d "$RELEASE_DIR/wheels-windows" \
-        --platform any \
-        --python-version "$PYTHON_MAJOR_MINOR" \
-        --only-binary=:all: \
-        --no-deps \
-        2>&1 | tail -3 || true
-
-    WIN_WHEEL_COUNT=$(ls -1 "$RELEASE_DIR/wheels-windows/" 2>/dev/null | wc -l)
-    echo "    Downloaded $WIN_WHEEL_COUNT Windows packages."
-    if [ "$WIN_WHEEL_COUNT" -eq 0 ]; then
-        echo "    WARNING: No Windows wheels downloaded. The install.bat will"
-        echo "    fall back to the Linux wheels directory (pure-python packages"
-        echo "    are cross-platform, but native extensions may not work)."
-    fi
+        --platform any
 fi
 fi  # end of: if $COMPILE ... elif true
 
@@ -223,6 +245,9 @@ elif $BUNDLE_PYTHON; then
         # python-build-standalone extracts to a 'python/' directory
         tar -xzf "/tmp/$ARCHIVE_NAME" -C "$DEST_DIR"
         rm -f "/tmp/$ARCHIVE_NAME"
+
+        # Remove macOS resource fork files (._*) that break venv on Linux
+        find "$DEST_DIR" -name '._*' -delete 2>/dev/null || true
 
         # Verify the extracted Python works (for native platform only)
         if [ -x "$DEST_DIR/python/bin/python3" ]; then
@@ -259,6 +284,11 @@ fi
 STEP=$((STEP + 1))
 echo "==> [$STEP/$STEP_TOTAL] Generating install scripts..."
 
+# Write version file so install scripts can read it
+# (install scripts are inside single-quoted heredocs, so $APP_VERSION
+#  can't be injected from deploy.sh — they read this file instead)
+echo "$APP_VERSION" > "$RELEASE_DIR/VERSION"
+
 if $COMPILE; then
 
 # ── Compiled-mode Linux install script ──
@@ -278,6 +308,8 @@ set -euo pipefail
 
 INSTALL_DIR="${1:-/opt/hmi}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+APP_VERSION="$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null || true)"
+APP_VERSION="${APP_VERSION:-unknown}"
 
 echo "============================================"
 echo "  HMI Installer (Linux — compiled)"
@@ -293,9 +325,11 @@ echo "==> Installing compiled application..."
 cp -r "$SCRIPT_DIR/hmi-server/"* "$INSTALL_DIR/"
 chmod +x "$INSTALL_DIR/hmi-server"
 
-# Create data directories
+# Create data directories (writable by all so the app
+# can run as any user, not just root)
 mkdir -p "$INSTALL_DIR/data"
 mkdir -p "$INSTALL_DIR/media/fault_help"
+chmod 777 "$INSTALL_DIR/data" "$INSTALL_DIR/media" "$INSTALL_DIR/media/fault_help"
 
 # Create environment file
 if [ ! -f "$INSTALL_DIR/.env" ]; then
@@ -389,6 +423,11 @@ setlocal enabledelayedexpansion
 set "INSTALL_DIR=%~1"
 if "%INSTALL_DIR%"=="" set "INSTALL_DIR=C:\hmi"
 set "SCRIPT_DIR=%~dp0"
+if exist "%SCRIPT_DIR%VERSION" (
+    set /p APP_VERSION=<"%SCRIPT_DIR%VERSION"
+) else (
+    set "APP_VERSION=unknown"
+)
 
 echo ============================================
 echo   HMI Installer (Windows — compiled)
@@ -416,14 +455,14 @@ if not exist "%INSTALL_DIR%\.env" (
         echo HMI_HOST=0.0.0.0
         echo HMI_PORT=8080
         echo HMI_DEBUG=false
-        echo HMI_APP_VERSION=$APP_VERSION
+        echo HMI_APP_VERSION=!APP_VERSION!
     ) > "%INSTALL_DIR%\.env"
     echo     Created .env with generated secret key.
 ) else (
     echo     Existing .env preserved.
 )
 :: Always update version in .env (even on upgrades)
-powershell -Command "$f='%INSTALL_DIR%\.env'; $c=Get-Content $f; if($c -match 'HMI_APP_VERSION='){$c=$c -replace 'HMI_APP_VERSION=.*','HMI_APP_VERSION=$APP_VERSION'}else{$c+='HMI_APP_VERSION=$APP_VERSION'}; Set-Content $f $c"
+powershell -Command "$f='%INSTALL_DIR%\.env'; $c=Get-Content $f; if($c -match 'HMI_APP_VERSION='){$c=$c -replace 'HMI_APP_VERSION=.*','HMI_APP_VERSION=%APP_VERSION%'}else{$c+='HMI_APP_VERSION=%APP_VERSION%'}; Set-Content $f $c"
 
 :: Create convenience scripts
 (
@@ -494,6 +533,8 @@ set -euo pipefail
 
 INSTALL_DIR="${1:-/opt/hmi}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+APP_VERSION="$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null || true)"
+APP_VERSION="${APP_VERSION:-unknown}"
 
 echo "============================================"
 echo "  HMI Installer (Linux)"
@@ -547,15 +588,25 @@ source "$INSTALL_DIR/venv/bin/activate"
 
 # Install dependencies from local wheels (offline)
 echo "==> Installing Python dependencies (offline)..."
-pip install --no-index --find-links="$SCRIPT_DIR/wheels" \
+WHEEL_DIR="$SCRIPT_DIR/wheels"
+if [ "$ARCH" = "aarch64" ] && [ -d "$SCRIPT_DIR/wheels-arm" ]; then
+    echo "    Using aarch64 wheels."
+    WHEEL_DIR="$SCRIPT_DIR/wheels-arm"
+fi
+pip install --no-index --find-links="$WHEEL_DIR" \
     -r "$SCRIPT_DIR/backend/requirements.txt"
 
 # Copy application files
 echo "==> Installing application files..."
 cp -r "$SCRIPT_DIR/backend/"* "$INSTALL_DIR/"
 
-# Create data directory for database
+# Create data directories (writable by all so the app
+# can run as any user, not just root)
 mkdir -p "$INSTALL_DIR/data"
+mkdir -p "$INSTALL_DIR/media/fault_help"
+chmod 777 "$INSTALL_DIR/data" "$INSTALL_DIR/media" "$INSTALL_DIR/media/fault_help"
+# If database already exists from a prior install, ensure it's writable
+[ -f "$INSTALL_DIR/data/hmi.db" ] && chmod 666 "$INSTALL_DIR/data/hmi.db"
 
 # Create environment file
 if [ ! -f "$INSTALL_DIR/.env" ]; then
@@ -665,6 +716,11 @@ setlocal enabledelayedexpansion
 set "INSTALL_DIR=%~1"
 if "%INSTALL_DIR%"=="" set "INSTALL_DIR=C:\hmi"
 set "SCRIPT_DIR=%~dp0"
+if exist "%SCRIPT_DIR%VERSION" (
+    set /p APP_VERSION=<"%SCRIPT_DIR%VERSION"
+) else (
+    set "APP_VERSION=unknown"
+)
 
 echo ============================================
 echo   HMI Installer (Windows)
@@ -759,14 +815,14 @@ if not exist "%INSTALL_DIR%\.env" (
         echo HMI_HOST=0.0.0.0
         echo HMI_PORT=8080
         echo HMI_DEBUG=false
-        echo HMI_APP_VERSION=$APP_VERSION
+        echo HMI_APP_VERSION=!APP_VERSION!
     ) > "%INSTALL_DIR%\.env"
     echo     Created .env with generated secret key.
 ) else (
     echo     Existing .env preserved.
 )
 :: Always update version in .env (even on upgrades)
-powershell -Command "$f='%INSTALL_DIR%\.env'; $c=Get-Content $f; if($c -match 'HMI_APP_VERSION='){$c=$c -replace 'HMI_APP_VERSION=.*','HMI_APP_VERSION=$APP_VERSION'}else{$c+='HMI_APP_VERSION=$APP_VERSION'}; Set-Content $f $c"
+powershell -Command "$f='%INSTALL_DIR%\.env'; $c=Get-Content $f; if($c -match 'HMI_APP_VERSION='){$c=$c -replace 'HMI_APP_VERSION=.*','HMI_APP_VERSION=%APP_VERSION%'}else{$c+='HMI_APP_VERSION=%APP_VERSION%'}; Set-Content $f $c"
 
 :: Create convenience scripts
 (
