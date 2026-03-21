@@ -86,6 +86,7 @@ mkdir -p "$RELEASE_DIR"
 # Calculate total steps
 # ──────────────────────────────────────────────
 STEP_TOTAL=5
+$BUILD_ARM && STEP_TOTAL=$((STEP_TOTAL + 1))
 $BUILD_WINDOWS && STEP_TOTAL=$((STEP_TOTAL + 1))
 $BUNDLE_PYTHON && STEP_TOTAL=$((STEP_TOTAL + 1))
 STEP=1
