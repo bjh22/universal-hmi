@@ -156,21 +156,21 @@ export function TrendsPage() {
         <div className="flex gap-2">
           <button
             onClick={() => setShowLoadDialog(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm"
+            className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm"
           >
             <FolderOpen size={16} /> Load View
           </button>
           <button
             onClick={() => setShowSaveDialog(true)}
             disabled={selectedTags.length === 0}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm disabled:opacity-50"
           >
             <Save size={16} /> Save View
           </button>
           <button
             onClick={exportCsv}
             disabled={displayChartData.length === 0}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm disabled:opacity-50"
           >
             <Download size={16} /> Export CSV
           </button>
@@ -186,12 +186,12 @@ export function TrendsPage() {
               value={viewName}
               onChange={e => setViewName(e.target.value)}
               placeholder="View name"
-              className="flex-1 bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+              className="flex-1 bg-slate-700 border border-slate-600 rounded-md px-3 py-2.5 min-h-[44px] text-sm text-white outline-none focus:border-blue-500"
               autoFocus
               onKeyDown={e => { if (e.key === 'Enter') handleSaveView(); }}
             />
-            <button onClick={handleSaveView} className="px-4 py-2 bg-[var(--hmi-accent)] rounded-md text-sm text-white">Save</button>
-            <button onClick={() => setShowSaveDialog(false)} className="px-4 py-2 bg-slate-700 rounded-md text-sm text-slate-300">Cancel</button>
+            <button onClick={handleSaveView} className="px-4 py-2.5 min-h-[44px] bg-[var(--hmi-accent)] rounded-md text-sm text-white">Save</button>
+            <button onClick={() => setShowSaveDialog(false)} className="px-4 py-2.5 min-h-[44px] bg-slate-700 rounded-md text-sm text-slate-300">Cancel</button>
           </div>
         </div>
       )}
@@ -206,7 +206,7 @@ export function TrendsPage() {
                 <button
                   key={i}
                   onClick={() => handleLoadView(v)}
-                  className="w-full text-left px-3 py-2 rounded-md hover:bg-slate-700 text-sm text-slate-300"
+                  className="w-full text-left px-3 py-2.5 min-h-[44px] rounded-md hover:bg-slate-700 text-sm text-slate-300"
                 >
                   <span className="font-medium">{v.name}</span>
                   <span className="text-slate-500 ml-2">{v.tag_ids.length} tags, {v.hours}h</span>
@@ -216,7 +216,7 @@ export function TrendsPage() {
           ) : (
             <p className="text-sm text-slate-500">No saved views</p>
           )}
-          <button onClick={() => setShowLoadDialog(false)} className="mt-2 px-4 py-2 bg-slate-700 rounded-md text-sm text-slate-300">Close</button>
+          <button onClick={() => setShowLoadDialog(false)} className="mt-2 px-4 py-2.5 min-h-[44px] bg-slate-700 rounded-md text-sm text-slate-300">Close</button>
         </div>
       )}
 
@@ -227,7 +227,7 @@ export function TrendsPage() {
             <button
               key={tr.label}
               onClick={() => { setTimeRange(tr.hours); setUseCustomRange(false); }}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+              className={`px-3 py-2.5 min-h-[44px] rounded-md text-sm font-medium ${
                 !useCustomRange && timeRange === tr.hours ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
               }`}
             >
@@ -238,7 +238,7 @@ export function TrendsPage() {
         <div className="border-l border-slate-700 pl-2 flex items-center gap-2">
           <button
             onClick={() => setUseCustomRange(!useCustomRange)}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+            className={`px-3 py-2.5 min-h-[44px] rounded-md text-sm font-medium ${
               useCustomRange ? 'bg-[var(--hmi-accent)] text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
             }`}
           >
@@ -250,14 +250,14 @@ export function TrendsPage() {
                 type="datetime-local"
                 value={customStart}
                 onChange={e => setCustomStart(e.target.value)}
-                className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-white"
+                className="bg-slate-800 border border-slate-700 rounded px-3 py-2.5 min-h-[44px] text-sm text-white"
               />
               <span className="text-slate-500 text-sm">to</span>
               <input
                 type="datetime-local"
                 value={customEnd}
                 onChange={e => setCustomEnd(e.target.value)}
-                className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-white"
+                className="bg-slate-800 border border-slate-700 rounded px-3 py-2.5 min-h-[44px] text-sm text-white"
               />
             </>
           )}
@@ -272,7 +272,7 @@ export function TrendsPage() {
             {tags.map((tag) => (
               <label
                 key={tag.id}
-                className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-slate-700 cursor-pointer"
+                className="flex items-center gap-2 px-2 py-2.5 min-h-[44px] rounded-md hover:bg-slate-700 cursor-pointer"
               >
                 <input
                   type="checkbox"

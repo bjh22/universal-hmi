@@ -93,7 +93,7 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
         <div className="flex gap-1">
           <button
             onClick={onToggleLock}
-            className={`text-xs px-1.5 py-0.5 rounded ${locked ? 'bg-yellow-600/20 text-yellow-400' : 'text-slate-500 hover:text-slate-300'}`}
+            className={`text-xs px-2.5 py-1.5 min-h-[36px] rounded ${locked ? 'bg-yellow-600/20 text-yellow-400' : 'text-slate-500 hover:text-slate-300'}`}
             title={locked ? 'Unlock' : 'Lock position'}
           >
             {locked ? 'Locked' : 'Lock'}

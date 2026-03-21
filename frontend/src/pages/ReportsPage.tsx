@@ -192,7 +192,7 @@ export function ReportsPage() {
           </div>
           <button
             onClick={exportCsv}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm"
+            className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-slate-700 hover:bg-slate-600 rounded-lg text-sm"
           >
             <Download className="w-4 h-4" /> Export CSV
           </button>
@@ -202,7 +202,7 @@ export function ReportsPage() {
         <div className="flex gap-1 mt-3">
           <button
             onClick={() => setTab('live')}
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            className={`px-4 py-2.5 min-h-[44px] rounded-lg text-sm font-medium transition-colors ${
               tab === 'live' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
             }`}
           >
@@ -210,7 +210,7 @@ export function ReportsPage() {
           </button>
           <button
             onClick={() => setTab('historical')}
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            className={`px-4 py-2.5 min-h-[44px] rounded-lg text-sm font-medium transition-colors ${
               tab === 'historical' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
             }`}
           >
@@ -229,7 +229,7 @@ export function ReportsPage() {
                   <button
                     key={p.label}
                     onClick={() => handlePreset(p.getRange)}
-                    className="px-2.5 py-1 text-xs bg-slate-700 hover:bg-slate-600 rounded-md text-slate-300"
+                    className="px-3 py-2.5 min-h-[44px] text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-300"
                   >
                     {p.label}
                   </button>
@@ -240,14 +240,14 @@ export function ReportsPage() {
                   type="datetime-local"
                   value={toLocalInput(dateStart)}
                   onChange={e => { const d = new Date(e.target.value); if (!isNaN(d.getTime())) setDateStart(d.toISOString()); }}
-                  className="bg-slate-700 border border-slate-600 rounded-md px-2 py-1 text-sm text-slate-200"
+                  className="bg-slate-700 border border-slate-600 rounded-md px-3 py-2.5 min-h-[44px] text-sm text-slate-200"
                 />
                 <span className="text-slate-500">to</span>
                 <input
                   type="datetime-local"
                   value={dateEnd ? toLocalInput(dateEnd) : ''}
                   onChange={e => { const d = new Date(e.target.value); if (!isNaN(d.getTime())) setDateEnd(d.toISOString()); else setDateEnd(undefined); }}
-                  className="bg-slate-700 border border-slate-600 rounded-md px-2 py-1 text-sm text-slate-200"
+                  className="bg-slate-700 border border-slate-600 rounded-md px-3 py-2.5 min-h-[44px] text-sm text-slate-200"
                   placeholder="Now"
                 />
               </div>
@@ -257,7 +257,7 @@ export function ReportsPage() {
                   <button
                     key={g}
                     onClick={() => setGranularity(g)}
-                    className={`px-2.5 py-1 text-xs rounded-md ${
+                    className={`px-3 py-2.5 min-h-[44px] text-sm rounded-md ${
                       granularity === g ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-400 hover:text-white'
                     }`}
                   >

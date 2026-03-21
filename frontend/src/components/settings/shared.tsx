@@ -35,7 +35,7 @@ export const LABEL_COLORS = [
   '#ec4899', '#06b6d4', '#f97316', '#6366f1', '#14b8a6',
 ];
 
-export const inputCls = 'w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-md px-3 py-2 text-sm text-[var(--hmi-text-primary)] outline-none focus:border-[var(--hmi-accent)]';
+export const inputCls = 'w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-md px-3 py-2.5 min-h-[44px] text-sm text-[var(--hmi-text-primary)] outline-none focus:border-[var(--hmi-accent)]';
 
 export function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -128,8 +128,8 @@ export function DeleteConfirmDialog({ title, name, onConfirm, onCancel }: {
         <div className="text-[var(--hmi-text-primary)] font-medium mb-2">{title}</div>
         <p className="text-sm text-[var(--hmi-text-secondary)] mb-4">Are you sure you want to delete <span className="text-[var(--hmi-text-primary)] font-mono">{name}</span>? This cannot be undone.</p>
         <div className="flex justify-end gap-2">
-          <button onClick={onCancel} className="px-4 py-2 bg-[var(--hmi-bg-input)] rounded-lg text-sm text-[var(--hmi-text-secondary)]">Cancel</button>
-          <button onClick={onConfirm} className="px-4 py-2 bg-red-600 rounded-lg text-sm text-white hover:bg-red-700">Delete</button>
+          <button onClick={onCancel} className="px-4 py-2.5 min-h-[44px] bg-[var(--hmi-bg-input)] rounded-lg text-sm text-[var(--hmi-text-secondary)]">Cancel</button>
+          <button onClick={onConfirm} className="px-4 py-2.5 min-h-[44px] bg-red-600 rounded-lg text-sm text-white hover:bg-red-700">Delete</button>
         </div>
       </div>
     </div>
