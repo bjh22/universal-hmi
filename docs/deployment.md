@@ -51,6 +51,12 @@ On your development machine:
 
 # Override the bundled Python version (default: 3.11.13)
 ./deploy.sh --python-version 3.12.8
+
+# Bundle Chromium for kiosk mode (no browser needed on target)
+./deploy.sh --chromium
+
+# All platforms with kiosk mode
+./deploy.sh --windows --arm --chromium
 ```
 
 ### `deploy.sh` Flags
@@ -63,8 +69,10 @@ On your development machine:
 | `--arm` | Also include a Linux aarch64 (ARM) Python interpreter for Raspberry Pi and ARM-based panel PCs |
 | `--no-bundle-python` | Skip bundling the standalone Python interpreter. The target machine must have Python 3.11+ pre-installed |
 | `--python-version X.Y.Z` | Override the bundled Python version (default: `3.11.13`). Must match a release available from [python-build-standalone](https://github.com/astral-sh/python-build-standalone/releases) |
+| `--chromium` | Bundle Chrome for Testing for kiosk mode deployment. Creates `start-kiosk.sh` / `start-kiosk.bat` and a `hmi-kiosk.service` systemd unit. No browser needs to be pre-installed on the target |
+| `--chromium-version X.Y.Z.W` | Override the bundled Chromium version (default: `136.0.7103.92`). Must match a [Chrome for Testing](https://googlechromelabs.github.io/chrome-for-testing/) release |
 
-Flags can be combined freely (e.g., `./deploy.sh --windows --arm --python-version 3.12.8`).
+Flags can be combined freely (e.g., `./deploy.sh --windows --arm --chromium --python-version 3.12.8`).
 
 This performs the following steps automatically:
 1. Builds the frontend with `npm run build` (TypeScript check + Vite production build)
@@ -72,10 +80,13 @@ This performs the following steps automatically:
 3. Downloads all Python dependency wheels for offline installation (skipped with `--compile`)
 4. Downloads Windows-specific wheels (when `--windows` is specified, skipped with `--compile`)
 5. Bundles a standalone Python interpreter for each target platform (skipped with `--compile` or `--no-bundle-python`)
-6. Generates platform-specific install scripts (`install.sh` and `install.bat`)
-7. Creates deployment archives in `dist/`:
-   - `dist/hmi-<timestamp>.tar.gz` — Linux deployment package (always created)
-   - `dist/hmi-<timestamp>-windows.zip` — Windows deployment package (when `--windows` is used)
+6. Downloads and bundles Chrome for Testing (when `--chromium` is specified)
+7. Generates platform-specific install scripts (`install.sh` and `install.bat`)
+8. Creates deployment archives in `dist/`:
+   - `dist/hmi-<version>.tar.gz` — Linux deployment package (always created)
+   - `dist/hmi-<version>-windows.zip` — Windows deployment package (when `--windows` is used)
+
+> **Versioning:** Deployment packages use [CalVer](https://calver.org/) format `YYYY.MM.DD.N` (e.g., `2026.03.21.1`). The version is automatically computed from the current date and number of commits that day, and written to `HMI_APP_VERSION` in `.env` during installation.
 
 ## Step 2: Deploy to the Target
 
@@ -194,6 +205,42 @@ After installation on either platform, verify the deployment:
 
 If accessing from another machine on the network, use the panel PC's IP address (e.g., `http://192.168.1.100:8080`).
 
+## Kiosk Mode Deployment
+
+When the deployment package is built with `--chromium`, the installer bundles a dedicated Chromium browser and creates kiosk launcher scripts. This provides a fully self-contained deployment — no browser, Python, or internet connection is needed on the target machine.
+
+### Linux Kiosk
+
+After installing with a Chromium-bundled package, you get two additional files:
+
+- **`start-kiosk.sh`** — Launches the HMI server and opens Chromium in fullscreen kiosk mode
+- **`hmi-kiosk.service`** — A systemd unit that runs the kiosk on boot (requires auto-login configured on the target)
+
+```bash
+# Start kiosk manually
+/opt/hmi/start-kiosk.sh
+
+# Start in windowed mode (useful for testing)
+/opt/hmi/start-kiosk.sh --windowed
+
+# Use a custom URL (e.g., when accessing via network)
+HMI_KIOSK_URL=http://192.168.1.100:8080 /opt/hmi/start-kiosk.sh
+
+# Enable as a systemd service (starts on boot)
+sudo systemctl enable --now hmi-kiosk
+```
+
+> **Note:** The `hmi-kiosk` service replaces the standard `hmi` service — use one or the other, not both. The kiosk service starts the HMI server and Chromium together.
+
+### Windows Kiosk
+
+```cmd
+REM Start kiosk manually
+C:\hmi\start-kiosk.bat
+```
+
+The Windows kiosk script launches the HMI server and opens Chromium in fullscreen mode. For auto-start on boot, add `start-kiosk.bat` to Task Scheduler or use NSSM.
+
 ## Updating an Existing Installation
 
 Updates can be applied **directly from the HMI web interface** or via the command line. Both methods are designed for safe in-place upgrades — application code and frontend assets are replaced while **all operational data is preserved**.
@@ -206,8 +253,9 @@ Updates can be applied **directly from the HMI web interface** or via the comman
 |-------------------------------|---------------------|
 | `.env` (configuration & secret key) | `app/` (backend source code) |
 | `data/hmi.db` (database: trends, jobs, screens, alarms, users, audit trail, production runs) | `static/` (frontend build) |
-| `venv/` (updated only if new wheels bundled) | `requirements.txt` |
-| systemd service / NSSM config | `run.py`, `start.*`, `seed.*` |
+| `media/` (uploaded fault help images) | `requirements.txt` |
+| `venv/` (updated only if new wheels bundled) | `run.py`, `start.*`, `seed.*` |
+| systemd service / NSSM config | |
 
 **Compiled-mode installations** (`--compile`):
 
@@ -224,7 +272,7 @@ The SQLite database contains all your operational data — trend history, job/re
 
 ### Method 1: In-HMI Update (Recommended)
 
-The HMI includes a built-in **System Update** feature in the Settings page. This allows engineers and designers to apply updates directly from the running HMI — no command line, SSH, or terminal access required.
+The HMI includes a built-in **Software Update** feature on the Support page. This allows engineers and designers to apply updates directly from the running HMI — no command line, SSH, or terminal access required.
 
 1. Build a deployment package on your development machine (`./deploy.sh` or `./deploy.sh --compile`)
 2. Copy the `.tar.gz` or `.zip` file to the panel PC (USB drive, network share, or any local folder)
@@ -291,7 +339,7 @@ After updating (via either method), verify the new version is running:
 
 1. Open `http://localhost:8080` in a browser
 2. Log in and confirm the application loads correctly
-3. Go to **Settings** > **System Update** to confirm the reported version
+3. Go to **Support** > **Software Update** to confirm the reported version
 4. Check that existing screens, trend data, jobs, and alarms are intact
 5. Verify the WebSocket "Connected" indicator is green
 
@@ -316,6 +364,7 @@ For production panel PC deployments, review these settings in the `.env` file at
 | `HMI_ACCESS_TOKEN_EXPIRE_MINUTES` | `480` (8 hours) — adjust to match shift length |
 | `HMI_WS_UPDATE_INTERVAL_MS` | `500` — lower for faster updates, higher to reduce CPU usage |
 | `HMI_TREND_RETENTION_DAYS` | `90` — increase for longer history, monitor disk usage |
+| `HMI_APP_VERSION` | Auto-set during install/update (CalVer `YYYY.MM.DD.N`) — do not edit manually |
 
 ## Deployment Directory Structure
 
@@ -329,6 +378,7 @@ After installation, the target machine will have:
 │   ├── api/                       # Route handlers
 │   ├── core/                      # Config, database, security
 │   ├── drivers/                   # PLC protocol drivers
+│   ├── integrations/              # Plugin integrations (Zebra, Cognex, etc.)
 │   ├── models/                    # Database models
 │   ├── services/                  # Business logic
 │   ├── main.py                    # FastAPI entry point
@@ -338,11 +388,15 @@ After installation, the target machine will have:
 │   └── index.html                 # SPA entry point
 ├── data/
 │   └── hmi.db                     # SQLite database
+├── media/                         # Uploaded fault help images
+│   └── fault_help/
 ├── run.py                         # Server entry point
 ├── requirements.txt               # Python dependencies list
 ├── .env                           # Environment configuration
 ├── start.sh (or start.bat)        # Manual start script
-└── seed.sh (or seed.bat)          # Database seed script
+├── seed.sh (or seed.bat)          # Database seed script
+├── start-kiosk.sh (or .bat)       # Kiosk launcher (if --chromium was used)
+└── chromium/                      # Bundled browser (if --chromium was used)
 ```
 
 **Compiled mode** (`--compile`):
@@ -353,6 +407,9 @@ After installation, the target machine will have:
 ├── data/
 │   └── hmi.db                     # SQLite database
 ├── media/                         # Uploaded fault help images
+│   └── fault_help/
 ├── .env                           # Environment configuration
-└── start.sh (or start.bat)        # Manual start script
+├── start.sh (or start.bat)        # Manual start script
+├── start-kiosk.sh (or .bat)       # Kiosk launcher (if --chromium was used)
+└── chromium/                      # Bundled browser (if --chromium was used)
 ```
