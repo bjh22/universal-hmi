@@ -284,6 +284,11 @@ fi
 STEP=$((STEP + 1))
 echo "==> [$STEP/$STEP_TOTAL] Generating install scripts..."
 
+# Write version file so install scripts can read it
+# (install scripts are inside single-quoted heredocs, so $APP_VERSION
+#  can't be injected from deploy.sh — they read this file instead)
+echo "$APP_VERSION" > "$RELEASE_DIR/VERSION"
+
 if $COMPILE; then
 
 # ── Compiled-mode Linux install script ──
@@ -303,6 +308,7 @@ set -euo pipefail
 
 INSTALL_DIR="${1:-/opt/hmi}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+APP_VERSION=$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null || echo "unknown")
 
 echo "============================================"
 echo "  HMI Installer (Linux — compiled)"
@@ -414,6 +420,11 @@ setlocal enabledelayedexpansion
 set "INSTALL_DIR=%~1"
 if "%INSTALL_DIR%"=="" set "INSTALL_DIR=C:\hmi"
 set "SCRIPT_DIR=%~dp0"
+if exist "%SCRIPT_DIR%VERSION" (
+    set /p APP_VERSION=<"%SCRIPT_DIR%VERSION"
+) else (
+    set "APP_VERSION=unknown"
+)
 
 echo ============================================
 echo   HMI Installer (Windows — compiled)
@@ -441,14 +452,14 @@ if not exist "%INSTALL_DIR%\.env" (
         echo HMI_HOST=0.0.0.0
         echo HMI_PORT=8080
         echo HMI_DEBUG=false
-        echo HMI_APP_VERSION=$APP_VERSION
+        echo HMI_APP_VERSION=!APP_VERSION!
     ) > "%INSTALL_DIR%\.env"
     echo     Created .env with generated secret key.
 ) else (
     echo     Existing .env preserved.
 )
 :: Always update version in .env (even on upgrades)
-powershell -Command "$f='%INSTALL_DIR%\.env'; $c=Get-Content $f; if($c -match 'HMI_APP_VERSION='){$c=$c -replace 'HMI_APP_VERSION=.*','HMI_APP_VERSION=$APP_VERSION'}else{$c+='HMI_APP_VERSION=$APP_VERSION'}; Set-Content $f $c"
+powershell -Command "$f='%INSTALL_DIR%\.env'; $c=Get-Content $f; if($c -match 'HMI_APP_VERSION='){$c=$c -replace 'HMI_APP_VERSION=.*','HMI_APP_VERSION=%APP_VERSION%'}else{$c+='HMI_APP_VERSION=%APP_VERSION%'}; Set-Content $f $c"
 
 :: Create convenience scripts
 (
@@ -519,6 +530,7 @@ set -euo pipefail
 
 INSTALL_DIR="${1:-/opt/hmi}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+APP_VERSION=$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null || echo "unknown")
 
 echo "============================================"
 echo "  HMI Installer (Linux)"
@@ -695,6 +707,11 @@ setlocal enabledelayedexpansion
 set "INSTALL_DIR=%~1"
 if "%INSTALL_DIR%"=="" set "INSTALL_DIR=C:\hmi"
 set "SCRIPT_DIR=%~dp0"
+if exist "%SCRIPT_DIR%VERSION" (
+    set /p APP_VERSION=<"%SCRIPT_DIR%VERSION"
+) else (
+    set "APP_VERSION=unknown"
+)
 
 echo ============================================
 echo   HMI Installer (Windows)
@@ -789,14 +806,14 @@ if not exist "%INSTALL_DIR%\.env" (
         echo HMI_HOST=0.0.0.0
         echo HMI_PORT=8080
         echo HMI_DEBUG=false
-        echo HMI_APP_VERSION=$APP_VERSION
+        echo HMI_APP_VERSION=!APP_VERSION!
     ) > "%INSTALL_DIR%\.env"
     echo     Created .env with generated secret key.
 ) else (
     echo     Existing .env preserved.
 )
 :: Always update version in .env (even on upgrades)
-powershell -Command "$f='%INSTALL_DIR%\.env'; $c=Get-Content $f; if($c -match 'HMI_APP_VERSION='){$c=$c -replace 'HMI_APP_VERSION=.*','HMI_APP_VERSION=$APP_VERSION'}else{$c+='HMI_APP_VERSION=$APP_VERSION'}; Set-Content $f $c"
+powershell -Command "$f='%INSTALL_DIR%\.env'; $c=Get-Content $f; if($c -match 'HMI_APP_VERSION='){$c=$c -replace 'HMI_APP_VERSION=.*','HMI_APP_VERSION=%APP_VERSION%'}else{$c+='HMI_APP_VERSION=%APP_VERSION%'}; Set-Content $f $c"
 
 :: Create convenience scripts
 (
