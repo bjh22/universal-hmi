@@ -135,24 +135,70 @@ if $COMPILE; then
     echo "    Skipping wheel download (compiled mode)."
 elif true; then
 STEP=$((STEP + 1))
-echo "==> [$STEP/$STEP_TOTAL] Downloading Linux Python dependencies (wheels)..."
+echo "==> [$STEP/$STEP_TOTAL] Downloading Linux x86_64 Python dependencies (wheels)..."
 mkdir -p "$RELEASE_DIR/wheels"
+
+# Download platform-specific (binary) wheels for Linux x86_64
 pip download \
     -r "$ROOT_DIR/backend/requirements.txt" \
     -d "$RELEASE_DIR/wheels" \
+    --platform manylinux2014_x86_64 \
+    --platform manylinux_2_17_x86_64 \
+    --platform linux_x86_64 \
+    --python-version "$PYTHON_MAJOR_MINOR" \
     --only-binary=:all: \
-    2>&1 | tail -1 || {
-    echo "    Some wheels unavailable as binary, retrying with source..."
-    pip download \
-        -r "$ROOT_DIR/backend/requirements.txt" \
-        -d "$RELEASE_DIR/wheels" \
-        2>&1 | tail -1
-}
+    --no-deps \
+    2>&1 | tail -3 || true
+
+# Also grab pure-python (any) wheels that work cross-platform
+pip download \
+    -r "$ROOT_DIR/backend/requirements.txt" \
+    -d "$RELEASE_DIR/wheels" \
+    --platform any \
+    --python-version "$PYTHON_MAJOR_MINOR" \
+    --only-binary=:all: \
+    --no-deps \
+    2>&1 | tail -3 || true
+
 WHEEL_COUNT=$(ls -1 "$RELEASE_DIR/wheels/" | wc -l)
-echo "    Downloaded $WHEEL_COUNT Linux packages."
+echo "    Downloaded $WHEEL_COUNT Linux x86_64 packages."
 
 # ──────────────────────────────────────────────
-# 3b. Download Windows Python wheels (if requested)
+# 3b. Download Linux aarch64 (ARM) wheels (if requested)
+# ──────────────────────────────────────────────
+if $BUILD_ARM; then
+    STEP=$((STEP + 1))
+    echo "==> [$STEP/$STEP_TOTAL] Downloading Linux aarch64 Python dependencies (wheels)..."
+    mkdir -p "$RELEASE_DIR/wheels-arm"
+
+    # Download platform-specific (binary) wheels for Linux aarch64
+    pip download \
+        -r "$ROOT_DIR/backend/requirements.txt" \
+        -d "$RELEASE_DIR/wheels-arm" \
+        --platform manylinux2014_aarch64 \
+        --platform manylinux_2_17_aarch64 \
+        --platform linux_aarch64 \
+        --python-version "$PYTHON_MAJOR_MINOR" \
+        --only-binary=:all: \
+        --no-deps \
+        2>&1 | tail -3 || true
+
+    # Also grab pure-python (any) wheels that work cross-platform
+    pip download \
+        -r "$ROOT_DIR/backend/requirements.txt" \
+        -d "$RELEASE_DIR/wheels-arm" \
+        --platform any \
+        --python-version "$PYTHON_MAJOR_MINOR" \
+        --only-binary=:all: \
+        --no-deps \
+        2>&1 | tail -3 || true
+
+    ARM_WHEEL_COUNT=$(ls -1 "$RELEASE_DIR/wheels-arm/" 2>/dev/null | wc -l)
+    echo "    Downloaded $ARM_WHEEL_COUNT Linux aarch64 packages."
+fi
+
+# ──────────────────────────────────────────────
+# 3c. Download Windows Python wheels (if requested)
 # ──────────────────────────────────────────────
 if $BUILD_WINDOWS; then
     STEP=$((STEP + 1))
@@ -547,7 +593,12 @@ source "$INSTALL_DIR/venv/bin/activate"
 
 # Install dependencies from local wheels (offline)
 echo "==> Installing Python dependencies (offline)..."
-pip install --no-index --find-links="$SCRIPT_DIR/wheels" \
+WHEEL_DIR="$SCRIPT_DIR/wheels"
+if [ "$ARCH" = "aarch64" ] && [ -d "$SCRIPT_DIR/wheels-arm" ]; then
+    echo "    Using aarch64 wheels."
+    WHEEL_DIR="$SCRIPT_DIR/wheels-arm"
+fi
+pip install --no-index --find-links="$WHEEL_DIR" \
     -r "$SCRIPT_DIR/backend/requirements.txt"
 
 # Copy application files
