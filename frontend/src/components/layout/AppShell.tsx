@@ -19,7 +19,7 @@ import {
   LayoutDashboard, TrendingUp, Bell, ClipboardList, BarChart3,
   Settings, User, Menu, X, FolderOpen, CheckCheck,
   Cog, LifeBuoy, Wrench,
-  Minus, Power, LogOut,
+  Minus, Power, LogOut, LogIn,
 } from 'lucide-react';
 import type { UserData, AlarmData, DatasourceStatus } from '../../types';
 import { api } from '../../lib/api';
@@ -145,14 +145,14 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
                 className={`relative flex items-center rounded-lg transition-colors ${
                   sidebarOpen
                     ? 'gap-3 px-4 py-3 mx-2'
-                    : 'justify-center mx-auto w-[56px] h-[56px]'
+                    : 'justify-center mx-auto w-[64px] h-[64px]'
                 } ${
                   active
                     ? 'bg-[var(--hmi-accent-bg)] text-[var(--hmi-accent-text)]'
                     : 'text-[var(--hmi-text-secondary)] hover:bg-[var(--hmi-bg-elevated)] hover:text-[var(--hmi-text-primary)]'
                 }`}
               >
-                <item.icon size={sidebarOpen ? 20 : 24} className="shrink-0" />
+                <item.icon size={sidebarOpen ? 20 : 28} className="shrink-0" />
                 {sidebarOpen && <span className="text-sm font-medium">{item.label}</span>}
                 {item.to === '/alarms' && activeAlarmCount > 0 && (
                   <span className={`bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full ${
@@ -166,10 +166,10 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
           })}
         </nav>
 
-        {/* User info — moved from header to sidebar bottom */}
-        {user && (
-          <div className="border-t border-[var(--hmi-border)] px-2 py-2">
-            {sidebarOpen ? (
+        {/* User info / Login — sidebar bottom */}
+        <div className="border-t border-[var(--hmi-border)] px-2 py-2">
+          {user ? (
+            sidebarOpen ? (
               <div className="px-2">
                 <div className="flex items-center gap-2 mb-2">
                   <User size={16} className="text-[var(--hmi-text-secondary)] shrink-0" />
@@ -238,9 +238,28 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
                   </>
                 )}
               </div>
-            )}
-          </div>
-        )}
+            )
+          ) : (
+            /* Not logged in — show Login button */
+            sidebarOpen ? (
+              <Link
+                to="/login"
+                className="flex items-center justify-center gap-2 px-3 py-2.5 min-h-[44px] rounded text-sm font-medium text-[var(--hmi-accent-text)] bg-[var(--hmi-accent-bg)] hover:bg-[var(--hmi-accent-bg-hover)] transition-colors mx-1"
+              >
+                <LogIn size={18} />
+                Login
+              </Link>
+            ) : (
+              <Link
+                to="/login"
+                title="Login"
+                className="flex items-center justify-center w-[56px] h-[56px] mx-auto rounded text-[var(--hmi-accent-text)] bg-[var(--hmi-accent-bg)] hover:bg-[var(--hmi-accent-bg-hover)] transition-colors"
+              >
+                <LogIn size={24} />
+              </Link>
+            )
+          )}
+        </div>
 
         {appVersion && (
           <div className="px-4 py-2 border-t border-[var(--hmi-border)]" title={`HMI: v${appVersion}${plcVersion ? `\nPLC: ${plcVersion}` : ''}`}>
@@ -259,7 +278,7 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar — compact header with inline alarm display */}
-        <header className="h-12 bg-[var(--hmi-bg-surface)] border-b border-[var(--hmi-border)] flex items-center px-3 gap-2 shrink-0">
+        <header className="h-14 bg-[var(--hmi-bg-surface)] border-b border-[var(--hmi-border)] flex items-center px-3 gap-2 shrink-0">
           {/* Active job */}
           {activeJobName && (
             <Link
@@ -278,7 +297,7 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
                 <Link
                   key={alarm.id}
                   to="/alarms"
-                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-medium whitespace-nowrap shrink-0 transition-colors ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-base font-medium whitespace-nowrap shrink-0 transition-colors ${
                     alarm.state === 'active_unacked'
                       ? alarm.severity === 'critical'
                         ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
@@ -308,7 +327,7 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
             <button
               onClick={handleAcknowledgeAll}
               disabled={ackingAll}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium transition-colors shrink-0"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors shrink-0"
             >
               <CheckCheck size={14} />
               {ackingAll ? 'Acking...' : 'Ack All'}
