@@ -300,6 +300,10 @@ export interface ProductionSettings {
   cycling_tag: string | null;
   downtime_exception_tags: string[];
   target_rate: number | null;
+
+  machine_status_tag: string | null;
+  cycle_start_tag: string | null;
+  reset_tag: string | null;
 }
 
 export interface ServiceTagOverride {

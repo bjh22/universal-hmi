@@ -20,8 +20,9 @@ import {
   Settings, User, Menu, X, FolderOpen, CheckCheck,
   Cog, LifeBuoy, Wrench,
   Minus, Power, LogOut, LogIn,
+  Play, RotateCcw, Activity,
 } from 'lucide-react';
-import type { UserData, AlarmData, DatasourceStatus } from '../../types';
+import type { UserData, AlarmData, DatasourceStatus, TagValue, ProductionSettings } from '../../types';
 import { api } from '../../lib/api';
 import { SeverityIcon } from '../shared/SeverityIcon';
 
@@ -35,6 +36,7 @@ interface AppShellProps {
   activeJobName?: string | null;
   datasourceStatuses?: DatasourceStatus[];
   plcVersion?: string | null;
+  tagValues?: Record<string, TagValue>;
 }
 
 // Declarative navigation config — each item defines its URL path, icon, label,
@@ -123,7 +125,95 @@ function AlarmMarquee({ alarms }: { alarms: AlarmData[] }) {
   );
 }
 
-export function AppShell({ children, user, wsConnected, alarms, onLogout, navTitle = 'HMI', activeJobName, datasourceStatuses: _ds = [], plcVersion }: AppShellProps) {
+/** Machine status color mapping — maps common PLC state strings/values to colors. */
+function getStatusStyle(value: unknown): { bg: string; text: string; label: string } {
+  const s = String(value).toLowerCase().trim();
+  if (['running', 'cycling', 'auto', '1', 'true'].includes(s))
+    return { bg: 'bg-green-500/20', text: 'text-green-300', label: String(value) };
+  if (['faulted', 'fault', 'error', 'alarm'].includes(s))
+    return { bg: 'bg-red-500/20', text: 'text-red-300', label: String(value) };
+  if (['idle', 'standby', 'waiting'].includes(s))
+    return { bg: 'bg-yellow-500/20', text: 'text-yellow-300', label: String(value) };
+  if (['stopped', 'off', '0', 'false'].includes(s))
+    return { bg: 'bg-slate-500/20', text: 'text-slate-300', label: String(value) };
+  return { bg: 'bg-slate-500/20', text: 'text-slate-300', label: String(value) };
+}
+
+/** Top bar controls — machine status indicator + cycle start / reset buttons.
+ *  Shown when no alarms are active. Fetches production settings on mount to
+ *  determine which tags to display. */
+function TopBarControls({ tagValues }: { tagValues?: Record<string, TagValue> }) {
+  const [settings, setSettings] = useState<ProductionSettings | null>(null);
+  const [pending, setPending] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.getProductionSettings().then(setSettings).catch(() => {});
+  }, []);
+
+  const handleWrite = useCallback(async (tagName: string) => {
+    if (pending) return;
+    setPending(tagName);
+    try {
+      await api.writeTag(tagName, true);
+    } catch {
+      // Write errors are non-fatal
+    } finally {
+      setPending(null);
+    }
+  }, [pending]);
+
+  if (!settings) return <div className="flex-1" />;
+
+  const { machine_status_tag, cycle_start_tag, reset_tag } = settings;
+  const hasAny = machine_status_tag || cycle_start_tag || reset_tag;
+  if (!hasAny) return <div className="flex-1" />;
+
+  const statusValue = machine_status_tag && tagValues?.[machine_status_tag]?.value;
+  const statusStyle = statusValue != null ? getStatusStyle(statusValue) : null;
+
+  return (
+    <div className="flex-1 flex items-center gap-3">
+      {/* Machine status pill */}
+      {machine_status_tag && (
+        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium ${
+          statusStyle ? `${statusStyle.bg} ${statusStyle.text}` : 'bg-slate-500/20 text-slate-400'
+        }`}>
+          <Activity size={14} />
+          <span>{statusStyle ? statusStyle.label : '---'}</span>
+        </div>
+      )}
+
+      {/* Spacer to push buttons right */}
+      <div className="flex-1" />
+
+      {/* Cycle Start button */}
+      {cycle_start_tag && (
+        <button
+          onClick={() => handleWrite(cycle_start_tag)}
+          disabled={pending === cycle_start_tag}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-green-500/40 text-green-400 hover:bg-green-500/15 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors shrink-0"
+        >
+          <Play size={14} />
+          Cycle Start
+        </button>
+      )}
+
+      {/* Reset button */}
+      {reset_tag && (
+        <button
+          onClick={() => handleWrite(reset_tag)}
+          disabled={pending === reset_tag}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-blue-500/40 text-blue-400 hover:bg-blue-500/15 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors shrink-0"
+        >
+          <RotateCcw size={14} />
+          Reset
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function AppShell({ children, user, wsConnected, alarms, onLogout, navTitle = 'HMI', activeJobName, datasourceStatuses: _ds = [], plcVersion, tagValues }: AppShellProps) {
   void _ds; // Datasource statuses are now shown on the Support page, but prop kept for API compat
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     const saved = localStorage.getItem('hmi_sidebar_open');
@@ -371,7 +461,7 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
           {activeAlarms.length > 0 ? (
             <AlarmMarquee alarms={activeAlarms} />
           ) : (
-            <div className="flex-1" />
+            <TopBarControls tagValues={tagValues} />
           )}
 
           {/* Acknowledge All button — only when unacked alarms exist */}

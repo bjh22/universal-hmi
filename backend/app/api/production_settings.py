@@ -19,6 +19,9 @@ _KEYS = {
     "cycling_tag": "production.cycling_tag",
     "downtime_exception_tags": "production.downtime_exception_tags",
     "target_rate": "production.target_rate",
+    "machine_status_tag": "production.machine_status_tag",
+    "cycle_start_tag": "production.cycle_start_tag",
+    "reset_tag": "production.reset_tag",
 }
 
 
@@ -28,6 +31,9 @@ class ProductionSettingsBody(BaseModel):
     cycling_tag: str | None = None
     downtime_exception_tags: list[str] = []
     target_rate: float | None = None
+    machine_status_tag: str | None = None
+    cycle_start_tag: str | None = None
+    reset_tag: str | None = None
 
 
 async def _get_setting(session: AsyncSession, key: str) -> str | None:
@@ -62,12 +68,18 @@ async def load_production_settings(session: AsyncSession) -> dict:
     cycling_tag = await _get_setting(session, _KEYS["cycling_tag"])
     exception_raw = await _get_setting(session, _KEYS["downtime_exception_tags"])
     target_rate_raw = await _get_setting(session, _KEYS["target_rate"])
+    machine_status_tag = await _get_setting(session, _KEYS["machine_status_tag"])
+    cycle_start_tag = await _get_setting(session, _KEYS["cycle_start_tag"])
+    reset_tag = await _get_setting(session, _KEYS["reset_tag"])
     result = {
         "good_count_tag": good_count_tag,
         "reject_fault_tags": json.loads(reject_raw) if reject_raw else [],
         "cycling_tag": cycling_tag,
         "downtime_exception_tags": json.loads(exception_raw) if exception_raw else [],
         "target_rate": float(target_rate_raw) if target_rate_raw else None,
+        "machine_status_tag": machine_status_tag,
+        "cycle_start_tag": cycle_start_tag,
+        "reset_tag": reset_tag,
     }
     _settings_cache = result
     _settings_cache_time = time.monotonic()
@@ -96,6 +108,9 @@ async def update_production_settings(
     await _set_setting(session, _KEYS["cycling_tag"], body.cycling_tag)
     await _set_setting(session, _KEYS["downtime_exception_tags"], json.dumps(body.downtime_exception_tags))
     await _set_setting(session, _KEYS["target_rate"], str(body.target_rate) if body.target_rate is not None else None)
+    await _set_setting(session, _KEYS["machine_status_tag"], body.machine_status_tag)
+    await _set_setting(session, _KEYS["cycle_start_tag"], body.cycle_start_tag)
+    await _set_setting(session, _KEYS["reset_tag"], body.reset_tag)
     await session.commit()
     invalidate_production_settings_cache()
     return await load_production_settings(session)

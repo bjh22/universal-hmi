@@ -204,6 +204,7 @@ export default function App() {
               activeJobName={activeJobName}
               datasourceStatuses={datasourceStatuses}
               plcVersion={plcVersion}
+              tagValues={tagValues}
             >
               {/* Suspense wraps lazy-loaded pages. While a page's code is downloading,
                   React shows the <PageLoader /> fallback instead of a blank screen. */}
