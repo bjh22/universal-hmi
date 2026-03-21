@@ -153,12 +153,22 @@ download_wheels_for_platforms() {
             --only-binary=:all: \
             --no-deps \
             2>/dev/null || \
-        # Fallback: source distribution (platform-independent, built on target)
-        pip download "$req" \
-            -d "$DEST_DIR" \
-            --no-deps \
-            --no-binary=:all: \
-            2>/dev/null || \
+        # Fallback: download source and build into a wheel so the target
+        # doesn't need setuptools or a compiler
+        {
+            local TMPSDIST
+            TMPSDIST=$(mktemp -d)
+            pip download "$req" \
+                -d "$TMPSDIST" \
+                --no-deps \
+                --no-binary=:all: \
+                2>/dev/null && \
+            pip wheel "$TMPSDIST"/*.tar.gz \
+                --no-deps \
+                --wheel-dir "$DEST_DIR" \
+                2>/dev/null && \
+            rm -rf "$TMPSDIST"
+        } || \
         echo "    WARNING: Could not download $req"
     done < "$ROOT_DIR/backend/requirements.txt"
     echo "    Downloaded $(ls -1 "$DEST_DIR/" 2>/dev/null | wc -l | tr -d ' ') packages."
