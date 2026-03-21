@@ -95,7 +95,7 @@ export function DowntimePeriodsTable({ periods, reasonCodes, onAnnotated }: Prop
               const hasException = p.faults.some(f => f.is_exception);
               return (
                 <tr key={`${p.start_time}-${i}`} className="border-b border-slate-700/50 hover:bg-slate-700/30 align-top">
-                  <td className="py-2 pr-3">
+                  <td className="py-3 pr-3">
                     <div className="flex flex-col gap-0.5">
                       {p.faults.map((f, fi) => (
                         <div key={`${f.tag_name}-${fi}`} className="flex items-center gap-1.5">
@@ -110,9 +110,9 @@ export function DowntimePeriodsTable({ periods, reasonCodes, onAnnotated }: Prop
                       ))}
                     </div>
                   </td>
-                  <td className="py-2 pr-3 text-slate-400">{formatTime(p.start_time)}</td>
-                  <td className="py-2 pr-3 text-slate-400">{p.end_time ? formatTime(p.end_time) : <span className="text-amber-400">Ongoing</span>}</td>
-                  <td className="py-2 pr-3 text-slate-300">
+                  <td className="py-3 pr-3 text-slate-400">{formatTime(p.start_time)}</td>
+                  <td className="py-3 pr-3 text-slate-400">{p.end_time ? formatTime(p.end_time) : <span className="text-amber-400">Ongoing</span>}</td>
+                  <td className="py-3 pr-3 text-slate-300">
                     {formatDuration(p.capped_duration_seconds)}
                     {hasException && p.duration_seconds > p.capped_duration_seconds && (
                       <span className="text-xs text-amber-400 ml-1" title="Capped at 5 minutes">
@@ -120,12 +120,12 @@ export function DowntimePeriodsTable({ periods, reasonCodes, onAnnotated }: Prop
                       </span>
                     )}
                   </td>
-                  <td className="py-2 pr-3">
+                  <td className="py-3 pr-3">
                     {isEditing ? (
                       <select
                         value={editCode}
                         onChange={e => setEditCode(e.target.value)}
-                        className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 w-32"
+                        className="bg-slate-700 border border-slate-600 rounded px-2 py-2 min-h-[44px] text-xs text-slate-200 w-32"
                       >
                         <option value="">Unassigned</option>
                         {reasonCodes.map(rc => (
@@ -138,21 +138,21 @@ export function DowntimePeriodsTable({ periods, reasonCodes, onAnnotated }: Prop
                       </span>
                     )}
                   </td>
-                  <td className="py-2">
+                  <td className="py-3">
                     {isEditing ? (
                       <div className="flex items-center gap-1">
                         <button
                           type="button"
                           onClick={() => doSave(p)}
                           disabled={saving}
-                          className="px-2 py-0.5 bg-blue-600 hover:bg-blue-500 rounded text-xs text-white disabled:opacity-50"
+                          className="px-3 py-2 min-h-[44px] bg-blue-600 hover:bg-blue-500 rounded text-xs text-white disabled:opacity-50"
                         >
                           Save
                         </button>
                         <button
                           type="button"
                           onClick={cancelEdit}
-                          className="px-2 py-0.5 bg-slate-600 hover:bg-slate-500 rounded text-xs text-white"
+                          className="px-3 py-2 min-h-[44px] bg-slate-600 hover:bg-slate-500 rounded text-xs text-white"
                         >
                           Cancel
                         </button>
@@ -162,7 +162,7 @@ export function DowntimePeriodsTable({ periods, reasonCodes, onAnnotated }: Prop
                       <button
                         type="button"
                         onClick={() => startEdit(p)}
-                        className="flex items-center gap-1 px-2 py-0.5 bg-slate-700 hover:bg-slate-600 rounded text-xs text-slate-300"
+                        className="flex items-center gap-1 px-3 py-2 min-h-[44px] bg-slate-700 hover:bg-slate-600 rounded text-xs text-slate-300"
                         title="Tag with reason code"
                       >
                         <Tag className="w-3 h-3" /> Tag

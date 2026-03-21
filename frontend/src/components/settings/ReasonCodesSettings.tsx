@@ -4,7 +4,7 @@ import { api } from '../../lib/api';
 import { Dialog } from '../Dialog';
 import type { ReasonCode } from '../../types';
 
-const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-slate-200 outline-none focus:border-blue-500';
+const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2.5 min-h-[44px] text-sm text-slate-200 outline-none focus:border-blue-500';
 
 export function ReasonCodesSettings() {
   const [codes, setCodes] = useState<ReasonCode[]>([]);
@@ -82,7 +82,7 @@ export function ReasonCodesSettings() {
           <h2 className="text-base font-semibold text-slate-100">Downtime Reason Codes</h2>
           <p className="text-xs text-slate-400 mt-0.5">Managed list of reason codes for consistent downtime tracking and Pareto analysis.</p>
         </div>
-        <button onClick={openAdd} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--hmi-accent)] hover:opacity-90 text-white rounded-lg text-sm font-medium">
+        <button onClick={openAdd} className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-[var(--hmi-accent)] hover:opacity-90 text-white rounded-lg text-sm font-medium">
           <Plus size={16} /> Add Code
         </button>
       </div>
@@ -165,8 +165,8 @@ export function ReasonCodesSettings() {
           </div>
           {error && <div className="text-red-400 text-sm mt-2">{error}</div>}
           <div className="flex justify-end gap-2 mt-4">
-            <button onClick={() => setShowDialog(false)} className="px-3 py-1.5 bg-slate-700 text-slate-300 rounded-lg text-sm">Cancel</button>
-            <button onClick={handleSave} className="px-3 py-1.5 bg-[var(--hmi-accent)] hover:opacity-90 text-white rounded-lg text-sm">
+            <button onClick={() => setShowDialog(false)} className="px-3 py-2.5 min-h-[44px] bg-slate-700 text-slate-300 rounded-lg text-sm">Cancel</button>
+            <button onClick={handleSave} className="px-3 py-2.5 min-h-[44px] bg-[var(--hmi-accent)] hover:opacity-90 text-white rounded-lg text-sm">
               {editing ? 'Update' : 'Add'}
             </button>
           </div>
@@ -180,8 +180,8 @@ export function ReasonCodesSettings() {
             Deactivate reason code <span className="font-mono">{confirmDelete.code}</span>? It will no longer appear in dropdowns but historical data will be preserved.
           </p>
           <div className="flex justify-end gap-2">
-            <button onClick={() => setConfirmDelete(null)} className="px-3 py-1.5 bg-slate-700 text-slate-300 rounded-lg text-sm">Cancel</button>
-            <button onClick={() => handleDelete(confirmDelete)} className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm">Deactivate</button>
+            <button onClick={() => setConfirmDelete(null)} className="px-3 py-2.5 min-h-[44px] bg-slate-700 text-slate-300 rounded-lg text-sm">Cancel</button>
+            <button onClick={() => handleDelete(confirmDelete)} className="px-3 py-2.5 min-h-[44px] bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm">Deactivate</button>
           </div>
         </Dialog>
       )}
