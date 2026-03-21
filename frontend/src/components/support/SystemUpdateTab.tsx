@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { HardDriveUpload, CheckCircle2, AlertTriangle, RefreshCw, Upload, X } from 'lucide-react';
 import { api } from '../../lib/api';
+import { InAppFilePicker } from './InAppFilePicker';
 
 interface SystemInfo {
   app_version: string;
@@ -36,13 +37,15 @@ interface UpdateResult {
 export function SystemUpdateTab({ canManage }: { canManage: boolean }) {
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
   const [infoError, setInfoError] = useState('');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [showFilePicker, setShowFilePicker] = useState(false);
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  const [selectedSizeMb, setSelectedSizeMb] = useState(0);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [validating, setValidating] = useState(false);
   const [applying, setApplying] = useState(false);
   const [updateResult, setUpdateResult] = useState<UpdateResult | null>(null);
   const [error, setError] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load system info on mount
   useEffect(() => {
@@ -61,18 +64,19 @@ export function SystemUpdateTab({ canManage }: { canManage: boolean }) {
     return `${m}m`;
   }, []);
 
-  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setSelectedFile(file);
+  const handleFileSelect = useCallback(async (path: string, name: string, sizeMb: number) => {
+    setShowFilePicker(false);
+    setSelectedPath(path);
+    setSelectedFileName(name);
+    setSelectedSizeMb(sizeMb);
     setValidation(null);
     setUpdateResult(null);
     setError('');
 
-    // Auto-validate
+    // Auto-validate via server-side path (no upload needed)
     setValidating(true);
     try {
-      const result = await api.validateUpdatePackage(file);
+      const result = await api.validateUpdatePath(path);
       setValidation(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Validation failed');
@@ -82,28 +86,29 @@ export function SystemUpdateTab({ canManage }: { canManage: boolean }) {
   }, []);
 
   const handleApply = useCallback(async () => {
-    if (!selectedFile || !validation?.valid) return;
+    if (!selectedPath || !validation?.valid) return;
     if (!confirm('Apply this update? The system will restart automatically after the update is applied.\n\nYour database (trends, jobs, screens, alarms) will be preserved.')) return;
 
     setApplying(true);
     setError('');
     setUpdateResult(null);
     try {
-      const result = await api.applyUpdatePackage(selectedFile);
+      const result = await api.applyUpdatePath(selectedPath);
       setUpdateResult(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Update failed');
     } finally {
       setApplying(false);
     }
-  }, [selectedFile, validation]);
+  }, [selectedPath, validation]);
 
   const handleClear = useCallback(() => {
-    setSelectedFile(null);
+    setSelectedPath(null);
+    setSelectedFileName(null);
+    setSelectedSizeMb(0);
     setValidation(null);
     setUpdateResult(null);
     setError('');
-    if (fileInputRef.current) fileInputRef.current.value = '';
   }, []);
 
   return (
@@ -156,27 +161,19 @@ export function SystemUpdateTab({ canManage }: { canManage: boolean }) {
 
           {/* File picker */}
           <div className="mb-4">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".tar.gz,.zip,.gz"
-              onChange={handleFileSelect}
-              className="hidden"
-              id="update-file-input"
-            />
             <div className="flex gap-2 items-center">
               <button
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => setShowFilePicker(true)}
                 disabled={applying}
                 className="flex items-center gap-2 px-4 py-2.5 bg-[var(--hmi-bg-input)] hover:bg-[var(--hmi-border-subtle)] disabled:opacity-50 text-[var(--hmi-text-primary)] rounded-lg text-sm font-medium border border-[var(--hmi-border-subtle)]"
               >
                 <HardDriveUpload size={16} />
-                {selectedFile ? 'Choose Different Package' : 'Select Update Package'}
+                {selectedPath ? 'Choose Different Package' : 'Select Update Package'}
               </button>
-              {selectedFile && (
+              {selectedFileName && (
                 <>
-                  <span className="text-sm text-[var(--hmi-text-secondary)] font-mono truncate max-w-xs">{selectedFile.name}</span>
-                  <span className="text-xs text-[var(--hmi-text-muted)]">({(selectedFile.size / (1024 * 1024)).toFixed(1)} MB)</span>
+                  <span className="text-sm text-[var(--hmi-text-secondary)] font-mono truncate max-w-xs">{selectedFileName}</span>
+                  <span className="text-xs text-[var(--hmi-text-muted)]">({selectedSizeMb.toFixed(1)} MB)</span>
                   <button onClick={handleClear} className="text-[var(--hmi-text-muted)] hover:text-[var(--hmi-text-secondary)] ml-1" title="Clear">
                     <X size={16} />
                   </button>
@@ -184,6 +181,14 @@ export function SystemUpdateTab({ canManage }: { canManage: boolean }) {
               )}
             </div>
           </div>
+
+          {/* In-app file browser modal */}
+          {showFilePicker && (
+            <InAppFilePicker
+              onSelect={handleFileSelect}
+              onClose={() => setShowFilePicker(false)}
+            />
+          )}
 
           {/* Validating spinner */}
           {validating && (

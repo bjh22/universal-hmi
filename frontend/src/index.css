@@ -20,6 +20,13 @@
   --hmi-text-muted: #64748b;
 }
 
+html {
+  /* Bump base font-size for small 5" touch screens.
+     Tailwind uses rem so text-xs (0.75rem) → 15px,
+     text-sm (0.875rem) → 17.5px, text-base (1rem) → 20px */
+  font-size: 20px;
+}
+
 html, body {
   overscroll-behavior: none;
 }
@@ -45,4 +52,14 @@ body {
 ::-webkit-scrollbar-thumb {
   background: var(--hmi-border-subtle);
   border-radius: 4px;
+}
+
+/* Alarm marquee — scrolls left at constant speed, loops seamlessly via duplicated content */
+@keyframes alarm-marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.alarm-marquee {
+  animation: alarm-marquee 20s linear infinite;
+  width: max-content;
 }

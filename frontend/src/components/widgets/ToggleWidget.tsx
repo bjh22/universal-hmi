@@ -41,19 +41,17 @@ export const ToggleWidget = memo(function ToggleWidget({ title, tag, tagValues, 
       {shouldShowTitle(chrome) && <div className={`${getTitleClasses(chrome)} ${isNone ? '' : 'mb-3'}`} style={textStyleToCSS(titleStyle)}>{title}</div>}
       {/* The toggle track — `transition-colors` animates the background color change.
           When value is true, the track turns green; when false, it's gray. */}
+      {/* Track and knob use fixed px sizes so they don't scale with root font-size */}
       <button
         onClick={handleToggle}
-        className={`w-20 h-11 rounded-full transition-colors relative ${
+        className={`rounded-full transition-colors relative ${
           value ? 'bg-green-500' : 'bg-slate-600'
         }`}
+        style={{ width: 80, height: 44 }}
       >
-        {/* The toggle knob — `transition-transform` animates the position change.
-            When value is true, the knob slides to the right; when false,
-            it sits on the left. The browser smoothly animates between these. */}
         <span
-          className={`absolute top-1.5 w-8 h-8 bg-white rounded-full transition-transform shadow-md ${
-            value ? 'left-[2.75rem]' : 'left-1.5'
-          }`}
+          className="absolute bg-white rounded-full transition-all shadow-md"
+          style={{ top: 6, width: 32, height: 32, left: value ? 42 : 6 }}
         />
       </button>
       <div className={`text-base font-medium ${value ? 'text-green-400' : 'text-slate-400'} ${isNone ? '' : 'mt-2'}`} style={textStyleToCSS(valueStyle)}>

@@ -496,6 +496,19 @@ export const api = {
     return res.json();
   },
 
+  browseFiles: (path?: string) =>
+    request<{ current: string; parent: string | null; entries: { name: string; path: string; is_dir: boolean; size: number }[] }>(
+      `/system/files/browse${path ? `?path=${encodeURIComponent(path)}` : ''}`
+    ),
+  validateUpdatePath: (path: string) =>
+    request<{ valid: boolean; is_compiled: boolean; has_backend: boolean; has_frontend: boolean; has_wheels: boolean; has_windows_wheels: boolean; file_count: number; package_size_mb: number; error: string | null }>(
+      '/system/update/validate-path', { method: 'POST', body: JSON.stringify({ path }) }
+    ),
+  applyUpdatePath: (path: string) =>
+    request<{ success: boolean; message: string; updated_backend: boolean; updated_frontend: boolean; updated_dependencies: boolean; restart_scheduled: boolean }>(
+      '/system/update/apply-path', { method: 'POST', body: JSON.stringify({ path }) }
+    ),
+
   shutdownSystem: () =>
     request<{ status: string }>('/system/shutdown', { method: 'POST' }),
 
