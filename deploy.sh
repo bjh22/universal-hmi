@@ -145,13 +145,12 @@ download_wheels_for_platforms() {
     while IFS= read -r req; do
         # Skip empty lines and comments
         [[ -z "$req" || "$req" =~ ^[[:space:]]*# ]] && continue
-        # Try binary wheel with platform tags
+        # Try binary wheel with platform tags (includes transitive deps)
         pip download "$req" \
             -d "$DEST_DIR" \
             "${PLATFORM_ARGS[@]}" \
             --python-version "$PYTHON_MAJOR_MINOR" \
             --only-binary=:all: \
-            --no-deps \
             2>/dev/null || \
         # Fallback: download source and build into a wheel so the target
         # doesn't need setuptools or a compiler
