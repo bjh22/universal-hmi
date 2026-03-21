@@ -328,12 +328,20 @@ if $BUNDLE_CHROMIUM; then
 
     # Always bundle Linux x86_64
     echo "    --- Linux x86_64 ---"
-    download_chromium "linux64" "$RELEASE_DIR/chromium-linux-x86_64" "zip"
+    if [ -d "$RELEASE_DIR/chromium-linux-x86_64/chrome-linux64" ]; then
+        echo "    Already exists, skipping download."
+    else
+        download_chromium "linux64" "$RELEASE_DIR/chromium-linux-x86_64" "zip"
+    fi
 
     # Optionally bundle Windows x86_64
     if $BUILD_WINDOWS; then
         echo "    --- Windows x86_64 ---"
-        download_chromium "win64" "$RELEASE_DIR/chromium-windows" "zip"
+        if [ -d "$RELEASE_DIR/chromium-windows/chrome-win64" ]; then
+            echo "    Already exists, skipping download."
+        else
+            download_chromium "win64" "$RELEASE_DIR/chromium-windows" "zip"
+        fi
     fi
 
     echo "    Chromium bundling complete."
