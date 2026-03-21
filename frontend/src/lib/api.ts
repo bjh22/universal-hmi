@@ -496,6 +496,9 @@ export const api = {
     return res.json();
   },
 
+  shutdownSystem: () =>
+    request<{ status: string }>('/system/shutdown', { method: 'POST' }),
+
   // Application Logs
   getLogs: (params?: { level?: string; search?: string; limit?: number }) => {
     const qs = new URLSearchParams();

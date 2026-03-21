@@ -915,3 +915,13 @@ def _trigger_restart():
     """Trigger a process restart. systemd/NSSM will restart the service automatically."""
     logger.info("Restarting HMI service after software update...")
     os.kill(os.getpid(), signal.SIGTERM)
+
+
+@router.post("/shutdown")
+async def shutdown_system(
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    """Shut down the HMI server process. Engineer or Designer role required."""
+    logger.info(f"Shutdown requested by user: {_user.username}")
+    asyncio.get_event_loop().call_later(1.0, lambda: os.kill(os.getpid(), signal.SIGTERM))
+    return {"status": "shutdown_scheduled"}
