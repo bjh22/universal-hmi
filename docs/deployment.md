@@ -1,25 +1,29 @@
 # Deployment to Panel PCs
 
-The project includes a `deploy.sh` script that packages the entire HMI — backend, frontend, and all Python dependencies — into a self-contained archive for offline installation on industrial panel PCs. No internet connection is required on the target machine.
+This guide covers packaging the HMI for installation on industrial panel PCs, touchscreens, and embedded PCs. The deployment process creates a self-contained archive with everything needed — the HMI application, all libraries, and optionally a bundled Python runtime and Chromium browser. **No internet connection, Python, Node.js, or any other software is needed on the target machine.**
+
+This is similar to deploying a compiled PLC runtime or a packaged HMI application — you build the package on your development machine and transfer it to the panel PC via USB, SCP, or network share.
 
 ## Prerequisites (Build Machine)
 
-The packaging step runs on your **development machine** (Linux or macOS with internet access):
+The packaging step runs on your **development machine** (the same machine where you develop and test). It needs internet access to download platform-specific bundles:
 
 | Requirement | Purpose |
 |-------------|---------|
-| Python 3.10+ | Downloads pip wheels for the target |
-| Node.js 18+ | Builds the frontend |
-| `pip` | Downloads offline wheel packages |
-| `curl` | Downloads standalone Python interpreter |
+| Python 3.10+ | Packages the backend and downloads dependency bundles |
+| Node.js 18+ | Compiles the browser UI for production |
+| `pip` | Downloads offline dependency packages (Python's package manager) |
+| `curl` | Downloads the standalone Python interpreter for the target |
 | `zip` (optional) | Creates `.zip` archive for Windows targets |
-| `pyinstaller` (optional) | Required only when using `--compile` flag (`pip install pyinstaller`) |
+| `pyinstaller` (optional) | Only needed with `--compile` flag to create a single executable (`pip install pyinstaller`) |
 
 ## Prerequisites (Target Panel PC)
 
-**None** — by default, `deploy.sh` bundles a standalone Python interpreter ([python-build-standalone](https://github.com/astral-sh/python-build-standalone)) into the deployment package, so the target machine needs no pre-installed software. No Python, Node.js, npm, or internet connection is required. When using `--compile`, the backend is compiled into a native executable with PyInstaller — no Python interpreter or source files are present on the target.
+**None** — by default, the deployment package includes everything. The target machine needs no pre-installed software, no internet connection, and no special configuration.
 
-If you build the package with `--no-bundle-python`, the target machine must have Python 3.11+ installed:
+When using `--compile`, the backend is compiled into a single native executable — no Python interpreter or source files are present on the target at all.
+
+If you specifically build with `--no-bundle-python`, the target machine must have Python 3.11+ installed:
 
 | Platform | Requirement (only with `--no-bundle-python`) |
 |----------|-------------|
@@ -28,7 +32,7 @@ If you build the package with `--no-bundle-python`, the target machine must have
 
 ## Step 1: Create the Deployment Package
 
-On your development machine:
+On your development machine, run one of the following commands. The script automatically builds the frontend, packages the backend, downloads all dependencies, and creates an archive file:
 
 ```bash
 # Linux x86_64 (default — bundles Python interpreter)
@@ -74,27 +78,30 @@ On your development machine:
 
 Flags can be combined freely (e.g., `./deploy.sh --windows --arm --chromium --python-version 3.12.8`).
 
-This performs the following steps automatically:
-1. Builds the frontend with `npm run build` (TypeScript check + Vite production build)
-2. Packages the backend — either copies source files (default) or compiles into a native executable with PyInstaller (`--compile`)
-3. Downloads all Python dependency wheels for offline installation (skipped with `--compile`)
-4. Downloads Windows-specific wheels (when `--windows` is specified, skipped with `--compile`)
+The script performs these steps automatically:
+1. Builds the browser UI into optimized production files
+2. Packages the backend — either copies the Python source files (default) or compiles into a single native executable (`--compile`)
+3. Downloads all Python library dependencies as offline packages (skipped with `--compile`)
+4. Downloads Windows-specific library packages (when `--windows` is specified)
 5. Bundles a standalone Python interpreter for each target platform (skipped with `--compile` or `--no-bundle-python`)
-6. Downloads and bundles Chrome for Testing (when `--chromium` is specified)
+6. Downloads and bundles a Chromium browser for kiosk mode (when `--chromium` is specified)
 7. Generates platform-specific install scripts (`install.sh` and `install.bat`)
 8. Creates deployment archives in `dist/`:
    - `dist/hmi-<version>.tar.gz` — Linux deployment package (always created)
    - `dist/hmi-<version>-windows.zip` — Windows deployment package (when `--windows` is used)
 
-> **Versioning:** Deployment packages use [CalVer](https://calver.org/) format `YYYY.MM.DD.N` (e.g., `2026.03.21.1`). The version is automatically computed from the current date and number of commits that day, and written to `HMI_APP_VERSION` in `.env` during installation.
+> **Versioning:** Packages are automatically versioned using the date format `YYYY.MM.DD.N` (e.g., `2026.03.21.1`). The version number is written to the `.env` configuration file during installation and displayed on the Support page.
 
 ## Step 2: Deploy to the Target
+
+Transfer the archive file to the panel PC using any method — USB drive, SCP, network share, etc.
 
 ### Linux Panel PC
 
 ```bash
-# 1. Copy the archive to the panel PC (USB drive, SCP, network share, etc.)
+# 1. Copy the archive to the panel PC
 scp dist/hmi-*.tar.gz user@panel-pc:/tmp/
+# Or: copy to USB drive and mount on the panel PC
 
 # 2. On the panel PC, extract the archive
 tar -xzf /tmp/hmi-*.tar.gz
@@ -112,15 +119,14 @@ sudo ./install.sh /home/hmi/app
 | *(none)* | Install to `/opt/hmi` (default) |
 | `<path>` | Install to a custom directory (e.g., `sudo ./install.sh /home/hmi/app`) |
 
-The Linux installer:
-- Installs the bundled Python interpreter (or falls back to system Python 3 if `--no-bundle-python` was used)
-- Creates a Python virtual environment at the install location
-- Installs all dependencies from bundled wheels (fully offline)
-- Copies the application files and built frontend
-- Creates a `.env` file with a generated `HMI_SECRET_KEY`
-- Creates a **systemd service** (`hmi.service`) for auto-start on boot
-- Seeds the database with default users and demo tags
-- Creates convenience scripts (`start.sh`, `seed.sh`)
+The Linux installer handles everything automatically:
+- Sets up the bundled Python interpreter (no system Python needed)
+- Installs all software dependencies from the bundled packages (fully offline)
+- Copies the application files and compiled browser UI
+- Generates a `.env` configuration file with a random security key
+- Creates a **systemd service** (`hmi.service`) so the HMI starts automatically on boot and restarts if it crashes
+- Populates the database with default users and demo tags
+- Creates helper scripts (`start.sh` for manual start, `seed.sh` to reset demo data)
 
 **After installation:**
 
@@ -160,15 +166,14 @@ install.bat D:\hmi
 | *(none)* | Install to `C:\hmi` (default) |
 | `<path>` | Install to a custom directory (e.g., `install.bat D:\hmi`) |
 
-The Windows installer:
-- Installs the bundled Python interpreter (or falls back to system Python on PATH if `--no-bundle-python` was used)
-- Creates a Python virtual environment at the install location (default: `C:\hmi`)
-- Installs all dependencies from bundled wheels (fully offline, uses Windows-specific wheels when available)
-- Copies the application files and built frontend
-- Creates a `.env` file with a generated `HMI_SECRET_KEY`
-- Configures a **Windows Firewall** rule to allow incoming connections on port 8080
-- Seeds the database with default users and demo tags
-- Creates convenience scripts (`start.bat`, `seed.bat`)
+The Windows installer handles everything automatically:
+- Sets up the bundled Python interpreter (no system Python needed)
+- Installs all software dependencies from the bundled packages (fully offline)
+- Copies the application files and compiled browser UI
+- Generates a `.env` configuration file with a random security key
+- Creates a **Windows Firewall** rule to allow incoming connections on port 8080 (so other machines on the network can access the HMI)
+- Populates the database with default users and demo tags
+- Creates helper scripts (`start.bat` for manual start, `seed.bat` to reset demo data)
 
 **After installation:**
 
@@ -182,7 +187,7 @@ C:\hmi\seed.bat
 
 **Running as a Windows Service (recommended for production):**
 
-The HMI should run as a service so it starts automatically on boot and survives user logoff. Use [NSSM](https://nssm.cc/) (Non-Sucking Service Manager):
+For production use, the HMI should run as a Windows service so it starts automatically on boot and keeps running even when no user is logged in. Use [NSSM](https://nssm.cc/) (a free tool for creating Windows services from any executable):
 
 ```cmd
 REM Install NSSM, then register the service:
@@ -196,18 +201,18 @@ REM Or use Task Scheduler to run start.bat at logon
 
 ## Post-Deployment Verification
 
-After installation on either platform, verify the deployment:
+After installation on either platform, verify that everything is working:
 
 1. **Open a browser** on the panel PC and navigate to `http://localhost:8080`
 2. **Log in** with the default credentials: username `admin`, password `admin`
-3. **Check the WebSocket** — the "Connected" indicator in the header should show green
-4. **Verify tag data** — navigate to the Dashboard and confirm simulated tag values are updating
+3. **Check the connection** — the "Connected" indicator in the header should show green (this means the live data link between the browser and the server is working)
+4. **Verify tag data** — navigate to the Dashboard and confirm simulated tag values are updating every 500ms
 
-If accessing from another machine on the network, use the panel PC's IP address (e.g., `http://192.168.1.100:8080`).
+To access the HMI from another machine on the network, use the panel PC's IP address instead of `localhost` (e.g., `http://192.168.1.100:8080`). Multiple browsers can connect simultaneously.
 
 ## Kiosk Mode Deployment
 
-When the deployment package is built with `--chromium`, the installer bundles a dedicated Chromium browser and creates kiosk launcher scripts. This provides a fully self-contained deployment — no browser, Python, or internet connection is needed on the target machine.
+Kiosk mode is for dedicated panel PCs where the HMI should fill the entire screen with no browser chrome (no address bar, no tabs, no minimize/close buttons) — just like a traditional embedded HMI. When the deployment package is built with `--chromium`, it bundles a dedicated Chromium browser so the target machine doesn't need any browser pre-installed.
 
 ### Linux Kiosk
 
@@ -243,7 +248,7 @@ The Windows kiosk script launches the HMI server and opens Chromium in fullscree
 
 ## Updating an Existing Installation
 
-Updates can be applied **directly from the HMI web interface** or via the command line. Both methods are designed for safe in-place upgrades — application code and frontend assets are replaced while **all operational data is preserved**.
+Updates can be applied **directly from the HMI's web interface** (recommended) or via the command line. Both methods perform a safe in-place upgrade — the application code is replaced while **all operational data is preserved** (screens, tags, trend history, alarm history, users, jobs, audit logs, etc.).
 
 ### What Is Preserved During Updates
 
@@ -266,13 +271,13 @@ Updates can be applied **directly from the HMI web interface** or via the comman
 | `media/` (uploaded images) | |
 | systemd service / NSSM config | |
 
-The SQLite database contains all your operational data — trend history, job/recipe definitions, screen layouts, alarm history, user accounts, audit logs, and production records. It is stored in the `data/` subdirectory and is **never overwritten or deleted** during an update.
+The SQLite database file contains all your operational data — trend history, job/recipe definitions, screen layouts, alarm history, user accounts, audit logs, and production records. It is stored in the `data/` subdirectory and is **never overwritten or deleted** during an update. Think of it like the retain memory in a PLC — it survives firmware updates.
 
 > **Important:** Update packages must match the installation type — a compiled package can only be applied to a compiled installation, and a source package to a source installation. The system validates this automatically and rejects mismatched packages.
 
 ### Method 1: In-HMI Update (Recommended)
 
-The HMI includes a built-in **Software Update** feature on the Support page. This allows engineers and designers to apply updates directly from the running HMI — no command line, SSH, or terminal access required.
+The HMI includes a built-in **Software Update** feature on the Support page. Engineers and designers can apply updates directly from the running HMI — no command line, SSH, or terminal access required. Just upload the package file through the web interface.
 
 1. Build a deployment package on your development machine (`./deploy.sh` or `./deploy.sh --compile`)
 2. Copy the `.tar.gz` or `.zip` file to the panel PC (USB drive, network share, or any local folder)
@@ -353,18 +358,18 @@ If an update causes issues, you can restore the previous version:
 
 ## Production Configuration
 
-For production panel PC deployments, review these settings in the `.env` file at the install location:
+For production panel PC deployments, review these settings in the `.env` file at the install location. The `.env` file is a plain text file with `NAME=VALUE` pairs — similar to PLC system parameters:
 
 | Variable | Recommendation |
 |----------|----------------|
-| `HMI_SECRET_KEY` | Auto-generated during install — keep the generated value |
-| `HMI_DEBUG` | Set to `false` (default) |
-| `HMI_HOST` | `0.0.0.0` to accept connections from any network interface |
-| `HMI_PORT` | `8080` (default) — change if needed, update firewall rules accordingly |
-| `HMI_ACCESS_TOKEN_EXPIRE_MINUTES` | `480` (8 hours) — adjust to match shift length |
-| `HMI_WS_UPDATE_INTERVAL_MS` | `500` — lower for faster updates, higher to reduce CPU usage |
-| `HMI_TREND_RETENTION_DAYS` | `90` — increase for longer history, monitor disk usage |
-| `HMI_APP_VERSION` | Auto-set during install/update (CalVer `YYYY.MM.DD.N`) — do not edit manually |
+| `HMI_SECRET_KEY` | Auto-generated during install — keep the generated value (this secures login tokens) |
+| `HMI_DEBUG` | Set to `false` (default) — never enable on production systems |
+| `HMI_HOST` | `0.0.0.0` to accept connections from any network interface (default) |
+| `HMI_PORT` | `8080` (default) — change if needed, and update firewall rules accordingly |
+| `HMI_ACCESS_TOKEN_EXPIRE_MINUTES` | `480` (8 hours) — adjust to match your shift length |
+| `HMI_WS_UPDATE_INTERVAL_MS` | `500` (twice per second) — lower for faster updates, higher to reduce CPU load on low-power devices |
+| `HMI_TREND_RETENTION_DAYS` | `90` — increase for longer history, but monitor disk usage on devices with limited storage |
+| `HMI_APP_VERSION` | Auto-set during install/update — do not edit manually |
 
 ## Deployment Directory Structure
 

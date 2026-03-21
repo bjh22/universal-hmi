@@ -1,73 +1,52 @@
-# React + TypeScript + Vite
+# Frontend — Browser-Based User Interface
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This folder contains the browser-based user interface (the "frontend") — the screens, widgets, navigation, and screen designer that operators, supervisors, and engineers interact with.
 
-Currently, two official plugins are available:
+## What's in here
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+| Folder | Purpose |
+|--------|---------|
+| `src/components/widgets/` | Widget components (gauges, status indicators, toggles, command buttons, etc.) |
+| `src/components/designer/` | The drag-and-drop screen editor (widget palette, canvas, property panel, toolbar) |
+| `src/components/layout/` | Navigation sidebar, header bar, and application shell |
+| `src/components/reports/` | OEE charts, downtime Pareto, production trend charts |
+| `src/hooks/` | Shared logic modules — login state (`useAuth`), live data connection (`useWebSocket`), screen editor state (`useDesignMode`) |
+| `src/pages/` | Full-page views — Dashboard, Alarms, Trends, Jobs, Reports, Settings, Service, etc. |
+| `src/lib/api.ts` | HTTP client that calls the backend API (handles authentication automatically) |
+| `src/types/index.ts` | Data structure definitions used throughout the frontend |
 
-## React Compiler
+## Quick reference
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+# Start development server (hot-reloading — changes appear instantly in the browser)
+npm run dev
 
-## Expanding the ESLint configuration
+# Build for production (output goes to dist/)
+npm run build
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+# Check code for errors without building
+npx tsc --noEmit
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+# Run code quality checks
+npm run lint
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# Run automated tests
+npx vitest run
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Technology
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- **React** — UI framework that builds the interface from reusable components
+- **TypeScript** — JavaScript with type checking (catches errors before runtime, like a PLC compiler)
+- **Vite** — Build tool that compiles the code for production and provides hot-reload during development
+- **Tailwind CSS** — Utility-based styling system (dark industrial theme)
+- **Recharts** — Charting library used for trends, OEE, and production reports
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## How it connects to the backend
+
+- **HTTP API calls** (`src/lib/api.ts`) — for reading/writing configuration (tags, screens, users, settings)
+- **WebSocket** (`src/hooks/useWebSocket.ts`) — for receiving live tag values and alarm updates in real time (500ms push cycle)
+
+During development, the Vite dev server (port 5173) proxies API and WebSocket requests to the backend (port 8080). In production, the backend serves the compiled frontend files directly.
+
+For more details on extending the frontend, see the [Developer Guide](../DEVELOPER.md).

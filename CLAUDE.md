@@ -1,8 +1,10 @@
 # CLAUDE.md — OPC-UA Industrial HMI
 
+> **For controls engineers:** This file is a reference for AI-assisted development (used by tools like Claude Code). It provides a concise map of the entire codebase. You don't need to read it to use the HMI — see the [User Guide](docs/user-guide.md) for that. But it's useful if you want to understand where things live in the code.
+
 ## Project Overview
 
-Full-stack industrial HMI (Human-Machine Interface) for monitoring and controlling industrial equipment via OPC-UA, Modbus, EtherNet/IP, and MQTT. Python/FastAPI backend with React/TypeScript frontend and a drag-and-drop screen designer.
+Full-stack industrial HMI (Human-Machine Interface) for monitoring and controlling industrial equipment via OPC-UA, Modbus, EtherNet/IP, and MQTT. The **backend** (Python/FastAPI) handles PLC communication, alarm processing, trend logging, and data storage. The **frontend** (React/TypeScript) is the browser-based operator interface with a drag-and-drop screen designer.
 
 ## Architecture
 

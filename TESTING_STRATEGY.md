@@ -2,21 +2,25 @@
 
 ## Overview
 
-This document outlines the recommended testing strategy for the universal-hmi project. The project currently has no testing infrastructure. This plan prioritizes correctness of critical calculations and state machines, starting with the highest-value, easiest-to-test code.
+This document describes the automated testing approach for the HMI. Automated tests are scripts that verify the application works correctly — like a self-diagnostic routine that checks alarm logic, OEE calculations, authentication, and UI behavior after every code change. This catches bugs before they reach production.
 
-## Recommended Frameworks
+The strategy prioritizes correctness of critical calculations and state machines (alarm transitions, OEE math, tag simulation), starting with the highest-value code.
 
-### Backend: pytest + pytest-asyncio
+> **Note:** This document was the original testing plan. The tests described here have been implemented. See `DEVELOPER.md` > Testing for the current state.
 
-- **Why:** Industry standard for Python, excellent async support, rich plugin ecosystem
-- **Packages:** `pytest`, `pytest-asyncio`, `pytest-cov`, `httpx` (async FastAPI TestClient), `freezegun` (time mocking)
-- **Install to:** `backend/requirements-dev.txt` (separate from production deps)
+## Testing Tools
 
-### Frontend: Vitest + React Testing Library
+### Backend: pytest
 
-- **Why:** Native Vite integration (same transform pipeline), Jest-compatible API, fast execution
-- **Packages:** `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`
-- **Install to:** `frontend/package.json` devDependencies
+- **pytest** is the standard Python testing tool. It discovers test functions, runs them, and reports pass/fail results.
+- Additional tools: `pytest-asyncio` (for testing async code), `pytest-cov` (for measuring which code is covered by tests), `httpx` (for simulating HTTP requests to the API), `freezegun` (for freezing time in tests)
+- Installed via: `backend/requirements-dev.txt` (separate from production — these don't ship to panel PCs)
+
+### Frontend: Vitest
+
+- **Vitest** is the JavaScript testing tool. It renders UI components in a simulated browser and checks they display correctly.
+- Additional tools: `@testing-library/react` (for rendering components), `jsdom` (simulated browser environment)
+- Installed via: `frontend/package.json` (development dependencies only)
 
 ---
 

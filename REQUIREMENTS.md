@@ -1,5 +1,7 @@
 # Industrial HMI — Requirements & Use Cases
 
+This document defines the functional and non-functional requirements for the HMI system. It is written for controls engineers and project managers who need to understand what the system does and how it behaves. Web development knowledge is not required — the technology stack section below briefly explains the role of each tool.
+
 ## 1. Project Overview
 
 A general-purpose, web-based Human-Machine Interface (HMI) for monitoring and controlling industrial machines and processes. While the examples and simulation in this document use a packaging machine scenario, the system is **application-agnostic** — it can be deployed for any industrial control context including packaging, food & beverage, material handling, water/wastewater, HVAC, building automation, discrete manufacturing, and process control.
@@ -12,20 +14,20 @@ The system is designed to run **fully offline** with no internet dependency — 
 
 ### 1.1 Technology Stack
 
-| Layer | Technology | Rationale |
+| Layer | Technology | What it does |
 |-------|-----------|-----------|
-| Frontend | React + TypeScript + Vite | Responsive, component-based UI with strong typing |
-| UI Library | Shadcn/ui + Tailwind CSS | Clean industrial look, accessible, customizable |
-| Real-time Comms | WebSocket (via FastAPI) | Low-latency live data push to browser |
-| Backend | Python 3.11+ / FastAPI | Async-native, excellent performance, easy integration with industrial protocols |
-| OPC UA Driver | asyncua (opcua-asyncio) | Mature async Python OPC UA client/server library |
-| EtherNet/IP Driver | pycomm3 | Python library for Allen-Bradley EtherNet/IP (CIP) communication — supports MicroLogix, CompactLogix, ControlLogix |
-| Modbus TCP Driver | pymodbus | Async Python Modbus TCP client for generic PLC/device communication |
-| MQTT Driver | aiomqtt (paho-mqtt) | Async Python MQTT 3.1.1/5.0 client for subscribing to and publishing tag values via an MQTT broker |
-| Database | SQLite | Embedded, zero-config, portable — ideal for a dedicated panel PC deployment |
-| ORM | SQLAlchemy + Alembic | Database access and migrations |
-| Auth | JWT tokens + bcrypt | Stateless auth with role-based access control |
-| Simulation | Tag database simulation layer | Protocol-agnostic tag value simulation for development, demo, and screen design without a live PLC |
+| Browser UI | React + TypeScript + Vite | The operator-facing interface that runs in a web browser. React builds the UI from reusable components (widgets, pages). TypeScript adds type safety. Vite is the build tool that compiles everything for production. |
+| UI Styling | Shadcn/ui + Tailwind CSS | Pre-built UI components (buttons, dialogs, tables) with a clean industrial dark theme |
+| Live Data | WebSocket (via FastAPI) | Pushes tag value updates from the server to the browser in real time (500ms cycle), similar to how a traditional HMI polls a PLC |
+| Server | Python 3.11+ / FastAPI | The backend server that talks to PLCs, processes alarms, logs trends, and serves the API. FastAPI is a modern Python web framework. |
+| OPC UA Driver | asyncua (opcua-asyncio) | Connects to OPC UA servers (CODESYS, Beckhoff, Siemens, B&R, etc.) |
+| EtherNet/IP Driver | pycomm3 | Connects to Allen-Bradley PLCs (MicroLogix, CompactLogix, ControlLogix) via EtherNet/IP (CIP) |
+| Modbus TCP Driver | pymodbus | Connects to any Modbus TCP device (generic PLCs, drives, sensors, meters) |
+| MQTT Driver | aiomqtt (paho-mqtt) | Subscribes to and publishes tag values via an MQTT broker (for IIoT sensors, edge gateways) |
+| Database | SQLite | An embedded single-file database — no database server to install or manage. Stores tags, screens, alarms, trends, users, and settings. |
+| Database Access | SQLAlchemy | Python library for database operations (reading, writing, querying) |
+| Authentication | JWT tokens + bcrypt | Login security with role-based access control. JWT tokens are like session IDs — they prove the user is logged in without storing session state on the server. |
+| Simulation | Tag database simulation layer | Generates fake tag values (sine waves, ramps, random, toggle) for development and demo without a live PLC |
 
 ---
 
