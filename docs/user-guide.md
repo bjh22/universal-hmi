@@ -1,5 +1,9 @@
 # User Guide
 
+This guide covers day-to-day operation and configuration of the HMI from the web browser interface. It is written for operators, supervisors, and engineers — no web development knowledge is needed.
+
+---
+
 ## Logging In
 
 The HMI supports two login modes:
@@ -26,13 +30,13 @@ The sidebar provides access to all pages. Pages are filtered by role — operato
 | **Service** | Manual I/O monitoring and equipment actuation | Engineer |
 | **Support** | System info, application logs, ZPL label preview | Operator |
 
-The **Connected** indicator in the header shows real-time WebSocket status. Green means live data is flowing. The alarm banner at the top scrolls active alarms with color-coded severity and an "Acknowledge All" button.
+The **Connected** indicator in the header shows whether the browser is receiving live data from the server. Green means live data is flowing (tag values are updating). If it turns red, the browser has lost connection to the server — this could mean the backend service has stopped, a network cable was disconnected, or the server is restarting after an update. It will automatically reconnect when the server is available again. The alarm banner at the top scrolls active alarms with color-coded severity and an "Acknowledge All" button.
 
 ---
 
 ## Creating and Editing Screens
 
-Screens are the main way to visualize and interact with your process. Only users with the **Designer** role can create and edit screens.
+Screens are the main way to visualize and interact with your process — similar to screens in FactoryTalk View, CODESYS WebVisu, or WinCC. Only users with the **Designer** role can create and edit screens.
 
 ### Creating a New Screen
 
@@ -127,7 +131,7 @@ Screens are the main way to visualize and interact with your process. Only users
 
 ## Connecting to a PLC (Data Sources)
 
-Data sources define how the HMI communicates with your PLCs and controllers. Requires the **Engineer** or **Designer** role.
+Data sources define how the HMI communicates with your PLCs and controllers — similar to how you configure a communication channel in FactoryTalk Linx or a CODESYS gateway connection. Each data source represents one PLC or controller. Requires the **Engineer** or **Designer** role.
 
 ### Adding a Data Source
 
@@ -176,7 +180,7 @@ Imported tags are automatically configured with:
 
 ## Importing Tags from Files
 
-Tags represent data points in your system — sensor readings, setpoints, machine states, counters, etc. In addition to [browsing tags live from a PLC](#browsing-and-importing-tags-from-an-opc-ua-server), the HMI supports three file-based import formats.
+Tags represent data points in your system — sensor readings, setpoints, machine states, counters, fault flags, etc. Each tag maps to a variable in a PLC or controller. In addition to [browsing tags live from a PLC](#browsing-and-importing-tags-from-an-opc-ua-server), the HMI supports three file-based import formats for bulk tag creation.
 
 ### Method 1: HMI CSV Import
 
@@ -231,7 +235,7 @@ For Allen-Bradley SLC 500 / MicroLogix PLCs.
 - Enable **trending** to start recording historical data.
 - Enable **alarms** and set severity, trigger condition, and message.
 - Enable **simulation** for testing without a real PLC (sine, ramp, random, toggle, enum cycle).
-- Tags without a data source or simulation are treated as **internal nonvolatile tags** — their values persist across application restarts and can be used as operator-settable flags, counters, or configuration parameters.
+- Tags without a data source or simulation are treated as **internal nonvolatile tags** — their values persist across application restarts (like retain variables in a PLC) and can be used as operator-settable flags, counters, or configuration parameters that don't need a PLC.
 - Use **bulk operations** to update, label, or delete multiple tags at once.
 
 ---
@@ -266,12 +270,12 @@ For Allen-Bradley SLC 500 / MicroLogix PLCs.
 
 1. Go to **Settings** > **Tags** and click on a tag.
 2. Enable alarms and configure:
-   - **Type**: Boolean (triggers when tag value matches `trigger_on`).
-   - **Trigger On**: The value that activates the alarm (default: `true`).
+   - **Type**: Boolean (triggers when the tag value matches the `trigger_on` value).
+   - **Trigger On**: The value that activates the alarm (default: `true` — meaning the alarm fires when the tag becomes true).
    - **Severity**: Critical, Warning, or Info.
-   - **Message**: Custom alarm text displayed to operators.
+   - **Message**: Custom alarm text displayed to operators (e.g., "Conveyor Motor Overload").
 
-> **Note**: Analog threshold alarming (high/low limits) is handled on the PLC side and reported to the HMI as boolean fault flags.
+> **Note**: This HMI uses boolean alarm triggers — the PLC sets a fault bit, and the HMI monitors it. Analog threshold alarming (high temperature, low pressure, etc.) should be handled in the PLC program and reported to the HMI as boolean fault flags. This is the standard practice in industrial automation because the PLC can react in real time, while the HMI is only for monitoring and acknowledgment.
 
 ### Fault Help Dialog
 
@@ -317,7 +321,7 @@ The dialog shows once per alarm instance. If multiple alarms trigger simultaneou
 
 ## Managing Jobs and Recipes
 
-Jobs define sets of machine setpoints that can be downloaded to a PLC in one operation. Requires **Supervisor** role or higher.
+Jobs (also called recipes in some HMI systems) define sets of machine setpoints that can be downloaded to a PLC in one operation — like a recipe manager in FactoryTalk or a parameter set in a CODESYS recipe system. Requires **Supervisor** role or higher.
 
 ### Creating a Job
 
@@ -555,7 +559,7 @@ The renderer supports text (`^FD`, `^A`, `^FB`), barcodes (Code 128, Code 39), Q
 
 ## Configuring Integrations
 
-Integrations connect the HMI to third-party equipment like label printers, barcode readers, and file systems. Each integration runs as a background service that provides virtual tags visible throughout the HMI — on dashboards, in alarms, and in trends.
+Integrations connect the HMI to third-party equipment like Zebra label printers, Cognex barcode readers, and FTP file watchers. Each integration runs as a background service that creates "virtual tags" — these appear alongside PLC tags everywhere in the HMI (dashboards, alarms, trends) and update in real time. For example, a Zebra printer integration creates tags like `zebra.status`, `zebra.paper_out`, and `zebra.labels_in_queue`.
 
 ### Adding an Integration
 

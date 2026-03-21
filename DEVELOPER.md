@@ -1,6 +1,10 @@
 # Developer Guide
 
-This guide covers the common development tasks you'll encounter when extending the HMI application. It assumes you've read `CLAUDE.md` for the project overview.
+This guide covers common tasks you'll encounter when extending the HMI application — adding new widgets, creating plugin integrations for third-party equipment, adding backend features, and running tests.
+
+**Who this is for:** Controls engineers who need to customize or extend the HMI. You don't need to be a web developer — this guide explains the web-specific concepts as they come up. If you're familiar with PLC programming, structured text, or any scripting language, you'll be able to follow along.
+
+> **Key concept — how the code is organized:** The project has two halves. The **backend** (`backend/` folder) is a Python server that handles PLC communication, alarm processing, trend logging, and data storage — think of it as the "runtime" like a FactoryTalk or WinCC runtime. The **frontend** (`frontend/` folder) is the browser-based UI that operators see — screens, widgets, navigation. They communicate over HTTP (for configuration) and WebSocket (for live tag values).
 
 ## Table of Contents
 
@@ -23,45 +27,49 @@ This guide covers the common development tasks you'll encounter when extending t
 
 ## Adding a Page to the Sidebar
 
-Adding a new page requires changes in three files. Here's the step-by-step process using a hypothetical "Diagnostics" page as an example.
+Adding a new page to the HMI navigation requires changes in three files. Here's a step-by-step walkthrough using a hypothetical "Diagnostics" page.
 
-### Step 1: Create the page component
+### Step 1: Create the page file
 
-Create `frontend/src/pages/DiagnosticsPage.tsx`:
+Create a new file at `frontend/src/pages/DiagnosticsPage.tsx`:
 
 ```tsx
 import { useState, useCallback } from 'react';
 import type { TagValue, AlarmData } from '../types';
 
+// "Props" defines what data this page receives from the application.
+// Think of these like input parameters to a function block.
 interface Props {
-  tagValues: Record<string, TagValue>;
-  alarms: AlarmData[];
-  userRole: string;
+  tagValues: Record<string, TagValue>;  // All current tag values (like a global variable list)
+  alarms: AlarmData[];                  // All active alarms
+  userRole: string;                     // The logged-in user's role (operator, engineer, etc.)
 }
 
 export function DiagnosticsPage({ tagValues, alarms, userRole }: Props) {
   return (
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold text-slate-100">Diagnostics</h1>
-      {/* Page content here */}
+      {/* Page content goes here */}
     </div>
   );
 }
 ```
 
-Pages receive props from `App.tsx` — the available props depend on what data the page needs. Common props include `tagValues`, `alarms`, and `userRole`.
+> **What's a `.tsx` file?** It's a TypeScript file that can contain HTML-like markup (called JSX). TypeScript is JavaScript with type checking — it catches errors before the code runs, similar to how a PLC compiler checks your structured text before downloading. The HTML-like markup describes what the page looks like.
 
-### Step 2: Register the route in App.tsx
+### Step 2: Register the page route in App.tsx
 
-In `frontend/src/App.tsx`, add a lazy import and a `<Route>` entry:
+In `frontend/src/App.tsx`, add two lines — one to import your page (near line 24) and one to define its URL path (near line 140):
 
 ```tsx
 // Add with the other lazy imports (around line 24)
+// "lazy" means the page's code is only loaded when the user navigates to it
 const DiagnosticsPage = lazy(() =>
   import('./pages/DiagnosticsPage').then(m => ({ default: m.DiagnosticsPage }))
 );
 
 // Add inside the <Routes> block (around line 140)
+// This maps the URL "/diagnostics" to your page
 <Route path="/diagnostics" element={
   <Suspense fallback={<PageLoader />}>
     <DiagnosticsPage tagValues={tagValues} alarms={alarms} userRole={userRole} />
@@ -69,17 +77,17 @@ const DiagnosticsPage = lazy(() =>
 } />
 ```
 
-Pages use `lazy()` with a `.then()` wrapper because they use named exports instead of default exports. This enables code splitting — the page's JavaScript is only downloaded when the user navigates to it.
+> **What are Routes?** Routes are URL-to-page mappings. When a user navigates to `http://yourpanel:5173/diagnostics`, the router displays `DiagnosticsPage`. This is how the single-page application knows which page to show — similar to how a traditional HMI navigates between screens.
 
-### Step 3: Add the navigation item in AppShell.tsx
+### Step 3: Add the sidebar navigation link in AppShell.tsx
 
-In `frontend/src/components/layout/AppShell.tsx`, add an entry to the `NAV_ITEMS` array (line 42):
+In `frontend/src/components/layout/AppShell.tsx`, add an entry to the `NAV_ITEMS` array (around line 42). This is the list that controls what appears in the sidebar:
 
 ```tsx
-// Import the icon at the top of the file
+// Import an icon for your page (browse options at https://lucide.dev/icons)
 import { Stethoscope } from 'lucide-react';
 
-// Add to NAV_ITEMS array
+// Add to the NAV_ITEMS array
 const NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', roles: null },
   // ... existing items ...
@@ -87,26 +95,26 @@ const NAV_ITEMS = [
 ];
 ```
 
-The `NAV_ITEMS` array is the single source of truth for sidebar navigation:
+The `NAV_ITEMS` array controls the entire sidebar. Each entry has:
 
 | Field   | Type                  | Description |
 |---------|-----------------------|-------------|
-| `to`    | `string`              | Route path matching the `<Route>` in App.tsx |
-| `icon`  | Lucide component      | Icon from `lucide-react` displayed in the sidebar |
-| `label` | `string`              | Text label shown when the sidebar is expanded |
-| `roles` | `string[] \| null`    | `null` = visible to everyone. Array = only visible to listed roles |
+| `to`    | `string`              | URL path (must match what you added in App.tsx) |
+| `icon`  | Lucide icon           | The sidebar icon (browse all icons at lucide.dev/icons) |
+| `label` | `string`              | Text label shown next to the icon |
+| `roles` | `string[] \| null`    | `null` = visible to all users. Array = only visible to listed roles |
 
-Role values are: `operator`, `supervisor`, `engineer`, `designer`.
+Role values are: `operator`, `supervisor`, `engineer`, `designer`. Higher roles inherit lower roles — an engineer can see everything a supervisor can see.
 
 ---
 
 ## Creating a New Widget
 
-The widget system has four touchpoints. Here's a walkthrough for creating a "Speedometer" widget.
+Widgets are the building blocks of HMI screens — status indicators, gauges, buttons, trend charts, etc. Adding a new widget type requires changes in four places. Here's a walkthrough using a "Speedometer" widget as an example.
 
-### Step 1: Create the widget component
+### Step 1: Create the widget file
 
-Create `frontend/src/components/widgets/Speedometer.tsx`:
+Create a new file at `frontend/src/components/widgets/Speedometer.tsx`:
 
 ```tsx
 import type { TagValue, TextStyle } from '../../types';
@@ -161,14 +169,14 @@ export function Speedometer({
 
 **Key conventions:**
 
-- The widget receives `tagValues` (all current values) and looks up its bound tag by name
-- Support the `chrome` prop (`'full' | 'compact' | 'none'`) for display level control
+- The widget receives `tagValues` (a dictionary of all current tag values, updated live via WebSocket) and looks up its bound tag by name — just like reading a PLC variable by its symbolic name
+- Support the `chrome` prop (`'full' | 'compact' | 'none'`) to control how much decoration (title bar, borders) the widget shows
 - Support `titleStyle` and `valueStyle` for text customization via `buildTextStyle()`
-- Use the `chromeUtils` helpers for consistent rendering across widgets
+- Use the `chromeUtils` helpers for consistent look and feel across all widgets
 
-### Step 2: Register in the widget type registry
+### Step 2: Register in the widget type catalog
 
-In `frontend/src/components/designer/widgetTypes.ts`, add an entry to `WIDGET_TYPES`:
+In `frontend/src/components/designer/widgetTypes.ts`, add an entry to the `WIDGET_TYPES` array. This is the master list that tells the screen designer what widget types are available:
 
 ```tsx
 import { Gauge } from 'lucide-react'; // or another appropriate icon
@@ -197,17 +205,17 @@ The `WidgetTypeInfo` fields:
 
 | Field           | Description |
 |-----------------|-------------|
-| `type`          | Unique string identifier. Used in `WidgetRenderer` switch and stored in screen JSON |
-| `label`         | Display name shown in the widget palette |
-| `icon`          | Lucide icon component shown in the palette |
-| `category`      | Groups the widget in the palette: `display`, `input`, or `layout` |
-| `defaultW/H`    | Default size in grid units (for grid layout mode) |
-| `defaultAbsW/H` | Default size in pixels (for absolute layout mode) |
-| `defaultProps`   | Initial values for `widget.props` when a new instance is created |
+| `type`          | Unique string ID (stored in the database with each screen layout) |
+| `label`         | Human-readable name shown in the widget palette |
+| `icon`          | Icon shown in the palette (browse options at lucide.dev/icons) |
+| `category`      | Which palette section: `display` (read-only), `input` (operator interaction), or `layout` |
+| `defaultW/H`    | Default size in grid cells (for responsive grid layout mode) |
+| `defaultAbsW/H` | Default size in pixels (for pixel-perfect absolute layout mode) |
+| `defaultProps`   | Starting property values when a designer first drops this widget onto a screen |
 
-### Step 3: Add the renderer case
+### Step 3: Add the rendering logic
 
-In `frontend/src/components/widgets/WidgetRenderer.tsx`, import your widget and add a case:
+In `frontend/src/components/widgets/WidgetRenderer.tsx`, import your widget and add a `case` to the switch statement. The `WidgetRenderer` is a dispatcher — it looks at each widget's `type` and renders the correct component (similar to a CASE statement in structured text):
 
 ```tsx
 import { Speedometer } from './Speedometer';
@@ -229,11 +237,11 @@ case 'speedometer':
   );
 ```
 
-Props are extracted from `widget.props` (aliased as `p`) and cast to the expected types. The `chrome` prop is already extracted from `widget.chrome` at the top of the component.
+Properties are read from the widget's saved configuration (`widget.props`, aliased as `p`). The `chrome` prop is already extracted at the top of the file.
 
-### Step 4: Add property panel sections (if needed)
+### Step 4: Add property panel fields (if needed)
 
-If your widget has type-specific properties, add a section in `frontend/src/components/designer/PropertyPanel.tsx`. Look for existing type-specific blocks (search for `widget.type ===`) and follow the same pattern:
+If your widget has custom settings that the designer needs to configure (like min/max range, units, etc.), add them in `frontend/src/components/designer/PropertyPanel.tsx`. Search for `widget.type ===` to see examples of how other widgets add their type-specific property fields:
 
 ```tsx
 {/* Speedometer range settings */}
@@ -264,19 +272,21 @@ If your widget has type-specific properties, add a section in `frontend/src/comp
 )}
 ```
 
-All widgets automatically get the common property sections (title, tag binding, chrome, visibility/enabled, text styling) without any extra work. You only need to add sections for properties unique to your widget type.
+All widgets automatically get the standard property sections (title, tag binding, chrome level, visibility/enabled conditions, text styling) for free. You only need to add fields for properties unique to your widget type.
 
 ### Performance note
 
-`WidgetRenderer` is wrapped in `memo()` with a custom comparator that only triggers re-renders when the specific tags used by a widget change. If your widget uses tags from `props` beyond just `tag`, add them to the `getWidgetTagNames()` function in `WidgetRenderer.tsx` so the optimization works correctly.
+The system is optimized so that a widget only re-renders when its specific bound tag(s) change — not when any tag changes. If your widget reads multiple tags (beyond just the primary `tag` property), add them to the `getWidgetTagNames()` function in `WidgetRenderer.tsx` so this optimization works correctly.
 
 ---
 
 ## Adding a Backend API Endpoint
 
-### Adding routes to an existing router
+API endpoints are the communication interface between the browser UI and the backend server. When the browser needs data (tag values, alarm lists, settings) or needs to perform an action (write a tag, acknowledge an alarm), it calls an API endpoint. Each endpoint has a URL path (like `/api/tags/`) and an HTTP method (GET = read, POST = create, PUT = update, DELETE = remove).
 
-Each resource has its own router file in `backend/app/api/`. To add an endpoint to an existing router (e.g., tags), edit that file directly:
+### Adding to an existing endpoint file
+
+Each feature area has its own file in `backend/app/api/` (e.g., `tags.py` for tag operations, `alarms.py` for alarm operations). To add a new endpoint to an existing area, edit that file:
 
 ```python
 # In backend/app/api/tags.py
@@ -292,11 +302,11 @@ async def get_tag_summary(
     return {"total_tags": count}
 ```
 
-### Creating a new router
+### Creating a new endpoint file
 
-For a new resource domain, create a new router file:
+For an entirely new feature area, create a new file in `backend/app/api/`:
 
-**1. Create the router file** (`backend/app/api/diagnostics.py`):
+**1. Create the endpoint file** (`backend/app/api/diagnostics.py`):
 
 ```python
 from fastapi import APIRouter, Depends
@@ -318,7 +328,7 @@ async def list_diagnostics(
     return []
 ```
 
-**2. Register the router** in `backend/app/main.py`:
+**2. Register it** in `backend/app/main.py` so the server knows about it:
 
 ```python
 from app.api import diagnostics
@@ -327,27 +337,29 @@ from app.api import diagnostics
 app.include_router(diagnostics.router)
 ```
 
-### Auth patterns
+### Authentication patterns
+
+Every endpoint can require a specific user role, similar to how PLC HMI systems restrict access by user level:
 
 ```python
-# No auth required (public endpoint)
+# No login required (public endpoint — like an HMI screen visible to anyone)
 @router.get("/health")
 async def health():
     return {"status": "ok"}
 
-# Any authenticated user
+# Any logged-in user (operator, supervisor, engineer, or designer)
 @router.get("/me")
 async def get_me(user: User = Depends(get_current_user)):
     return user
 
-# Specific roles only
+# Only engineers and designers (returns HTTP 403 Forbidden for other roles)
 @router.post("/configure")
 async def configure(
     user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
 ):
     ...
 
-# Optional auth (works for both anonymous and logged-in users)
+# Optional — works for both anonymous and logged-in users
 @router.get("/public-data")
 async def public_data(user: User | None = Depends(get_current_user)):
     if user:
@@ -358,9 +370,9 @@ async def public_data(user: User | None = Depends(get_current_user)):
         ...
 ```
 
-### Accessing services from routes
+### Accessing background services from endpoints
 
-Background services are attached to `app.state` during startup:
+The HMI runs several background services (tag engine, alarm service, trend service) — similar to how a PLC has background tasks. You can call these from your API endpoints:
 
 ```python
 from fastapi import Request
@@ -372,12 +384,15 @@ async def trigger_alarm_eval(request: Request):
     return {"status": "ok"}
 ```
 
-Available on `app.state`: `alarm_service`, `trend_service`, `integration_manager`.
-The `tag_engine` is accessed via `from app.services.tag_engine import tag_engine` (module-level singleton).
+Available services:
+- `request.app.state.alarm_service` — alarm processing and state machine
+- `request.app.state.trend_service` — historical data logging
+- `request.app.state.integration_manager` — third-party equipment plugins
+- `from app.services.tag_engine import tag_engine` — the tag engine (imported directly as a global singleton)
 
-### Adding a frontend API method
+### Calling your endpoint from the browser UI
 
-After creating the backend endpoint, add the corresponding method in `frontend/src/lib/api.ts`:
+After creating a backend endpoint, add a corresponding function in `frontend/src/lib/api.ts` so the frontend can call it:
 
 ```typescript
 // Add to the api object
@@ -390,13 +405,13 @@ createDiagnostic: (data: CreateDiagnosticPayload) =>
   }),
 ```
 
-The `request<T>()` helper automatically adds the JWT Authorization header and handles error responses.
+The `request<T>()` helper automatically attaches the login token and handles error responses. You can then call `api.getDiagnostics()` from any page.
 
 ---
 
 ## Creating a Plugin Integration
 
-The plugin integration system lets you add support for external equipment (printers, barcode readers, file watchers, etc.) without modifying core application code. Each integration is a self-contained Python package that is automatically discovered at startup.
+The plugin system lets you add support for external equipment (label printers, barcode readers, scales, file watchers, etc.) without modifying any core HMI code. Each integration is a self-contained Python package that is automatically discovered when the server starts — similar to how a PLC function block library can be dropped into a project and used immediately.
 
 ### Architecture Overview
 
@@ -420,15 +435,15 @@ backend/app/integrations/
 
 **How it works:**
 
-1. **Discovery** — On startup, `IntegrationManager.discover()` scans all subpackages under `app/integrations/` using `pkgutil.iter_modules()`. Each package must export an `integration_class` attribute pointing to its `IntegrationBase` subclass.
-2. **Configuration** — Integration instances and their configs are stored in the `integrations` database table. Admins can add, enable/disable, and configure instances via the Settings page.
-3. **Virtual tags** — Each integration declares tags via `get_tag_definitions()`. These are registered into the `TagEngine` at startup and broadcast via WebSocket like any other tag.
-4. **Custom API routes** — Integrations can optionally expose API endpoints via `get_router()`. These are mounted into FastAPI dynamically.
-5. **Lifecycle** — The manager handles start, stop, enable/disable, and status tracking. Integrations manage their own reconnection logic.
+1. **Auto-discovery** — When the server starts, it scans all folders under `backend/app/integrations/` and finds any new integration packages automatically. No manual registration needed.
+2. **Configuration** — Engineers add and configure integration instances through the Settings > Integrations page in the browser UI. Settings are stored in the database.
+3. **Virtual tags** — Each integration creates "virtual tags" (e.g., `zebra.status`, `scale.weight`) that appear alongside PLC tags everywhere in the HMI — on dashboards, in alarms, in trends.
+4. **Custom endpoints** — Integrations can optionally add their own API endpoints (e.g., a `/api/integrations/scale/tare` endpoint to zero a scale).
+5. **Lifecycle** — The system handles starting, stopping, enable/disable, and connection status. Your integration just needs to implement `start()` and `stop()`.
 
-### Step 1: Create the integration package
+### Step 1: Create the integration folder
 
-Create a new directory under `backend/app/integrations/`. For this example, we'll build a "Scale Reader" integration that reads weight from an industrial scale over TCP.
+Create a new folder under `backend/app/integrations/`. For this example, we'll build a "Scale Reader" integration that reads weight from an industrial scale over TCP (a common setup for checkweighers and platform scales).
 
 Create `backend/app/integrations/scale_reader/__init__.py`:
 
@@ -438,7 +453,7 @@ from app.integrations.scale_reader.integration import ScaleReaderIntegration
 integration_class = ScaleReaderIntegration
 ```
 
-The `integration_class` attribute is required — the manager looks for this to discover your integration.
+This file is required — it tells the auto-discovery system which class implements your integration.
 
 ### Step 2: Implement the integration class
 
@@ -584,15 +599,15 @@ class ScaleReaderIntegration(IntegrationBase):
 
 **Key patterns:**
 
-- Inherit from `IntegrationBase` and set the four class attributes: `type_name`, `display_name`, `description`, `default_config`
-- Implement `start()` and `stop()` (both abstract and required)
-- Use `self._set_tag(name, value)` to push values into the TagEngine — they are immediately available via WebSocket
-- Handle reconnection with exponential backoff in a separate async task
-- `self.connected` and `self.status_message` are tracked by the manager for UI display
+- Inherit from `IntegrationBase` and set four class-level attributes: `type_name`, `display_name`, `description`, `default_config`
+- Implement `start()` and `stop()` — these are required (similar to implementing an interface/abstract class)
+- Use `self._set_tag(name, value)` to publish values — they immediately appear in the HMI's tag engine and are broadcast to all connected browsers
+- Handle reconnection with exponential backoff (2s, 4s, 8s... up to 60s) — the example above shows the pattern
+- `self.connected` and `self.status_message` are tracked by the system and displayed on the Settings > Integrations page
 
 ### Step 3: Add custom API endpoints (optional)
 
-If your integration needs endpoints beyond tag reads (e.g., sending commands, querying device info), create a router.
+If your integration needs more than just reading tag values — for example, sending a tare command to a scale, or triggering a print job on a label printer — you can add custom API endpoints.
 
 Create `backend/app/integrations/scale_reader/router.py`:
 
@@ -655,19 +670,18 @@ class ScaleReaderIntegration(IntegrationBase):
         return create_router(self)
 ```
 
-The router uses a factory pattern: `create_router()` receives the live integration instance, so route handlers can call methods directly on it. The manager mounts the router into FastAPI when the integration starts.
+The `create_router()` function receives the live integration instance, so your endpoint handlers can call methods directly on it (like `integration.send_tare()`). The system automatically mounts the router when the integration starts.
 
 ### Step 4: That's it — no registration needed
 
-The integration is automatically discovered because `IntegrationManager.discover()` iterates all subpackages of `app/integrations/`. There is no central registry to update. Just restart the application and the new integration type appears in the available types list.
+The integration is automatically discovered because the system scans all subfolders of `backend/app/integrations/` at startup. There is no central registry to update. Just restart the server and your new integration type appears in Settings > Integrations.
 
-**The lifecycle at startup:**
+**What happens at startup:**
 
-1. `IntegrationManager.discover()` finds all packages under `app/integrations/`
-2. For each package, it imports the module and reads `integration_class`
-3. The class is registered in an in-memory `_registry` dict keyed by `type_name`
-4. `load_and_start()` queries the `integrations` table for enabled instances
-5. For each enabled instance, it instantiates the class, registers virtual tags, mounts the router, and calls `start()`
+1. The system finds all folders under `backend/app/integrations/`
+2. For each folder, it looks for the `integration_class` attribute in `__init__.py`
+3. The class is registered as an available integration type
+4. Any instances that were previously added and enabled via the Settings page are instantiated, their virtual tags are registered, and `start()` is called
 
 ### IntegrationBase reference
 
@@ -710,7 +724,9 @@ Integration configurations are stored in the `integrations` table (`backend/app/
 
 ---
 
-## Adding a Database Model
+## Adding a Database Table
+
+The database stores all HMI configuration and historical data — tags, screens, alarms, trend history, users, audit logs, etc. If you need to store a new type of data, you add a "model" (a Python class that maps to a database table).
 
 ### Step 1: Create the model file
 
@@ -750,23 +766,23 @@ class Diagnostic(Base):
 **Conventions:**
 
 - One model per file in `backend/app/models/`
-- Use `Mapped[type]` and `mapped_column()` (SQLAlchemy 2.0 style)
-- Enums use Python's `enum.Enum`, stored as strings in the database
+- Use `Mapped[type]` and `mapped_column()` — this is the modern SQLAlchemy 2.0 syntax for defining columns
+- Enums (like severity levels) use Python's `enum.Enum` and are stored as strings in the database
 - All timestamps use UTC: `datetime.now(timezone.utc)`
-- Use `JSON` type for flexible/nested configuration
-- Relationships use `lazy="selectin"` to avoid N+1 query problems
+- Use `JSON` type for flexible/nested configuration (stored as a JSON string in the database)
+- Relationships between tables use `lazy="selectin"` to load related data efficiently
 
 ### Step 2: Import the model
 
-Add the import in `backend/app/models/__init__.py` (or wherever models are collected) so SQLAlchemy discovers it during `create_all()`:
+Add the import in `backend/app/models/__init__.py` so the system creates the table at startup:
 
 ```python
 from app.models.diagnostic import Diagnostic
 ```
 
-### Step 3: Create Pydantic schemas
+### Step 3: Define data validation schemas
 
-Define request/response schemas in the router file or a dedicated schemas file:
+When accepting data from the browser or sending data back, you need "schemas" that define the expected structure and types — similar to defining a struct or UDT in a PLC:
 
 ```python
 from pydantic import BaseModel
@@ -787,21 +803,19 @@ class DiagnosticOut(BaseModel):
         from_attributes = True  # Enables creating from SQLAlchemy model instances
 ```
 
-The table is automatically created on next startup via `Base.metadata.create_all()` in `database.py:init_db()`. No migration step is needed for new tables.
+The database table is automatically created the next time the server starts. No migration step or SQL commands are needed for new tables.
 
 ---
 
 ## Production & Reporting System
 
-The reporting system computes OEE and machine metrics from historical trend data and alarm history on-demand, without requiring production runs.
+The reporting system computes OEE (Overall Equipment Effectiveness) and machine metrics from historical trend data and alarm history. It works on-demand — there are no background processes running continuously. When a user opens the Reports page or requests a summary, the system queries the database and computes the numbers in real time.
 
-### Architecture
+### How it's structured
 
-The system spans three layers:
-
-- **ReportingService** (`backend/app/services/reporting_service.py`) — Stateless service that computes metrics from existing trend_data and alarm_history tables on-demand. No background loops.
-- **Reporting API** (`backend/app/api/reporting.py`) — REST endpoints for summary metrics, time-series bucketing, downtime periods, annotations, and Pareto analysis.
-- **Reports Page** (`frontend/src/pages/ReportsPage.tsx`) — Two-tab layout: Live (rolling 8-hour view with auto-refresh) and Historical (arbitrary date range with charts and analytics).
+- **ReportingService** (`backend/app/services/reporting_service.py`) — The calculation engine. Queries trend_data and alarm_history tables, computes time intervals, and returns OEE, uptime, downtime, idle time, and production counts.
+- **Reporting API** (`backend/app/api/reporting.py`) — HTTP endpoints that the browser calls to get report data (summary, time-series charts, downtime periods, Pareto analysis).
+- **Reports Page** (`frontend/src/pages/ReportsPage.tsx`) — The browser UI with summary cards, OEE trend charts, downtime Pareto, and production volume charts.
 
 ### How metrics are computed
 
@@ -1025,7 +1039,9 @@ The ZPL renderer requires three additional Python packages: `Pillow`, `python-ba
 
 ## Testing
 
-The project uses **pytest** for backend tests and **Vitest** for frontend tests. The full suite contains 252 tests (172 backend + 80 frontend) covering services, API endpoints, hooks, and widgets.
+Automated tests verify that the application works correctly after code changes — like running a self-diagnostic on a PLC after modifying the program. The project has 252 tests that check alarm state transitions, OEE calculations, tag simulation, authentication, API endpoints, and widget rendering.
+
+The backend uses **pytest** (the standard Python testing tool) and the frontend uses **Vitest** (a JavaScript testing tool).
 
 ### Running Tests
 
@@ -1055,7 +1071,7 @@ cd frontend && npx vitest run src/hooks/__tests__/useDesignMode.test.ts
 
 ### Test Dependencies
 
-Backend test dependencies are in `backend/requirements-dev.txt` (separate from production):
+Backend test libraries are listed in `backend/requirements-dev.txt` (kept separate from production dependencies so they don't ship to panel PCs):
 
 ```
 pytest>=8.0
@@ -1067,14 +1083,7 @@ freezegun>=1.4
 
 Install with: `cd backend && pip install -r requirements-dev.txt`
 
-Frontend test dependencies are in `frontend/package.json` devDependencies:
-
-- `vitest` — test runner (native Vite integration)
-- `@testing-library/react` — React component testing utilities
-- `@testing-library/jest-dom` — DOM assertion matchers
-- `jsdom` — browser environment simulation
-
-These are installed automatically with `npm install`.
+Frontend test libraries are listed in `frontend/package.json` and are installed automatically with `npm install` (they're marked as development-only and don't ship in production builds).
 
 ### Test Directory Structure
 
@@ -1112,7 +1121,7 @@ frontend/src/
 
 ### Backend Test Configuration
 
-**`backend/pytest.ini`** configures pytest for async test discovery:
+**`backend/pytest.ini`** tells pytest where to find tests and how to run them:
 
 ```ini
 [pytest]
@@ -1122,49 +1131,30 @@ python_files = test_*.py
 python_functions = test_*
 ```
 
-`asyncio_mode = auto` means all `async def test_*` functions are automatically treated as async tests — no `@pytest.mark.asyncio` decorator needed.
+The `asyncio_mode = auto` setting means async test functions (those using `async def`) are handled automatically.
 
 ### Backend Test Fixtures
 
-The shared fixtures in `backend/tests/conftest.py` provide:
+"Fixtures" are pre-configured test environments — think of them like test jigs or setup procedures that run before each test. They're defined in `backend/tests/conftest.py`:
 
-| Fixture | Scope | Purpose |
-|---------|-------|---------|
-| `db_engine` | session | In-memory SQLite async engine with all tables created |
-| `db_session` | function | Fresh async session per test (rolled back after each test) |
-| `session_factory` | session | Async session factory for the test client |
-| `seeded_db` | function | Session pre-loaded with 4 default users and 4 test tags |
-| `admin_token` | function | Valid JWT for the `admin` user (designer role) |
-| `operator_token` | function | Valid JWT for the `operator` user |
-| `test_client` | function | FastAPI `AsyncClient` with database dependency overridden |
+| Fixture | What it provides |
+|---------|-----------------|
+| `db_engine` | A temporary in-memory database (created fresh for each test session, not your real database) |
+| `db_session` | A database connection that gets rolled back after each test (so tests don't interfere with each other) |
+| `seeded_db` | A database pre-loaded with the 4 default users and some test tags |
+| `admin_token` | A valid login token for the `admin` user (designer role) — for testing authenticated endpoints |
+| `operator_token` | A valid login token for the `operator` user — for testing role restrictions |
+| `test_client` | An HTTP client that calls the API directly in memory (no real server needed) |
 
-Integration tests use `httpx.AsyncClient` with `ASGITransport` to call the FastAPI app directly — no running server required.
+Tests run entirely in memory — they don't touch your real `hmi.db` database or require a running server.
 
 ### Frontend Test Configuration
 
-**`frontend/vitest.config.ts`** sets up Vitest with jsdom and React plugin:
-
-```ts
-import { defineConfig } from 'vitest/config'
-import react from '@vitejs/plugin-react'
-
-export default defineConfig({
-  plugins: [react()],
-  test: {
-    environment: 'jsdom',
-    globals: true,
-    setupFiles: ['./src/test-setup.ts'],
-  },
-})
-```
-
-- `environment: 'jsdom'` provides a browser-like DOM environment
-- `globals: true` makes `describe`, `it`, `expect` available without imports
-- `setupFiles` loads `@testing-library/jest-dom` matchers (`.toBeInTheDocument()`, etc.)
+**`frontend/vitest.config.ts`** configures the test environment. Frontend tests run in a simulated browser environment (jsdom) so they can test UI components without opening a real browser.
 
 ### Writing Backend Unit Tests
 
-Backend unit tests target pure functions extracted from services. They import the function directly and test without any database or HTTP context:
+Unit tests check individual functions in isolation — no database, no HTTP server, no PLC connection. They import the function directly and verify its output for known inputs:
 
 ```python
 from app.services.reporting_service import ReportingService
@@ -1183,14 +1173,13 @@ def test_clamp_interval_partial_overlap():
 ```
 
 **Key patterns:**
-- Test functions at the `_private` level since they contain the core logic
-- Use `@staticmethod` functions directly (no instance needed)
+- Test the internal helper functions directly — they contain the core math and logic
 - Group related tests in `class TestXxx:` blocks for organization
-- Use descriptive names: `test_<function>_<scenario>`
+- Use descriptive names: `test_<function>_<scenario>` (e.g., `test_clamp_interval_partial_overlap`)
 
 ### Writing Backend Integration Tests
 
-Integration tests use the `test_client` fixture to make HTTP requests through the full FastAPI stack:
+Integration tests verify the full request flow — from HTTP request through authentication, business logic, database, and back. They simulate what happens when the browser calls an API endpoint:
 
 ```python
 import pytest
@@ -1214,7 +1203,7 @@ async def test_login_valid_credentials(test_client, seeded_db):
 
 ### Writing Frontend Tests
 
-Frontend tests use React Testing Library to render components and assert on the DOM:
+Frontend tests render UI components in a simulated browser and check that they display the right content:
 
 ```tsx
 import { describe, it, expect } from 'vitest'
@@ -1237,7 +1226,7 @@ it('shows mapped label for known value', () => {
 })
 ```
 
-For hooks, use `renderHook` from `@testing-library/react`:
+For testing shared logic modules ("hooks" — reusable behavior like login state or WebSocket connection), use `renderHook`:
 
 ```ts
 import { renderHook, act } from '@testing-library/react'
@@ -1252,10 +1241,10 @@ it('toggles design mode', () => {
 ```
 
 **Key patterns:**
-- Use `screen.getByText()` / `screen.getByRole()` for querying rendered output
-- jsdom converts hex colors to `rgb()` format — assert with `toContain('59, 130, 246')` instead of `toContain('#3b82f6')`
-- Wrap state-changing calls in `act()`
-- Use `vi.spyOn(globalThis, 'fetch')` to mock API calls
+- Use `screen.getByText()` / `screen.getByRole()` to find rendered text and elements
+- The simulated browser converts hex colors like `#3b82f6` to `rgb()` format — use `toContain('59, 130, 246')` when checking colors
+- Wrap state-changing operations in `act()` so the test framework processes updates
+- Use `vi.spyOn(globalThis, 'fetch')` to intercept and fake HTTP requests during tests
 
 ### Adding Tests for a New Widget
 
@@ -1295,28 +1284,28 @@ When adding a backend endpoint (see [Adding a Backend API Endpoint](#adding-a-ba
 
 ## Frontend Patterns
 
-### State management
+> **What's a "hook"?** In React, a "hook" is a reusable module of behavior — like a function block in PLC programming. For example, `useWebSocket` encapsulates all the logic for connecting to the server, receiving live tag updates, and handling reconnection. Pages use hooks by calling them, and the hook provides data and functions back.
 
-The app uses React hooks and localStorage instead of Redux:
+### How data flows through the application
 
 ```
-App.tsx (root)
-├── useAuthState()     → user, token, login(), logout()
-├── useWebSocket()     → tagValues, alarms, wsConnected
-└── Props drilling     → Pages receive tagValues, alarms, userRole
-    └── useDesignMode() → Used only in DashboardPage for the screen editor
+App.tsx (the root of the application)
+├── useAuthState()     → Manages login: who is logged in, their role, login/logout functions
+├── useWebSocket()     → Manages the live connection: current tag values, active alarms
+└── Pages receive data → Each page gets tagValues, alarms, userRole as inputs
+    └── useDesignMode() → Only used by the Dashboard for the screen editor
 ```
 
-### Data flow for real-time values
+### How live tag values get to the screen
 
-1. Backend `TagEngine` updates tag values every 500ms
-2. WebSocket sends `tag_update` messages with changed values only (deltas)
-3. `useWebSocket` hook merges deltas into its `tagValues` state
-4. Components re-render with new values via props
+1. The backend `TagEngine` reads tag values from PLCs every 500ms
+2. Only changed values are sent to connected browsers via WebSocket (similar to change-of-state updates)
+3. The `useWebSocket` hook merges these updates into the in-memory tag value store
+4. Widgets automatically re-render when their bound tag value changes
 
-### Adding a custom hook
+### Adding a custom hook (reusable logic module)
 
-Place hooks in `frontend/src/hooks/` with the `use` prefix (e.g., `usePolling.ts`):
+Place hooks in `frontend/src/hooks/` with the `use` prefix (e.g., `usePolling.ts`). Here's an example that polls an API endpoint at a regular interval — useful for data that doesn't come through the WebSocket:
 
 ```tsx
 import { useState, useEffect, useCallback } from 'react';
@@ -1338,14 +1327,14 @@ export function usePolling<T>(fetcher: () => Promise<T>, intervalMs: number) {
 }
 ```
 
-**Conventions:**
+**Conventions (you'll see these patterns throughout the codebase):**
 
-- `useCallback` for all functions passed as props or used in dependency arrays
-- `useMemo` for expensive derived data (filtering, sorting)
-- `useRef` for values that shouldn't trigger re-renders (WebSocket refs, timers)
-- `useState` initializer functions for reading from localStorage on first render
+- `useCallback` — wraps functions so they aren't recreated unnecessarily on every render cycle
+- `useMemo` — caches expensive calculations (sorting, filtering) so they only recompute when inputs change
+- `useRef` — holds values that persist between renders without causing a screen update (like a static variable in a PLC function block)
+- `useState` — declares a variable that, when changed, causes the component to re-render with the new value
 
-### Fetching data in pages
+### Loading data when a page opens
 
 ```tsx
 const [data, setData] = useState<MyType[]>([]);
@@ -1355,21 +1344,21 @@ useEffect(() => {
 }, []);
 ```
 
-Non-critical fetches use `.catch(() => {})` to suppress console errors. Critical fetches should set an error state for display.
+`useEffect` with an empty `[]` runs once when the page loads — it calls the API and stores the result. The `.catch(() => {})` silently ignores errors for non-critical data.
 
 ### Styling
 
-- Tailwind CSS with dark theme (slate-800/900 backgrounds, slate-100/200 text)
-- CSS variables from `lib/theme.ts` for runtime theme customization (e.g., `var(--hmi-accent)`)
-- No CSS modules or styled-components
+The application uses a dark industrial theme (dark gray backgrounds, light text) via Tailwind CSS — a utility-based styling system where you apply small CSS classes directly in the markup (e.g., `className="text-slate-100 bg-slate-800"` means light text on a dark background). The accent color is customizable at runtime via Settings > Branding.
 
 ---
 
 ## Backend Patterns
 
+> **What does "async" mean?** Python's `async`/`await` lets the server handle many operations concurrently without threads — similar to how a PLC scan cycle processes multiple tasks cooperatively. When the server waits for a database query or PLC response, it can serve other requests instead of blocking. You'll see `async def` instead of `def` and `await` before operations that involve waiting.
+
 ### Async everywhere
 
-All database operations and service calls are async:
+All database operations and service calls use async:
 
 ```python
 # Database query
@@ -1383,7 +1372,7 @@ await session.commit()
 
 ### Background services
 
-Long-running background tasks follow this pattern:
+Long-running tasks (like the tag engine's 500ms polling loop or the trend service's data sampling) follow this pattern — similar to a cyclic task in a PLC:
 
 ```python
 class MyService:
@@ -1407,9 +1396,9 @@ class MyService:
             await asyncio.sleep(1.0)
 ```
 
-Register start/stop calls in the `lifespan` function in `main.py`.
+Register start/stop calls in the `lifespan` function in `main.py` — this is the server's initialization and shutdown sequence.
 
-### Error handling in routes
+### Error handling in endpoints
 
 ```python
 from fastapi import HTTPException, status
@@ -1424,7 +1413,7 @@ async def get_item(id: int, session: AsyncSession = Depends(get_db)):
 
 ### Database session management
 
-The `get_db()` dependency yields a session that auto-commits on success and rolls back on exception:
+The `get_db()` function provides a database connection to each endpoint. It automatically saves changes on success and rolls back on error — no manual commit/rollback needed in most cases:
 
 ```python
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -1433,7 +1422,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         await session.commit()
 ```
 
-For operations outside of request handlers (e.g., in background services), create sessions from the factory:
+For background services that need database access outside of an HTTP request (e.g., the trend service logging data), create sessions directly:
 
 ```python
 from app.core.database import async_session
@@ -1446,6 +1435,8 @@ async with async_session() as session:
 ---
 
 ## API Reference
+
+This is the complete list of HTTP endpoints the backend provides. The browser UI calls these to read and write data. They can also be called from external systems (e.g., a SCADA system, an MES, or a custom script) using standard HTTP requests with a JWT authentication token.
 
 ### Authentication
 
