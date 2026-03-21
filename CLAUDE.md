@@ -205,7 +205,7 @@ Environment variables prefixed with `HMI_` (or `.env` file):
 
 - **TagEngine** (`services/tag_engine.py`): In-memory tag store, simulation engine (sine/ramp/random/toggle/enum_cycle), 500ms update cycle, publishes to WebSocket subscribers. Internal tags (no data source, no simulation) are nonvolatile — values are persisted to the database via `persisted_value` column and restored on startup
 - **AlarmService** (`services/alarm_service.py`): Boolean alarm evaluation — each alarm-enabled tag is compared against its `trigger_on` value (default `true`). Analog threshold alarming is handled on the PLC side and reported to the HMI as boolean fault flags. State machine with four states: `active_unacked`, `active_acked`, `inactive_unacked` (alarm clears before acknowledgment), `inactive` (cleared). History recording. Supports external callbacks (e.g., ProductionService) via `add_alarm_callback()`. Includes a `_help_cache` for fault help dialog data (image/text) broadcast via WebSocket.
-- **ReportingService** (`services/reporting_service.py`): Stateless on-demand report computation from trend data and alarm history. Computes OEE, rate, count, uptime (machine cycling), downtime (machine faulted), and idle time (neither) for arbitrary timeframes. Supports downtime exception faults with 5-minute cap — time beyond 5 minutes counts as idle. No background loops; all metrics computed at query time from existing trend_data and alarm_history tables. Production settings (tag bindings, cycling tag, exception tags, target rate) stored in `app_settings` table.
+- **ReportingService** (`services/reporting_service.py`): Stateless on-demand report computation from trend data and alarm history. Computes OEE, rate, count, uptime (machine cycling), downtime (machine faulted), and idle time (neither) for arbitrary timeframes. Supports downtime exception faults with 5-minute cap — time beyond 5 minutes counts as idle. No background loops; all metrics computed at query time from existing trend_data and alarm_history tables. Production settings (tag bindings, cycling tag, exception tags, target rate, top bar controls) stored in `app_settings` table.
 - **TrendService** (`services/trend_service.py`): Time-series sampling, 90-day retention
 - **ScriptEngine** (`services/script_engine.py`): Sandboxed Python execution for button actions (5s timeout, restricted builtins)
 - **ZplRenderer** (`services/zpl_renderer.py`): Offline ZPL-to-PNG rendering using Pillow. Supports text, barcodes (Code 128, Code 39), QR codes, graphics, rotation, reverse fields, and compressed graphic fields
@@ -219,6 +219,7 @@ Environment variables prefixed with `HMI_` (or `.env` file):
 - **Tag binding:** Widgets bind to tags by name. `TagPicker` component provides searchable dropdown
 - **Visibility/Enabled:** Widgets support `visible`, `visibleTag`, `visibleRoles`, `enabled`, `enabledTag`, `enabledRoles` for conditional runtime rendering. Conditions can be combined — tag-based and role-based conditions on the same property are AND-ed.
 - **Screen management:** Create/delete screens via modal dialog, screen tabs for navigation
+- **Top bar controls:** When no alarms are active, the header shows a configurable machine status indicator, Cycle Start button, and Reset button. Tags configured in Production Settings (`machine_status_tag`, `cycle_start_tag`, `reset_tag`). Controls hide when alarms are active (alarm marquee takes priority).
 
 ## Adding a New Widget Type
 
@@ -261,7 +262,7 @@ See `DEVELOPER.md` → "Creating a Plugin Integration" for a full walkthrough wi
 - `backend/app/services/reporting_service.py` — On-demand report computation from trend + alarm data
 - `backend/app/api/reporting.py` — Reporting API (summary, time-series, downtime periods, annotations)
 - `backend/app/models/downtime_annotation.py` — Downtime period reason code annotations
-- `backend/app/api/production_settings.py` — Production/reporting configuration API
+- `backend/app/api/production_settings.py` — Production/reporting configuration API (includes top bar control tag bindings)
 - `backend/app/api/reason_codes.py` — Downtime reason codes CRUD API
 - `backend/app/services/zpl_renderer.py` — Offline ZPL-to-PNG rendering engine
 - `backend/app/api/service_config.py` — Service page configuration API
