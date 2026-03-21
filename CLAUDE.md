@@ -191,6 +191,7 @@ Environment variables prefixed with `HMI_` (or `.env` file):
 | GET | `/api/media/{media_id}` | Serve a fault help image |
 | GET | `/api/media/` | List uploaded fault help images |
 | DELETE | `/api/media/{media_id}` | Delete a fault help image |
+| GET | `/api/system/health` | Unauthenticated health check (kiosk startup probe) |
 | GET | `/api/system/info` | System info (version, platform, install type) |
 | POST | `/api/system/update/validate` | Validate update package (source or compiled) |
 | POST | `/api/system/update/apply` | Apply update package and restart |
