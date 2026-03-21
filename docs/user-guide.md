@@ -30,7 +30,7 @@ The sidebar provides access to all pages. Pages are filtered by role — operato
 | **Service** | Manual I/O monitoring and equipment actuation | Engineer |
 | **Support** | System info, application logs, ZPL label preview | Operator |
 
-The **Connected** indicator in the header shows whether the browser is receiving live data from the server. Green means live data is flowing (tag values are updating). If it turns red, the browser has lost connection to the server — this could mean the backend service has stopped, a network cable was disconnected, or the server is restarting after an update. It will automatically reconnect when the server is available again. The alarm banner at the top scrolls active alarms with color-coded severity and an "Acknowledge All" button.
+The **Connected** indicator in the header shows whether the browser is receiving live data from the server. Green means live data is flowing (tag values are updating). If it turns red, the browser has lost connection to the server — this could mean the backend service has stopped, a network cable was disconnected, or the server is restarting after an update. It will automatically reconnect when the server is available again. The alarm banner at the top scrolls active alarms with color-coded severity and an "Acknowledge All" button. When no alarms are active, the top bar can show a **machine status indicator** and **Cycle Start / Reset buttons** (configured in Settings > Reporting > Top Bar Controls).
 
 ---
 
@@ -417,6 +417,18 @@ Instead of starting and stopping runs manually, you can configure automatic shif
 4. Select **Downtime Alarm Tags** — check alarm-enabled tags that indicate machine downtime. Alarm events auto-create and auto-close downtime records.
 5. Click **Save**.
 
+### Configuring Top Bar Controls
+
+When no alarms are active, the top bar can display a machine status indicator and control buttons. To configure:
+
+1. Go to **Settings** > **Reporting** tab, scroll to the **Top Bar Controls** section.
+2. **Machine Status Tag** — select a tag whose value represents the machine state (e.g. "Running", "Stopped", "Faulted", "Idle"). The indicator is color-coded: green for running states, red for faulted, yellow for idle, gray for stopped.
+3. **Cycle Start Tag** — select a boolean tag. Pressing the Cycle Start button in the top bar writes `true` to this tag.
+4. **Reset Tag** — select a boolean tag. Pressing the Reset button writes `true` to this tag.
+5. Click **Save**. The controls appear in the top bar immediately (you may need to refresh the page).
+
+If no tags are configured, the top bar remains blank when alarm-free. Each control is independently optional — you can configure just the status indicator, just the buttons, or any combination.
+
 ### Managing Reason Codes
 
 Downtime reason codes are predefined categories used in the downtime Pareto chart and when logging downtime events.
@@ -597,7 +609,7 @@ The Settings page is the central configuration hub, organized into tabs:
 | **Tags** | Create, edit, delete, and bulk-manage data points. Configure data types, addresses, alarms, trending, simulation, and enum mappings |
 | **Data Sources** | Add and configure PLC connections (OPC-UA, Modbus, EtherNet/IP, MQTT, Simulation) with test and browse capabilities |
 | **Integrations** | Manage third-party equipment connections (printers, scanners, file watchers) |
-| **Reporting** | Configure shift schedules (manual or automatic), tag bindings for production tracking, and manage downtime reason codes |
+| **Reporting** | Configure shift schedules (manual or automatic), tag bindings for production tracking, top bar machine controls, and manage downtime reason codes |
 | **Users** | Create and manage user accounts, set roles and credentials |
 | **Audit Trail** | Browse all configuration changes with timestamps, usernames, actions, and source IPs. Filter and export to CSV |
 

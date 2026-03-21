@@ -13,6 +13,9 @@ export function ProductionSettingsTab() {
     cycling_tag: null,
     downtime_exception_tags: [],
     target_rate: null,
+    machine_status_tag: null,
+    cycle_start_tag: null,
+    reset_tag: null,
   });
   const [tags, setTags] = useState<Tag[]>([]);
   const [saving, setSaving] = useState(false);
@@ -180,6 +183,68 @@ export function ProductionSettingsTab() {
             </div>
           </>
         )}
+      </div>
+
+      {/* Top Bar Controls */}
+      <div className="mb-6 pt-6 border-t border-slate-700">
+        <h2 className="text-base font-semibold text-slate-100">Top Bar Controls</h2>
+        <p className="text-xs text-slate-400 mt-0.5 mb-4">
+          Machine status indicator and control buttons displayed in the top bar when no alarms are active.
+        </p>
+
+        {/* Machine Status Tag */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-slate-200 mb-1">Machine Status Tag</label>
+          <p className="text-xs text-slate-400 mb-2">
+            Tag whose value is displayed as a status indicator in the top bar (e.g. Running, Stopped, Faulted, Idle).
+          </p>
+          <select
+            value={settings.machine_status_tag || ''}
+            onChange={e => setSettings({ ...settings, machine_status_tag: e.target.value || null })}
+            className={inputCls}
+          >
+            <option value="">None</option>
+            {tags.map(t => (
+              <option key={t.id} value={t.name}>{t.name}{t.display_name ? ` — ${t.display_name}` : ''}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Cycle Start Tag */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-slate-200 mb-1">Cycle Start Tag</label>
+          <p className="text-xs text-slate-400 mb-2">
+            Boolean tag written to true when the Cycle Start button is pressed.
+          </p>
+          <select
+            value={settings.cycle_start_tag || ''}
+            onChange={e => setSettings({ ...settings, cycle_start_tag: e.target.value || null })}
+            className={inputCls}
+          >
+            <option value="">None</option>
+            {boolTags.map(t => (
+              <option key={t.id} value={t.name}>{t.name}{t.display_name ? ` — ${t.display_name}` : ''}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Reset Tag */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-slate-200 mb-1">Reset Tag</label>
+          <p className="text-xs text-slate-400 mb-2">
+            Boolean tag written to true when the Reset button is pressed.
+          </p>
+          <select
+            value={settings.reset_tag || ''}
+            onChange={e => setSettings({ ...settings, reset_tag: e.target.value || null })}
+            className={inputCls}
+          >
+            <option value="">None</option>
+            {boolTags.map(t => (
+              <option key={t.id} value={t.name}>{t.name}{t.display_name ? ` — ${t.display_name}` : ''}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Save */}

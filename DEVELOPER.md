@@ -844,6 +844,9 @@ Configuration is stored in the `app_settings` table as key-value pairs:
 | `production.cycling_tag` | Tag name string (boolean cycling indicator) |
 | `production.downtime_exception_tags` | JSON array of tag names (5-min downtime cap) |
 | `production.target_rate` | Target bags/hr for OEE performance calculation |
+| `production.machine_status_tag` | Tag name for top bar machine status indicator |
+| `production.cycle_start_tag` | Boolean tag written to true by top bar Cycle Start button |
+| `production.reset_tag` | Boolean tag written to true by top bar Reset button |
 
 ### Downtime annotations
 
