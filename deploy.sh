@@ -326,12 +326,22 @@ if $BUNDLE_CHROMIUM; then
         echo "    Extracted to $DEST_DIR/"
     }
 
-    # Always bundle Linux x86_64
-    echo "    --- Linux x86_64 ---"
-    if [ -d "$RELEASE_DIR/chromium-linux-x86_64/chrome-linux64" ]; then
-        echo "    Already exists, skipping download."
+    # Drop a marker so install scripts know --chromium was requested.
+    # On aarch64, the install script uses this marker to apt-install
+    # chromium-browser instead of looking for a bundled binary.
+    touch "$RELEASE_DIR/.chromium-kiosk"
+
+    # Chrome for Testing does not publish linux-arm64 builds.
+    # ARM targets get chromium-browser from apt at install time.
+    if $BUILD_ARM; then
+        echo "    Skipping Chromium download (ARM target uses system chromium-browser)."
     else
-        download_chromium "linux64" "$RELEASE_DIR/chromium-linux-x86_64" "zip"
+        echo "    --- Linux x86_64 ---"
+        if [ -d "$RELEASE_DIR/chromium-linux-x86_64/chrome-linux64" ]; then
+            echo "    Already exists, skipping download."
+        else
+            download_chromium "linux64" "$RELEASE_DIR/chromium-linux-x86_64" "zip"
+        fi
     fi
 
     # Optionally bundle Windows x86_64
@@ -454,9 +464,10 @@ cd "$(dirname "$0")"
 START_EOF
 chmod +x "$INSTALL_DIR/start.sh"
 
-# ── Install bundled Chromium (if present) ──
+# ── Install Chromium for kiosk mode (if present in package) ──
 ARCH=$(uname -m)
 CHROMIUM_SRC=""
+KIOSK_ENABLED=false
 if [ "$ARCH" = "x86_64" ] && [ -d "$SCRIPT_DIR/chromium-linux-x86_64" ]; then
     CHROMIUM_SRC="$SCRIPT_DIR/chromium-linux-x86_64/chrome-linux64"
 fi
@@ -466,7 +477,25 @@ if [ -n "$CHROMIUM_SRC" ] && [ -d "$CHROMIUM_SRC" ]; then
     cp -r "$CHROMIUM_SRC" "$INSTALL_DIR/chromium"
     chmod +x "$INSTALL_DIR/chromium/chrome"
     echo "    Chromium installed to $INSTALL_DIR/chromium/"
+    KIOSK_ENABLED=true
+elif [ "$ARCH" = "aarch64" ] && [ -f "$SCRIPT_DIR/.chromium-kiosk" ]; then
+    # Chrome for Testing doesn't publish ARM builds — install from system packages
+    echo "==> Installing Chromium from system packages (aarch64)..."
+    if command -v apt-get > /dev/null 2>&1; then
+        apt-get update -qq && apt-get install -y -qq chromium-browser 2>/dev/null \
+            || apt-get install -y -qq chromium 2>/dev/null
+    fi
+    # Verify it's available
+    if command -v chromium-browser > /dev/null 2>&1 || command -v chromium > /dev/null 2>&1; then
+        echo "    Chromium installed from system packages."
+        KIOSK_ENABLED=true
+    else
+        echo "    WARNING: Could not install Chromium. Install manually: apt install chromium-browser"
+        echo "    Kiosk mode will not be available until Chromium is installed."
+    fi
+fi
 
+if $KIOSK_ENABLED; then
     # Create kiosk launcher script
     cat > "$INSTALL_DIR/start-kiosk.sh" << 'KIOSK_EOF'
 #!/usr/bin/env bash
@@ -482,8 +511,33 @@ cd "$(dirname "$0")"
 
 HMI_URL="${HMI_KIOSK_URL:-http://localhost:8080}"
 KIOSK_FLAGS="--kiosk"
-CHROMIUM_DIR="$(pwd)/chromium"
 CHROMIUM_DATA="$(pwd)/data/chromium-profile"
+
+# Find Chromium binary: bundled takes priority, then system-installed
+if [ -x "$(pwd)/chromium/chrome" ]; then
+    CHROME_BIN="$(pwd)/chromium/chrome"
+elif command -v chromium-browser > /dev/null 2>&1; then
+    CHROME_BIN="chromium-browser"
+elif command -v chromium > /dev/null 2>&1; then
+    CHROME_BIN="chromium"
+else
+    echo "ERROR: Chromium not found. Install with: apt install chromium-browser"
+    exit 1
+fi
+
+# Detect the desktop session user — Chromium must run as this user to
+# access the display.  The HMI server can run as root, but the browser
+# needs the session owner's display/dbus environment.
+DESKTOP_USER=""
+RUN_CHROME=""   # command prefix to run Chromium as the desktop user
+if [ "$(id -u)" = "0" ]; then
+    DESKTOP_USER=$(who 2>/dev/null | grep -v root | head -1 | awk '{print $1}')
+    if [ -z "$DESKTOP_USER" ]; then
+        # Fallback: check logind for graphical sessions
+        DESKTOP_USER=$(loginctl list-sessions --no-legend 2>/dev/null \
+            | awk '{print $3}' | grep -v root | head -1)
+    fi
+fi
 
 for arg in "$@"; do
     case "$arg" in
@@ -491,25 +545,55 @@ for arg in "$@"; do
     esac
 done
 
-# Start the HMI server in the background
-./hmi-server &
-HMI_PID=$!
-
-# Wait for the server to become ready
-echo "Waiting for HMI server to start..."
-for i in $(seq 1 30); do
-    if curl -sf http://localhost:8080/api/system/info > /dev/null 2>&1; then
-        echo "HMI server is ready."
-        break
+# Build the command prefix for launching Chromium
+CHROME_EXTRA_FLAGS=""
+if [ -n "$DESKTOP_USER" ]; then
+    # Run Chromium as the desktop user so it inherits display access
+    RUN_CHROME="sudo -u $DESKTOP_USER"
+    echo "Running Chromium as user: $DESKTOP_USER"
+else
+    # Not root, or no desktop user found — run directly
+    RUN_CHROME=""
+    if [ "$(id -u)" = "0" ]; then
+        CHROME_EXTRA_FLAGS="--no-sandbox"
+        echo "WARNING: Running as root with no desktop user detected."
     fi
-    sleep 1
-done
+fi
+
+# Default DISPLAY if not set (systemd won't have it)
+export DISPLAY="${DISPLAY:-:0}"
+
+# Force X11 rendering — Chromium's native Wayland support causes invisible
+# windows on RPi OS Bookworm's labwc compositor.  XWayland is always available
+# alongside Wayland on RPi OS, so --ozone-platform=x11 works in both cases.
+DISPLAY_FLAGS="--ozone-platform=x11"
+
+# Start the HMI server only if not already running (e.g. via hmi.service)
+HMI_PID=""
+if curl -sf http://localhost:8080/api/system/health > /dev/null 2>&1; then
+    echo "HMI server already running on port 8080."
+else
+    ./hmi-server &
+    HMI_PID=$!
+    echo "Waiting for HMI server to start..."
+    for i in $(seq 1 30); do
+        if curl -sf http://localhost:8080/api/system/health > /dev/null 2>&1; then
+            echo "HMI server is ready."
+            break
+        fi
+        sleep 1
+    done
+fi
 
 # Launch Chromium in kiosk mode
-echo "Launching Chromium kiosk at $HMI_URL..."
+echo "Launching Chromium kiosk at $HMI_URL ($(basename "$CHROME_BIN"))..."
 mkdir -p "$CHROMIUM_DATA"
-"$CHROMIUM_DIR/chrome" \
+chmod 777 "$CHROMIUM_DATA"
+$RUN_CHROME "$CHROME_BIN" \
     $KIOSK_FLAGS \
+    $CHROME_EXTRA_FLAGS \
+    $DISPLAY_FLAGS \
+    --disable-gpu \
     --no-first-run \
     --disable-infobars \
     --disable-session-crashed-bubble \
@@ -528,11 +612,15 @@ CHROME_PID=$!
 # Wait for either process to exit, then clean up the other
 cleanup() {
     kill $CHROME_PID 2>/dev/null
-    kill $HMI_PID 2>/dev/null
+    [ -n "$HMI_PID" ] && kill $HMI_PID 2>/dev/null
     wait
 }
 trap cleanup EXIT INT TERM
-wait -n $HMI_PID $CHROME_PID 2>/dev/null || true
+if [ -n "$HMI_PID" ]; then
+    wait -n $HMI_PID $CHROME_PID 2>/dev/null || true
+else
+    wait $CHROME_PID 2>/dev/null || true
+fi
 KIOSK_EOF
     chmod +x "$INSTALL_DIR/start-kiosk.sh"
 
@@ -574,7 +662,7 @@ echo "  Config:           $INSTALL_DIR/.env"
 echo
 echo "  Start manually:   $INSTALL_DIR/start.sh"
 echo "  Start as service: systemctl enable --now hmi"
-if [ -n "$CHROMIUM_SRC" ] && [ -d "$CHROMIUM_SRC" ]; then
+if $KIOSK_ENABLED; then
 echo
 echo "  Kiosk mode:       $INSTALL_DIR/start-kiosk.sh"
 echo "  Kiosk service:    systemctl enable --now hmi-kiosk"
@@ -673,7 +761,7 @@ if exist "%SCRIPT_DIR%chromium-windows\chrome-win64\" (
         echo echo Waiting for HMI server to start...
         echo :wait_loop
         echo timeout /t 1 /nobreak ^>nul
-        echo powershell -Command "try { $r = Invoke-WebRequest -Uri 'http://localhost:8080/api/system/info' -UseBasicParsing -TimeoutSec 2; if($r.StatusCode -eq 200){exit 0} } catch { exit 1 }"
+        echo powershell -Command "try { $r = Invoke-WebRequest -Uri 'http://localhost:8080/api/system/health' -UseBasicParsing -TimeoutSec 2; if($r.StatusCode -eq 200){exit 0} } catch { exit 1 }"
         echo if errorlevel 1 goto wait_loop
         echo echo HMI server is ready.
         echo.
@@ -888,11 +976,12 @@ python -m app.seed
 SEED_EOF
 chmod +x "$INSTALL_DIR/seed.sh"
 
-# ── Install bundled Chromium (if present) ──
+# ── Install Chromium for kiosk mode (if present in package) ──
 # NOTE: This must run BEFORE the seed step so that a seed failure
 #       (which exits the script via set -e) does not skip kiosk setup.
 ARCH=$(uname -m)
 CHROMIUM_SRC=""
+KIOSK_ENABLED=false
 if [ "$ARCH" = "x86_64" ] && [ -d "$SCRIPT_DIR/chromium-linux-x86_64" ]; then
     CHROMIUM_SRC="$SCRIPT_DIR/chromium-linux-x86_64/chrome-linux64"
 fi
@@ -902,7 +991,25 @@ if [ -n "$CHROMIUM_SRC" ] && [ -d "$CHROMIUM_SRC" ]; then
     cp -r "$CHROMIUM_SRC" "$INSTALL_DIR/chromium"
     chmod +x "$INSTALL_DIR/chromium/chrome"
     echo "    Chromium installed to $INSTALL_DIR/chromium/"
+    KIOSK_ENABLED=true
+elif [ "$ARCH" = "aarch64" ] && [ -f "$SCRIPT_DIR/.chromium-kiosk" ]; then
+    # Chrome for Testing doesn't publish ARM builds — install from system packages
+    echo "==> Installing Chromium from system packages (aarch64)..."
+    if command -v apt-get > /dev/null 2>&1; then
+        apt-get update -qq && apt-get install -y -qq chromium-browser 2>/dev/null \
+            || apt-get install -y -qq chromium 2>/dev/null
+    fi
+    # Verify it's available
+    if command -v chromium-browser > /dev/null 2>&1 || command -v chromium > /dev/null 2>&1; then
+        echo "    Chromium installed from system packages."
+        KIOSK_ENABLED=true
+    else
+        echo "    WARNING: Could not install Chromium. Install manually: apt install chromium-browser"
+        echo "    Kiosk mode will not be available until Chromium is installed."
+    fi
+fi
 
+if $KIOSK_ENABLED; then
     # Create kiosk launcher script
     cat > "$INSTALL_DIR/start-kiosk.sh" << 'KIOSK_EOF'
 #!/usr/bin/env bash
@@ -918,8 +1025,33 @@ cd "$(dirname "$0")"
 
 HMI_URL="${HMI_KIOSK_URL:-http://localhost:8080}"
 KIOSK_FLAGS="--kiosk"
-CHROMIUM_DIR="$(pwd)/chromium"
 CHROMIUM_DATA="$(pwd)/data/chromium-profile"
+
+# Find Chromium binary: bundled takes priority, then system-installed
+if [ -x "$(pwd)/chromium/chrome" ]; then
+    CHROME_BIN="$(pwd)/chromium/chrome"
+elif command -v chromium-browser > /dev/null 2>&1; then
+    CHROME_BIN="chromium-browser"
+elif command -v chromium > /dev/null 2>&1; then
+    CHROME_BIN="chromium"
+else
+    echo "ERROR: Chromium not found. Install with: apt install chromium-browser"
+    exit 1
+fi
+
+# Detect the desktop session user — Chromium must run as this user to
+# access the display.  The HMI server can run as root, but the browser
+# needs the session owner's display/dbus environment.
+DESKTOP_USER=""
+RUN_CHROME=""   # command prefix to run Chromium as the desktop user
+if [ "$(id -u)" = "0" ]; then
+    DESKTOP_USER=$(who 2>/dev/null | grep -v root | head -1 | awk '{print $1}')
+    if [ -z "$DESKTOP_USER" ]; then
+        # Fallback: check logind for graphical sessions
+        DESKTOP_USER=$(loginctl list-sessions --no-legend 2>/dev/null \
+            | awk '{print $3}' | grep -v root | head -1)
+    fi
+fi
 
 for arg in "$@"; do
     case "$arg" in
@@ -927,26 +1059,56 @@ for arg in "$@"; do
     esac
 done
 
-# Start the HMI server in the background
-source venv/bin/activate
-python run.py &
-HMI_PID=$!
-
-# Wait for the server to become ready
-echo "Waiting for HMI server to start..."
-for i in $(seq 1 30); do
-    if curl -sf http://localhost:8080/api/system/info > /dev/null 2>&1; then
-        echo "HMI server is ready."
-        break
+# Build the command prefix for launching Chromium
+CHROME_EXTRA_FLAGS=""
+if [ -n "$DESKTOP_USER" ]; then
+    # Run Chromium as the desktop user so it inherits display access
+    RUN_CHROME="sudo -u $DESKTOP_USER"
+    echo "Running Chromium as user: $DESKTOP_USER"
+else
+    # Not root, or no desktop user found — run directly
+    RUN_CHROME=""
+    if [ "$(id -u)" = "0" ]; then
+        CHROME_EXTRA_FLAGS="--no-sandbox"
+        echo "WARNING: Running as root with no desktop user detected."
     fi
-    sleep 1
-done
+fi
+
+# Default DISPLAY if not set (systemd won't have it)
+export DISPLAY="${DISPLAY:-:0}"
+
+# Force X11 rendering — Chromium's native Wayland support causes invisible
+# windows on RPi OS Bookworm's labwc compositor.  XWayland is always available
+# alongside Wayland on RPi OS, so --ozone-platform=x11 works in both cases.
+DISPLAY_FLAGS="--ozone-platform=x11"
+
+# Start the HMI server only if not already running (e.g. via hmi.service)
+HMI_PID=""
+if curl -sf http://localhost:8080/api/system/health > /dev/null 2>&1; then
+    echo "HMI server already running on port 8080."
+else
+    source venv/bin/activate
+    python run.py &
+    HMI_PID=$!
+    echo "Waiting for HMI server to start..."
+    for i in $(seq 1 30); do
+        if curl -sf http://localhost:8080/api/system/health > /dev/null 2>&1; then
+            echo "HMI server is ready."
+            break
+        fi
+        sleep 1
+    done
+fi
 
 # Launch Chromium in kiosk mode
-echo "Launching Chromium kiosk at $HMI_URL..."
+echo "Launching Chromium kiosk at $HMI_URL ($(basename "$CHROME_BIN"))..."
 mkdir -p "$CHROMIUM_DATA"
-"$CHROMIUM_DIR/chrome" \
+chmod 777 "$CHROMIUM_DATA"
+$RUN_CHROME "$CHROME_BIN" \
     $KIOSK_FLAGS \
+    $CHROME_EXTRA_FLAGS \
+    $DISPLAY_FLAGS \
+    --disable-gpu \
     --no-first-run \
     --disable-infobars \
     --disable-session-crashed-bubble \
@@ -965,11 +1127,15 @@ CHROME_PID=$!
 # Wait for either process to exit, then clean up the other
 cleanup() {
     kill $CHROME_PID 2>/dev/null
-    kill $HMI_PID 2>/dev/null
+    [ -n "$HMI_PID" ] && kill $HMI_PID 2>/dev/null
     wait
 }
 trap cleanup EXIT INT TERM
-wait -n $HMI_PID $CHROME_PID 2>/dev/null || true
+if [ -n "$HMI_PID" ]; then
+    wait -n $HMI_PID $CHROME_PID 2>/dev/null || true
+else
+    wait $CHROME_PID 2>/dev/null || true
+fi
 KIOSK_EOF
     chmod +x "$INSTALL_DIR/start-kiosk.sh"
 
@@ -1017,7 +1183,7 @@ echo "  Config:           $INSTALL_DIR/.env"
 echo
 echo "  Start manually:   $INSTALL_DIR/start.sh"
 echo "  Start as service: systemctl enable --now hmi"
-if [ -n "$CHROMIUM_SRC" ] && [ -d "$CHROMIUM_SRC" ]; then
+if $KIOSK_ENABLED; then
 echo
 echo "  Kiosk mode:       $INSTALL_DIR/start-kiosk.sh"
 echo "  Kiosk service:    systemctl enable --now hmi-kiosk"
@@ -1229,7 +1395,7 @@ if exist "%SCRIPT_DIR%chromium-windows\chrome-win64\" (
         echo echo Waiting for HMI server to start...
         echo :wait_loop
         echo timeout /t 1 /nobreak ^>nul
-        echo powershell -Command "try { $r = Invoke-WebRequest -Uri 'http://localhost:8080/api/system/info' -UseBasicParsing -TimeoutSec 2; if($r.StatusCode -eq 200){exit 0} } catch { exit 1 }"
+        echo powershell -Command "try { $r = Invoke-WebRequest -Uri 'http://localhost:8080/api/system/health' -UseBasicParsing -TimeoutSec 2; if($r.StatusCode -eq 200){exit 0} } catch { exit 1 }"
         echo if errorlevel 1 goto wait_loop
         echo echo HMI server is ready.
         echo.

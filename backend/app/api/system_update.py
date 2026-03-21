@@ -50,6 +50,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
+
+@router.get("/health")
+async def health_check():
+    """Unauthenticated health check for kiosk startup probes."""
+    return {"status": "ok"}
+
+
 # The install root — working directory in production, backend/ dir in dev
 _app_root = data_dir()
 
