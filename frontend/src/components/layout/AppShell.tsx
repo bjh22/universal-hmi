@@ -13,7 +13,7 @@
  *   - User info and system controls in sidebar footer
  *   - Collapsible sidebar for more screen real estate
  */
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, TrendingUp, Bell, ClipboardList, BarChart3,
@@ -54,6 +54,74 @@ const NAV_ITEMS = [
   { to: '/service', icon: Wrench, label: 'Service', roles: ['engineer', 'designer'] as string[] },
   { to: '/support', icon: LifeBuoy, label: 'Support', roles: null },
 ];
+
+/** Auto-scrolling alarm marquee — duplicates the list so it loops seamlessly.
+ *  Pauses on hover/touch so users can tap an alarm to navigate. */
+function AlarmMarquee({ alarms }: { alarms: AlarmData[] }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [needsScroll, setNeedsScroll] = useState(false);
+  const [paused, setPaused] = useState(false);
+
+  // Check if content overflows the container
+  useEffect(() => {
+    const check = () => {
+      if (containerRef.current && innerRef.current) {
+        setNeedsScroll(innerRef.current.scrollWidth > containerRef.current.clientWidth);
+      }
+    };
+    check();
+    // Re-check when alarms change
+    const timer = setTimeout(check, 100);
+    return () => clearTimeout(timer);
+  }, [alarms]);
+
+  const alarmPill = (alarm: AlarmData, keySuffix: string) => (
+    <Link
+      key={`${alarm.id}-${keySuffix}`}
+      to="/alarms"
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-base font-medium whitespace-nowrap shrink-0 transition-colors ${
+        alarm.state === 'active_unacked'
+          ? alarm.severity === 'critical'
+            ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
+            : alarm.severity === 'warning'
+              ? 'bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30'
+              : 'bg-blue-500/20 text-blue-300 hover:bg-blue-500/30'
+          : 'bg-[var(--hmi-bg-input)]/50 text-[var(--hmi-text-secondary)] hover:bg-[var(--hmi-bg-input)]/70'
+      }`}
+    >
+      <SeverityIcon severity={alarm.severity} />
+      <span>{alarm.message}</span>
+      {alarm.state === 'active_acked' && (
+        <span className="text-xs opacity-60 ml-0.5">(Acked)</span>
+      )}
+      {alarm.state === 'inactive_unacked' && (
+        <span className="text-xs opacity-60 ml-0.5">(Cleared)</span>
+      )}
+    </Link>
+  );
+
+  return (
+    <div
+      ref={containerRef}
+      className="min-w-0 flex-1 overflow-hidden"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onTouchStart={() => setPaused(true)}
+      onTouchEnd={() => setPaused(false)}
+    >
+      <div
+        ref={innerRef}
+        className={`flex items-center gap-1.5 ${needsScroll ? 'alarm-marquee' : ''}`}
+        style={needsScroll ? { animationPlayState: paused ? 'paused' : 'running' } : undefined}
+      >
+        {alarms.map(a => alarmPill(a, 'a'))}
+        {/* Duplicate for seamless loop */}
+        {needsScroll && alarms.map(a => alarmPill(a, 'b'))}
+      </div>
+    </div>
+  );
+}
 
 export function AppShell({ children, user, wsConnected, alarms, onLogout, navTitle = 'HMI', activeJobName, datasourceStatuses: _ds = [], plcVersion }: AppShellProps) {
   void _ds; // Datasource statuses are now shown on the Support page, but prop kept for API compat
@@ -134,7 +202,7 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
 
         {/* Role-based filtering: only show nav items the current user is allowed to see.
             If roles is null, everyone sees it. Otherwise, the user's role must be in the list. */}
-        <nav className="flex-1 py-2">
+        <nav className="flex-1 py-2 overflow-y-auto min-h-0">
           {NAV_ITEMS.filter(item => !item.roles || (user && item.roles.includes(user.role))).map((item) => {
             const active = location.pathname === item.to ||
               (item.to !== '/' && location.pathname.startsWith(item.to));
@@ -290,34 +358,9 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
             </Link>
           )}
 
-          {/* Inline alarm display — scrollable list of all active alarms */}
+          {/* Inline alarm display — auto-scrolling marquee that loops when overflowing */}
           {activeAlarms.length > 0 ? (
-            <div className="min-w-0 flex-1 overflow-x-auto flex items-center gap-1.5 scrollbar-thin" style={{ touchAction: 'pan-x' }}>
-              {activeAlarms.map((alarm) => (
-                <Link
-                  key={alarm.id}
-                  to="/alarms"
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-base font-medium whitespace-nowrap shrink-0 transition-colors ${
-                    alarm.state === 'active_unacked'
-                      ? alarm.severity === 'critical'
-                        ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
-                        : alarm.severity === 'warning'
-                          ? 'bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30'
-                          : 'bg-blue-500/20 text-blue-300 hover:bg-blue-500/30'
-                      : 'bg-[var(--hmi-bg-input)]/50 text-[var(--hmi-text-secondary)] hover:bg-[var(--hmi-bg-input)]/70'
-                  }`}
-                >
-                  <SeverityIcon severity={alarm.severity} />
-                  <span>{alarm.message}</span>
-                  {alarm.state === 'active_acked' && (
-                    <span className="text-xs opacity-60 ml-0.5">(Acked)</span>
-                  )}
-                  {alarm.state === 'inactive_unacked' && (
-                    <span className="text-xs opacity-60 ml-0.5">(Cleared)</span>
-                  )}
-                </Link>
-              ))}
-            </div>
+            <AlarmMarquee alarms={activeAlarms} />
           ) : (
             <div className="flex-1" />
           )}

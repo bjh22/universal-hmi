@@ -203,6 +203,136 @@ def _validate_package(release_root: Path, archive_size: int) -> UpdateValidation
     )
 
 
+def _apply_update(
+    release_root: Path, validation: UpdateValidation, app_root: Path
+) -> tuple[bool, bool, bool]:
+    """
+    Apply an extracted update package. Returns (updated_backend, updated_frontend, updated_deps).
+    Raises HTTPException on failure (with rollback).
+    """
+    updated_backend = False
+    updated_frontend = False
+    updated_deps = False
+
+    if validation.is_compiled:
+        exe_name = "hmi-server.exe" if platform.system() == "Windows" else "hmi-server"
+        new_bundle = release_root / "hmi-server"
+        current_exe = app_root / exe_name
+        current_internal = app_root / "_internal"
+        backup_exe = app_root / f"_{exe_name}.backup"
+        backup_internal = app_root / "__internal_backup"
+
+        if backup_exe.exists():
+            backup_exe.unlink()
+        if backup_internal.exists():
+            shutil.rmtree(backup_internal)
+
+        try:
+            if current_exe.exists():
+                current_exe.rename(backup_exe)
+            if current_internal.exists():
+                current_internal.rename(backup_internal)
+
+            shutil.copy2(new_bundle / exe_name, app_root / exe_name)
+            if platform.system() != "Windows":
+                os.chmod(app_root / exe_name, 0o755)
+            shutil.copytree(new_bundle / "_internal", app_root / "_internal")
+            updated_backend = True
+            updated_frontend = validation.has_frontend
+            logger.info("Compiled binary and _internal updated successfully")
+        except Exception as e:
+            logger.error(f"Compiled update failed, rolling back: {e}")
+            if (app_root / exe_name).exists():
+                (app_root / exe_name).unlink()
+            if (app_root / "_internal").exists():
+                shutil.rmtree(app_root / "_internal")
+            if backup_exe.exists():
+                backup_exe.rename(current_exe)
+            if backup_internal.exists():
+                backup_internal.rename(current_internal)
+            raise HTTPException(500, f"Compiled update failed (rolled back): {e}")
+    else:
+        # Source-mode: backend code
+        if validation.has_backend:
+            new_app_dir = release_root / "backend" / "app"
+            target_app_dir = app_root / "app"
+            backup_dir = app_root / "_app_backup"
+            if backup_dir.exists():
+                shutil.rmtree(backup_dir)
+            if target_app_dir.exists():
+                shutil.copytree(target_app_dir, backup_dir)
+            try:
+                if target_app_dir.exists():
+                    shutil.rmtree(target_app_dir)
+                shutil.copytree(new_app_dir, target_app_dir)
+                updated_backend = True
+                logger.info("Backend code updated successfully")
+            except Exception as e:
+                logger.error(f"Backend update failed, rolling back: {e}")
+                if target_app_dir.exists():
+                    shutil.rmtree(target_app_dir)
+                if backup_dir.exists():
+                    shutil.copytree(backup_dir, target_app_dir)
+                raise HTTPException(500, f"Backend update failed (rolled back): {e}")
+
+            for extra_file in ["run.py", "requirements.txt"]:
+                src = release_root / "backend" / extra_file
+                if src.is_file():
+                    shutil.copy2(src, app_root / extra_file)
+
+        # Source-mode: frontend
+        if validation.has_frontend:
+            new_static = release_root / "backend" / "static"
+            target_static = app_root / "static"
+            backup_static = app_root / "_static_backup"
+            if backup_static.exists():
+                shutil.rmtree(backup_static)
+            if target_static.exists():
+                shutil.copytree(target_static, backup_static)
+            try:
+                if target_static.exists():
+                    shutil.rmtree(target_static)
+                shutil.copytree(new_static, target_static)
+                updated_frontend = True
+                logger.info("Frontend assets updated successfully")
+            except Exception as e:
+                logger.error(f"Frontend update failed, rolling back: {e}")
+                if target_static.exists():
+                    shutil.rmtree(target_static)
+                if backup_static.exists():
+                    shutil.copytree(backup_static, target_static)
+                raise HTTPException(500, f"Frontend update failed (rolled back): {e}")
+
+        # Source-mode: Python wheels
+        if validation.has_wheels:
+            venv_dir = app_root / "venv"
+            if venv_dir.is_dir():
+                pip_path = (
+                    venv_dir / "Scripts" / "pip.exe"
+                    if platform.system() == "Windows"
+                    else venv_dir / "bin" / "pip"
+                )
+                wheels_dir = release_root / "wheels"
+                if platform.system() == "Windows" and validation.has_windows_wheels:
+                    wheels_dir = release_root / "wheels-windows"
+                req_file = app_root / "requirements.txt"
+                if pip_path.is_file() and req_file.is_file():
+                    try:
+                        result = subprocess.run(
+                            [str(pip_path), "install", "--no-index", f"--find-links={wheels_dir}", "-r", str(req_file)],
+                            capture_output=True, text=True, timeout=120,
+                        )
+                        if result.returncode == 0:
+                            updated_deps = True
+                            logger.info("Dependencies updated successfully")
+                        else:
+                            logger.warning(f"Dependency update had issues: {result.stderr}")
+                    except Exception as e:
+                        logger.warning(f"Dependency update failed (non-fatal): {e}")
+
+    return updated_backend, updated_frontend, updated_deps
+
+
 @router.get("/version")
 async def get_version():
     """Get app version (no auth required)."""
@@ -249,10 +379,8 @@ async def update_system_settings(
 
 
 @router.get("/info", response_model=SystemInfoResponse)
-async def get_system_info(
-    _user: User = Depends(require_role(UserRole.SUPERVISOR, UserRole.ENGINEER, UserRole.DESIGNER)),
-):
-    """Get current system information."""
+async def get_system_info():
+    """Get current system information. No auth required so the Support page works without login."""
     now = datetime.now(timezone.utc)
     uptime = (now - _start_time).total_seconds()
 
@@ -582,10 +710,8 @@ def _get_teamviewer_info() -> TeamViewerInfo:
 
 
 @router.get("/support-info", response_model=SupportInfoResponse)
-async def get_support_info(
-    _user: User = Depends(require_role(UserRole.SUPERVISOR, UserRole.ENGINEER, UserRole.DESIGNER)),
-):
-    """Get detailed system support information: network, disks, TeamViewer, removable drives."""
+async def get_support_info():
+    """Get detailed system support information. No auth required so the Support page works without login."""
     return SupportInfoResponse(
         hostname=socket.gethostname(),
         network_adapters=_get_network_adapters(),
@@ -593,6 +719,233 @@ async def get_support_info(
         removable_drives=_get_removable_drives(),
         teamviewer=_get_teamviewer_info(),
     )
+
+
+class BrowseEntry(BaseModel):
+    """A single file or directory entry for the in-app file browser."""
+    name: str
+    path: str
+    is_dir: bool
+    size: int = 0  # bytes, 0 for directories
+
+
+class BrowseResult(BaseModel):
+    """Response for the file-browse endpoint."""
+    current: str
+    parent: str | None
+    entries: list[BrowseEntry]
+
+
+# Allowed root paths for file browsing (prevents browsing sensitive system dirs).
+# On Linux: home, /media (USB), /mnt, /tmp
+# On all: the application root itself
+_ALLOWED_BROWSE_ROOTS: list[str] = []
+
+
+def _is_path_allowed(p: Path) -> bool:
+    """Check if a path is within allowed browsing roots."""
+    if not _ALLOWED_BROWSE_ROOTS:
+        # Initialize on first call
+        home = str(Path.home())
+        _ALLOWED_BROWSE_ROOTS.append(home)
+        _ALLOWED_BROWSE_ROOTS.append(str(_app_root))
+        for extra in ["/media", "/mnt", "/tmp", "/run/media"]:
+            if Path(extra).is_dir():
+                _ALLOWED_BROWSE_ROOTS.append(extra)
+        # Windows common locations
+        for drive in "DEFGH":
+            dp = f"{drive}:\\"
+            if Path(dp).is_dir():
+                _ALLOWED_BROWSE_ROOTS.append(dp)
+
+    resolved = str(p.resolve())
+    return any(resolved == root or resolved.startswith(root + os.sep) for root in _ALLOWED_BROWSE_ROOTS)
+
+
+@router.get("/files/browse", response_model=BrowseResult)
+async def browse_files(
+    path: str | None = None,
+    _user: User = Depends(require_role(UserRole.SUPERVISOR, UserRole.ENGINEER, UserRole.DESIGNER)),
+) -> BrowseResult:
+    """
+    Browse files on the server filesystem for the in-app file picker.
+    Returns directories and .tar.gz/.zip files in the requested path.
+    If no path is given, returns the user's home directory.
+    """
+    if path:
+        target = Path(path).resolve()
+    else:
+        target = Path.home()
+
+    if not target.is_dir():
+        raise HTTPException(400, f"Not a directory: {target}")
+
+    if not _is_path_allowed(target):
+        raise HTTPException(403, "Access denied: path not in allowed roots")
+
+    entries: list[BrowseEntry] = []
+    try:
+        for item in sorted(target.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
+            # Skip hidden files/dirs
+            if item.name.startswith("."):
+                continue
+            if item.is_dir():
+                entries.append(BrowseEntry(name=item.name, path=str(item), is_dir=True))
+            elif item.name.lower().endswith((".tar.gz", ".zip")):
+                try:
+                    size = item.stat().st_size
+                except OSError:
+                    size = 0
+                entries.append(BrowseEntry(name=item.name, path=str(item), is_dir=False, size=size))
+    except PermissionError:
+        raise HTTPException(403, f"Permission denied: {target}")
+
+    parent = str(target.parent) if target.parent != target and _is_path_allowed(target.parent) else None
+
+    return BrowseResult(current=str(target), parent=parent, entries=entries)
+
+
+class PathRequest(BaseModel):
+    """Request body with a server-side file path."""
+    path: str
+
+
+@router.post("/update/validate-path")
+async def validate_update_from_path(
+    body: PathRequest,
+    _user: User = Depends(require_role(UserRole.SUPERVISOR, UserRole.ENGINEER, UserRole.DESIGNER)),
+) -> UpdateValidation:
+    """Validate an update package by server-side file path (no upload needed)."""
+    file_path = Path(body.path).resolve()
+
+    if not file_path.is_file():
+        raise HTTPException(400, f"File not found: {file_path}")
+    if not _is_path_allowed(file_path):
+        raise HTTPException(403, "Access denied")
+
+    filename = file_path.name.lower()
+    if not (filename.endswith(".tar.gz") or filename.endswith(".zip")):
+        raise HTTPException(400, "Package must be a .tar.gz or .zip file")
+
+    content = file_path.read_bytes()
+
+    with tempfile.TemporaryDirectory(prefix="hmi_update_") as tmp_dir:
+        extract_dir = Path(tmp_dir) / "extracted"
+        extract_dir.mkdir()
+
+        try:
+            if filename.endswith(".tar.gz"):
+                with tarfile.open(file_path, "r:gz") as tf:
+                    tf.extractall(extract_dir)
+            else:
+                with zipfile.ZipFile(file_path, "r") as zf:
+                    zf.extractall(extract_dir)
+        except Exception as e:
+            return UpdateValidation(
+                valid=False,
+                error=f"Failed to extract archive: {e}",
+                package_size_mb=round(len(content) / (1024 * 1024), 1),
+            )
+
+        release_root = _find_release_root(extract_dir)
+        if release_root is None:
+            return UpdateValidation(
+                valid=False,
+                error="Invalid package structure: cannot find backend/app/ or hmi-server/ directory",
+                package_size_mb=round(len(content) / (1024 * 1024), 1),
+            )
+
+        return _validate_package(release_root, len(content))
+
+
+@router.post("/update/apply-path", response_model=UpdateResult)
+async def apply_update_from_path(
+    body: PathRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(UserRole.SUPERVISOR, UserRole.ENGINEER, UserRole.DESIGNER)),
+) -> UpdateResult:
+    """Apply an update package from a server-side file path (no upload needed)."""
+    file_path = Path(body.path).resolve()
+
+    if not file_path.is_file():
+        raise HTTPException(400, f"File not found: {file_path}")
+    if not _is_path_allowed(file_path):
+        raise HTTPException(403, "Access denied")
+
+    filename = file_path.name.lower()
+    if not (filename.endswith(".tar.gz") or filename.endswith(".zip")):
+        raise HTTPException(400, "Package must be a .tar.gz or .zip file")
+
+    content = file_path.read_bytes()
+    archive_size = len(content)
+    source_ip = request.client.host if request.client else None
+
+    tmp_dir = tempfile.mkdtemp(prefix="hmi_update_")
+    try:
+        extract_dir = Path(tmp_dir) / "extracted"
+        extract_dir.mkdir()
+
+        if filename.endswith(".tar.gz"):
+            with tarfile.open(file_path, "r:gz") as tf:
+                tf.extractall(extract_dir)
+        else:
+            with zipfile.ZipFile(file_path, "r") as zf:
+                zf.extractall(extract_dir)
+
+        release_root = _find_release_root(extract_dir)
+        if release_root is None:
+            raise HTTPException(400, "Invalid package: cannot find backend/app/ or hmi-server/ directory")
+
+        validation = _validate_package(release_root, archive_size)
+        if not validation.valid:
+            raise HTTPException(400, validation.error or "Invalid package")
+
+        if validation.is_compiled and not FROZEN:
+            raise HTTPException(400, "Cannot apply a compiled package to a source-mode installation.")
+        if not validation.is_compiled and FROZEN:
+            raise HTTPException(400, "Cannot apply a source package to a compiled installation.")
+
+        # Reuse the same update logic as the upload-based endpoint
+        updated_backend, updated_frontend, updated_deps = _apply_update(
+            release_root, validation, _app_root
+        )
+
+        mode = "compiled" if validation.is_compiled else "source"
+        details = f"Software update ({mode}) applied from {file_path.name} ({validation.package_size_mb} MB)"
+        if updated_backend:
+            details += " [backend updated]"
+        if updated_frontend:
+            details += " [frontend updated]"
+        if updated_deps:
+            details += " [dependencies updated]"
+        await log_audit(session, AuditAction.CONFIG_CHANGE, user.username, details, source_ip)
+        await session.commit()
+
+        restart_scheduled = False
+        if updated_backend or updated_frontend:
+            restart_scheduled = True
+            asyncio.get_event_loop().call_later(2.0, _trigger_restart)
+
+        return UpdateResult(
+            success=True,
+            message="Update applied successfully" + (". Restarting in 2 seconds..." if restart_scheduled else ""),
+            updated_backend=updated_backend,
+            updated_frontend=updated_frontend,
+            updated_dependencies=updated_deps,
+            restart_scheduled=restart_scheduled,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update failed: {e}")
+        raise HTTPException(500, f"Update failed: {e}")
+    finally:
+        try:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+        except Exception:
+            pass
 
 
 @router.post("/update/validate")
@@ -720,163 +1073,9 @@ async def apply_update_package(
                 "Use a compiled package (deploy.sh --compile).",
             )
 
-        updated_backend = False
-        updated_frontend = False
-        updated_deps = False
-
-        if validation.is_compiled:
-            # --- Compiled-mode update ---
-            # Replace the hmi-server binary and _internal/ directory.
-            # The running process will be killed after the response is sent,
-            # and systemd/NSSM will restart it using the new binary.
-            new_bundle = release_root / "hmi-server"
-            target_dir = _app_root
-
-            # On Windows, the running .exe cannot be overwritten directly.
-            # Rename the current binary out of the way first.
-            exe_name = "hmi-server.exe" if platform.system() == "Windows" else "hmi-server"
-            current_exe = target_dir / exe_name
-            current_internal = target_dir / "_internal"
-
-            # Backup current binary and _internal
-            backup_exe = target_dir / f"_{exe_name}.backup"
-            backup_internal = target_dir / "__internal_backup"
-
-            if backup_exe.exists():
-                backup_exe.unlink()
-            if backup_internal.exists():
-                shutil.rmtree(backup_internal)
-
-            try:
-                # Move current files out of the way (rename, not copy — works
-                # even for the running binary on Windows)
-                if current_exe.exists():
-                    current_exe.rename(backup_exe)
-                if current_internal.exists():
-                    current_internal.rename(backup_internal)
-
-                # Copy new binary and _internal from package
-                shutil.copy2(new_bundle / exe_name, target_dir / exe_name)
-                # Ensure executable permission on Linux/macOS
-                if platform.system() != "Windows":
-                    os.chmod(target_dir / exe_name, 0o755)
-                shutil.copytree(new_bundle / "_internal", target_dir / "_internal")
-
-                updated_backend = True
-                updated_frontend = validation.has_frontend  # Frontend is inside _internal
-                logger.info("Compiled binary and _internal updated successfully")
-            except Exception as e:
-                # Rollback — restore backed-up files
-                logger.error(f"Compiled update failed, rolling back: {e}")
-                if (target_dir / exe_name).exists():
-                    (target_dir / exe_name).unlink()
-                if (target_dir / "_internal").exists():
-                    shutil.rmtree(target_dir / "_internal")
-                if backup_exe.exists():
-                    backup_exe.rename(current_exe)
-                if backup_internal.exists():
-                    backup_internal.rename(current_internal)
-                raise HTTPException(500, f"Compiled update failed (rolled back): {e}")
-
-        else:
-            # --- Source-mode update ---
-
-            # Update backend code
-            if validation.has_backend:
-                new_app_dir = release_root / "backend" / "app"
-                target_app_dir = _app_root / "app"
-
-                # Backup current app directory
-                backup_dir = _app_root / "_app_backup"
-                if backup_dir.exists():
-                    shutil.rmtree(backup_dir)
-                if target_app_dir.exists():
-                    shutil.copytree(target_app_dir, backup_dir)
-
-                try:
-                    # Remove current and copy new
-                    if target_app_dir.exists():
-                        shutil.rmtree(target_app_dir)
-                    shutil.copytree(new_app_dir, target_app_dir)
-                    updated_backend = True
-                    logger.info("Backend code updated successfully")
-                except Exception as e:
-                    # Rollback on failure
-                    logger.error(f"Backend update failed, rolling back: {e}")
-                    if target_app_dir.exists():
-                        shutil.rmtree(target_app_dir)
-                    if backup_dir.exists():
-                        shutil.copytree(backup_dir, target_app_dir)
-                    raise HTTPException(500, f"Backend update failed (rolled back): {e}")
-
-                # Copy run.py and requirements.txt if present
-                for extra_file in ["run.py", "requirements.txt"]:
-                    src = release_root / "backend" / extra_file
-                    if src.is_file():
-                        shutil.copy2(src, _app_root / extra_file)
-
-            # Update frontend
-            if validation.has_frontend:
-                new_static = release_root / "backend" / "static"
-                target_static = _app_root / "static"
-
-                backup_static = _app_root / "_static_backup"
-                if backup_static.exists():
-                    shutil.rmtree(backup_static)
-                if target_static.exists():
-                    shutil.copytree(target_static, backup_static)
-
-                try:
-                    if target_static.exists():
-                        shutil.rmtree(target_static)
-                    shutil.copytree(new_static, target_static)
-                    updated_frontend = True
-                    logger.info("Frontend assets updated successfully")
-                except Exception as e:
-                    logger.error(f"Frontend update failed, rolling back: {e}")
-                    if target_static.exists():
-                        shutil.rmtree(target_static)
-                    if backup_static.exists():
-                        shutil.copytree(backup_static, target_static)
-                    raise HTTPException(500, f"Frontend update failed (rolled back): {e}")
-
-            # Update Python dependencies
-            if validation.has_wheels:
-                venv_dir = _app_root / "venv"
-                if venv_dir.is_dir():
-                    # Determine the correct pip path
-                    if platform.system() == "Windows":
-                        pip_path = venv_dir / "Scripts" / "pip.exe"
-                    else:
-                        pip_path = venv_dir / "bin" / "pip"
-
-                    wheels_dir = release_root / "wheels"
-
-                    # Use Windows-specific wheels if available on Windows
-                    if platform.system() == "Windows" and validation.has_windows_wheels:
-                        wheels_dir = release_root / "wheels-windows"
-
-                    req_file = _app_root / "requirements.txt"
-                    if pip_path.is_file() and req_file.is_file():
-                        try:
-                            result = subprocess.run(
-                                [
-                                    str(pip_path), "install",
-                                    "--no-index",
-                                    f"--find-links={wheels_dir}",
-                                    "-r", str(req_file),
-                                ],
-                                capture_output=True,
-                                text=True,
-                                timeout=120,
-                            )
-                            if result.returncode == 0:
-                                updated_deps = True
-                                logger.info("Dependencies updated successfully")
-                            else:
-                                logger.warning(f"Dependency update had issues: {result.stderr}")
-                        except Exception as e:
-                            logger.warning(f"Dependency update failed (non-fatal): {e}")
+        updated_backend, updated_frontend, updated_deps = _apply_update(
+            release_root, validation, _app_root
+        )
 
         # Log the update in audit trail
         mode = "compiled" if validation.is_compiled else "source"

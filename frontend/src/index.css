@@ -53,3 +53,13 @@ body {
   background: var(--hmi-border-subtle);
   border-radius: 4px;
 }
+
+/* Alarm marquee — scrolls left at constant speed, loops seamlessly via duplicated content */
+@keyframes alarm-marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.alarm-marquee {
+  animation: alarm-marquee 20s linear infinite;
+  width: max-content;
+}
