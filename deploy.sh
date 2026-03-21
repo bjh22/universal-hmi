@@ -308,7 +308,8 @@ set -euo pipefail
 
 INSTALL_DIR="${1:-/opt/hmi}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-APP_VERSION=$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null || echo "unknown")
+APP_VERSION="$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null || true)"
+APP_VERSION="${APP_VERSION:-unknown}"
 
 echo "============================================"
 echo "  HMI Installer (Linux — compiled)"
@@ -530,7 +531,8 @@ set -euo pipefail
 
 INSTALL_DIR="${1:-/opt/hmi}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-APP_VERSION=$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null || echo "unknown")
+APP_VERSION="$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null || true)"
+APP_VERSION="${APP_VERSION:-unknown}"
 
 echo "============================================"
 echo "  HMI Installer (Linux)"
