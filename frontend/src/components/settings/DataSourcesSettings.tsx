@@ -3,6 +3,7 @@ import { Plus, Pencil, Trash2, X, Plug, Unplug, FolderSearch } from 'lucide-reac
 import { api } from '../../lib/api';
 import { PROTOCOL_CONFIGS } from '../../lib/protocolConfigs';
 import { DeleteConfirmDialog, Field, inputCls } from './shared';
+import { TouchTextInput } from '../widgets/TouchTextInput';
 import { TagDialog, BrowseTagsDialog } from './TagsSettings';
 import type { Tag, TagLabel, DataSourceData, ProtocolType } from '../../types';
 
@@ -30,7 +31,7 @@ function DataSourceDialog({ ds, onSave, onClose }: {
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <Field label="Name *">
-            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required className={inputCls} placeholder="e.g. PLC-01" />
+            <TouchTextInput value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} className={inputCls} placeholder="e.g. PLC-01" title="Data Source Name" />
           </Field>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Field label="Protocol *">
@@ -58,15 +59,16 @@ function DataSourceDialog({ ds, onSave, onClose }: {
               <div className="space-y-3">
                 {protoFields.map(f => (
                   <Field key={f.key} label={f.label}>
-                    <input
-                      type={f.type}
-                      value={(form.config[f.key] as string) ?? ''}
-                      onChange={e => setForm(prev => ({
+                    <TouchTextInput
+                      type={f.type === 'number' ? 'number' : 'text'}
+                      value={String((form.config[f.key] as string) ?? '')}
+                      onChange={v => setForm(prev => ({
                         ...prev,
-                        config: { ...prev.config, [f.key]: f.type === 'number' ? (e.target.value ? Number(e.target.value) : '') : e.target.value },
+                        config: { ...prev.config, [f.key]: f.type === 'number' ? (v ? Number(v) : '') : v },
                       }))}
                       className={inputCls}
                       placeholder={f.placeholder}
+                      title={f.label}
                     />
                   </Field>
                 ))}

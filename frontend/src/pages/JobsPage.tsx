@@ -5,6 +5,7 @@ import { getTagDisplayName, buildTagDisplayNameMap } from '../lib/tagDisplayName
 import { isTagVisible } from '../lib/tagVisibility';
 import type { TagVisibilityMap } from '../lib/tagVisibility';
 import { NumericKeypad, AlphaKeyboard } from '../components/widgets/TouchInput';
+import { TouchTextInput } from '../components/widgets/TouchTextInput';
 import type { JobData, JobHistoryEntry, Tag, TagValue, UserData } from '../types';
 
 interface Props {
@@ -590,7 +591,7 @@ function UploadDialog({ tags, onClose, onUploaded }: {
         <div className="space-y-3">
           <div>
             <label className="text-sm text-slate-400">Job Name *</label>
-            <input value={name} onChange={e => setName(e.target.value)} className={inputCls + ' mt-1'} placeholder="e.g. Current Setup" />
+            <TouchTextInput value={name} onChange={setName} className={inputCls + ' mt-1'} placeholder="e.g. Current Setup" title="Job Name" />
           </div>
           <div>
             <div className="flex items-center justify-between mb-1">
@@ -601,11 +602,12 @@ function UploadDialog({ tags, onClose, onUploaded }: {
             </div>
             <div className="relative mb-2">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <input
+              <TouchTextInput
                 value={tagSearch}
-                onChange={e => setTagSearch(e.target.value)}
+                onChange={setTagSearch}
                 placeholder="Filter tags..."
-                className="w-full bg-slate-700 border border-slate-600 rounded-md pl-8 pr-3 py-3 text-sm text-white outline-none min-h-[48px]"
+                title="Filter Tags"
+                className="w-full bg-slate-700 border border-slate-600 rounded-md pl-8 pr-3 py-3 text-sm text-white min-h-[48px]"
               />
             </div>
             <div className="max-h-60 overflow-auto bg-slate-900 rounded-lg border border-slate-700 p-2 space-y-0.5">
@@ -852,18 +854,18 @@ export function JobsPage({ user, tagVisibilityMap = {}, tagValues = {} }: Props)
       {showCreate && (
         <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 mb-4">
           <div className="space-y-2">
-            <input
+            <TouchTextInput
               value={newName}
-              onChange={(e) => setNewName(e.target.value)}
+              onChange={setNewName}
               placeholder="Job name"
+              title="Job Name"
               className={inputCls}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }}
-              autoFocus
             />
-            <input
+            <TouchTextInput
               value={newDescription}
-              onChange={(e) => setNewDescription(e.target.value)}
+              onChange={setNewDescription}
               placeholder="Description (optional)"
+              title="Description"
               className={inputCls}
             />
             {jobSetpointTags.length > 0 && (
@@ -888,12 +890,12 @@ export function JobsPage({ user, tagVisibilityMap = {}, tagValues = {} }: Props)
         <div className={`w-full lg:w-96 flex-shrink-0 ${selectedJob ? 'hidden lg:block' : ''}`}>
           <div className="relative mb-3">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-            <input
-              type="text"
+            <TouchTextInput
               placeholder="Search jobs..."
               value={jobSearch}
-              onChange={e => setJobSearch(e.target.value)}
-              className={`w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 py-3 min-h-[48px] text-sm text-white outline-none focus:border-blue-500 ${jobSearch ? 'pr-10' : 'pr-3'}`}
+              onChange={setJobSearch}
+              title="Search Jobs"
+              className={`w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 py-3 min-h-[48px] text-sm text-white ${jobSearch ? 'pr-10' : 'pr-3'}`}
             />
             {jobSearch && (
               <button
@@ -1005,19 +1007,21 @@ export function JobsPage({ user, tagVisibilityMap = {}, tagValues = {} }: Props)
               <div className="space-y-4">
                 <div>
                   <label className="text-sm text-slate-400 font-medium">Name</label>
-                  <input
+                  <TouchTextInput
                     value={editName}
-                    onChange={e => setEditName(e.target.value)}
+                    onChange={setEditName}
                     className={inputCls + ' mt-1'}
                     placeholder="Job name"
+                    title="Job Name"
                   />
                 </div>
                 <div>
                   <label className="text-sm text-slate-400 font-medium">Description</label>
-                  <input
+                  <TouchTextInput
                     value={editDescription}
-                    onChange={e => setEditDescription(e.target.value)}
+                    onChange={setEditDescription}
                     className={inputCls + ' mt-1'}
+                    title="Description"
                   />
                 </div>
                 <SetpointEditor value={editSetpoints} onChange={setEditSetpoints} tags={visibleTags} />

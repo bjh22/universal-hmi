@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { UserPlus, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { DeleteConfirmDialog } from './shared';
+import { TouchTextInput } from '../widgets/TouchTextInput';
 import type { UserData, UserListEntry } from '../../types';
 
 export interface UsersSettingsProps {
@@ -58,18 +59,18 @@ export function UsersSettings({ user, users, canManage, refreshUsers }: UsersSet
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-[var(--hmi-text-secondary)]">Username</label>
-              <input value={newUser.username} onChange={e => setNewUser(p => ({ ...p, username: e.target.value }))}
-                className="w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-md px-3 py-2 text-sm text-white outline-none mt-1" />
+              <TouchTextInput value={newUser.username} onChange={v => setNewUser(p => ({ ...p, username: v }))} title="Username"
+                className="w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-md px-3 py-2 text-sm text-white mt-1 min-h-[44px]" />
             </div>
             <div>
               <label className="text-xs text-[var(--hmi-text-secondary)]">Display Name</label>
-              <input value={newUser.display_name} onChange={e => setNewUser(p => ({ ...p, display_name: e.target.value }))}
-                className="w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-md px-3 py-2 text-sm text-white outline-none mt-1" />
+              <TouchTextInput value={newUser.display_name} onChange={v => setNewUser(p => ({ ...p, display_name: v }))} title="Display Name"
+                className="w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-md px-3 py-2 text-sm text-white mt-1 min-h-[44px]" />
             </div>
             <div>
               <label className="text-xs text-[var(--hmi-text-secondary)]">Password / PIN</label>
-              <input type="password" value={newUser.password} onChange={e => setNewUser(p => ({ ...p, password: e.target.value }))}
-                className="w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-md px-3 py-2 text-sm text-white outline-none mt-1" />
+              <TouchTextInput type="password" value={newUser.password} onChange={v => setNewUser(p => ({ ...p, password: v }))} title="Password / PIN"
+                className="w-full bg-[var(--hmi-bg-input)] border border-[var(--hmi-border-subtle)] rounded-md px-3 py-2 text-sm text-white mt-1 min-h-[44px]" />
             </div>
             <div>
               <label className="text-xs text-[var(--hmi-text-secondary)]">Role</label>
