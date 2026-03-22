@@ -87,10 +87,16 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
 
   // Parse screen layout mode and resolution
   const screenLayoutMode: LayoutMode = activeScreen?.layout_mode || 'grid';
-  const screenResolution: ScreenResolution | null = (() => {
+  const [editResolution, setEditResolution] = useState<ScreenResolution | null>(null);
+  const screenResolution: ScreenResolution | null = editResolution ?? (() => {
     if (!activeScreen?.target_resolution) return null;
     try { return JSON.parse(activeScreen.target_resolution); } catch { return null; }
   })();
+
+  // Reset edit resolution when switching screens or exiting edit mode
+  useEffect(() => {
+    setEditResolution(null);
+  }, [activeScreen?.id, dm.editing]);
 
   const refreshScreens = useCallback(() => {
     api.getScreens().then(setScreens).catch(() => {});
@@ -159,20 +165,31 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
     setAbsPlacementOffset(0);
   }, [activeScreen, runtimeWidgets, dm, screenLayoutMode]);
 
+  // Change canvas resolution while editing
+  const handleResolutionChange = useCallback((resolution: ScreenResolution) => {
+    setEditResolution(resolution);
+    dm.markDirty();
+  }, [dm]);
+
   // Perform the actual save (called after confirmation)
   const performSave = useCallback(async () => {
     if (!activeScreen) return;
+    const targetRes = editResolution
+      ? JSON.stringify(editResolution)
+      : activeScreen.target_resolution;
     await api.saveScreen(activeScreen.id, {
       name: activeScreen.name,
       slug: activeScreen.slug,
       layout: dm.widgets,
       layout_mode: screenLayoutMode,
-      target_resolution: activeScreen.target_resolution,
+      target_resolution: targetRes,
       is_default: activeScreen.is_default,
       sort_order: activeScreen.sort_order,
     });
+    // Update activeScreen in state so the new resolution persists
+    setActiveScreen(prev => prev ? { ...prev, target_resolution: targetRes } : prev);
     setRuntimeWidgets(dm.widgets);
-  }, [activeScreen, dm.widgets, screenLayoutMode]);
+  }, [activeScreen, dm.widgets, screenLayoutMode, editResolution]);
 
   // Save — show confirmation dialog
   const handleSave = useCallback(() => {
@@ -453,6 +470,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
           onDiscard={handleDiscard}
           onGridSettingsChange={dm.setGridSettings}
           onZoomChange={dm.setZoom}
+          onResolutionChange={handleResolutionChange}
         />
         <div className="flex flex-1 overflow-hidden">
           <WidgetPalette
@@ -524,7 +542,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
     >
       {/* Screen carousel indicators + designer controls */}
       {visibleScreens.length > 1 && (
-        <div className="flex items-center justify-center gap-2 mb-2">
+        <div className="flex items-center justify-center gap-2 mb-0.5">
           {/* Prev arrow */}
           <button
             onClick={() => activeScreenIndex > 0 && navigate(`/screen/${visibleScreens[activeScreenIndex - 1].slug}`)}
@@ -561,7 +579,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
 
           {/* Screen name */}
           {activeScreen && (
-            <span className="text-xs text-slate-500 ml-1">{activeScreen.name}</span>
+            <span className="text-sm text-slate-500 ml-1">{activeScreen.name}</span>
           )}
 
           {/* Designer toggle */}
