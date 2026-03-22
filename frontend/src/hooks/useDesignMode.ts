@@ -85,6 +85,9 @@ export interface DesignModeState {
   // Lock
   lockedIds: Set<string>;
   toggleLock: (id: string) => void;
+
+  // Dirty flag
+  markDirty: () => void;
 }
 
 const DEFAULT_GRID: GridSettings = {
@@ -419,6 +422,8 @@ export function useDesignMode(): DesignModeState {
   const canUndo = undoStack.length > 0;
   const canRedo = redoStack.length > 0;
 
+  const markDirty = useCallback(() => setDirty(true), []);
+
   // useMemo creates a stable object reference that only changes when its dependencies
   // change. Without this, returning a new object literal `{ editing, widgets, ... }`
   // every render would cause every component consuming this hook to re-render, even
@@ -435,6 +440,7 @@ export function useDesignMode(): DesignModeState {
     canUndo, canRedo,
     setGridSettings, setZoom,
     lockedIds, toggleLock,
+    markDirty,
   }), [
     editing, layoutMode, widgets, selectedIds, clipboard, gridSettings, dirty, zoom,
     enterEditMode, exitEditMode,
@@ -447,5 +453,6 @@ export function useDesignMode(): DesignModeState {
     canUndo, canRedo,
     setGridSettings, setZoom,
     lockedIds, toggleLock,
+    markDirty,
   ]);
 }

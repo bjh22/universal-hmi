@@ -82,7 +82,7 @@ function AlarmMarquee({ alarms }: { alarms: AlarmData[] }) {
     <Link
       key={`${alarm.id}-${keySuffix}`}
       to="/alarms"
-      className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-base font-medium whitespace-nowrap shrink-0 transition-colors ${
+      className={`flex items-center gap-2 px-4 h-12 rounded text-base font-medium whitespace-nowrap shrink-0 transition-colors ${
         alarm.state === 'active_unacked'
           ? alarm.severity === 'critical'
             ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
@@ -95,10 +95,10 @@ function AlarmMarquee({ alarms }: { alarms: AlarmData[] }) {
       <SeverityIcon severity={alarm.severity} />
       <span>{alarm.message}</span>
       {alarm.state === 'active_acked' && (
-        <span className="text-xs opacity-60 ml-0.5">(Acked)</span>
+        <span className="text-sm opacity-60 ml-0.5">(Acked)</span>
       )}
       {alarm.state === 'inactive_unacked' && (
-        <span className="text-xs opacity-60 ml-0.5">(Cleared)</span>
+        <span className="text-sm opacity-60 ml-0.5">(Cleared)</span>
       )}
     </Link>
   );
@@ -143,83 +143,6 @@ function getStatusStyle(value: unknown, enumMapping?: Record<string, string> | n
   return { bg: 'bg-slate-500/20', text: 'text-slate-300', label: display };
 }
 
-/** Top bar controls — machine status indicator + cycle start / reset buttons.
- *  Shown when no alarms are active. Fetches production settings on mount to
- *  determine which tags to display. */
-function TopBarControls({ tagValues }: { tagValues?: Record<string, TagValue> }) {
-  const [settings, setSettings] = useState<ProductionSettings | null>(null);
-  const [tags, setTags] = useState<Tag[]>([]);
-  const [pending, setPending] = useState<string | null>(null);
-
-  useEffect(() => {
-    api.getProductionSettings().then(setSettings).catch(() => {});
-    api.getTags().then(setTags).catch(() => {});
-  }, []);
-
-  const handleWrite = useCallback(async (tagName: string) => {
-    if (pending) return;
-    setPending(tagName);
-    try {
-      await api.writeTag(tagName, true);
-    } catch {
-      // Write errors are non-fatal
-    } finally {
-      setPending(null);
-    }
-  }, [pending]);
-
-  if (!settings) return <div className="flex-1" />;
-
-  const { machine_status_tag, cycle_start_tag, reset_tag } = settings;
-  const hasAny = machine_status_tag || cycle_start_tag || reset_tag;
-  if (!hasAny) return <div className="flex-1" />;
-
-  const statusValue = machine_status_tag && tagValues?.[machine_status_tag]?.value;
-  const statusEnumMapping = machine_status_tag ? tags.find(t => t.name === machine_status_tag)?.enum_mapping : null;
-  const statusStyle = statusValue != null ? getStatusStyle(statusValue, statusEnumMapping) : null;
-
-  return (
-    <div className="flex-1 flex items-center gap-3">
-      {/* Machine status pill */}
-      {machine_status_tag && (
-        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium ${
-          statusStyle ? `${statusStyle.bg} ${statusStyle.text}` : 'bg-slate-500/20 text-slate-400'
-        }`}>
-          <Activity size={14} />
-          <span>{statusStyle ? statusStyle.label : '---'}</span>
-        </div>
-      )}
-
-      {/* Spacer to push buttons right */}
-      <div className="flex-1" />
-
-      {/* Cycle Start button */}
-      {cycle_start_tag && (
-        <button
-          onClick={() => handleWrite(cycle_start_tag)}
-          disabled={pending === cycle_start_tag}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-green-500/40 text-green-400 hover:bg-green-500/15 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors shrink-0"
-        >
-          <Play size={14} />
-          Cycle Start
-        </button>
-      )}
-
-      {/* Reset button */}
-      {reset_tag && (
-        <button
-          onClick={() => handleWrite(reset_tag)}
-          disabled={pending === reset_tag}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-blue-500/40 text-blue-400 hover:bg-blue-500/15 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors shrink-0"
-        >
-          <RotateCcw size={14} />
-          Reset
-        </button>
-      )}
-    </div>
-  );
-}
-
 export function AppShell({ children, user, wsConnected, alarms, onLogout, navTitle = 'HMI', activeJobName, datasourceStatuses: _ds = [], plcVersion, tagValues }: AppShellProps) {
   void _ds; // Datasource statuses are now shown on the Support page, but prop kept for API compat
   const [sidebarOpen, setSidebarOpen] = useState(() => {
@@ -230,10 +153,40 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
   });
   const [ackingAll, setAckingAll] = useState(false);
   const [appVersion, setAppVersion] = useState<string | null>(null);
+  const [prodSettings, setProdSettings] = useState<ProductionSettings | null>(null);
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+  const [writePending, setWritePending] = useState<string | null>(null);
 
   useEffect(() => {
     api.getVersion().then(info => setAppVersion(info.version)).catch(() => {});
+    api.getProductionSettings().then(setProdSettings).catch(() => {});
+    api.getTags().then(setAllTags).catch(() => {});
   }, []);
+
+  const handleWriteTag = useCallback(async (tagName: string) => {
+    if (writePending) return;
+    setWritePending(tagName);
+    try {
+      await api.writeTag(tagName, true);
+    } catch {
+      // Write errors are non-fatal
+    } finally {
+      setWritePending(null);
+    }
+  }, [writePending]);
+
+  // Top bar control tag bindings
+  const machineStatusTag = prodSettings?.machine_status_tag;
+  const cycleStartTag = prodSettings?.cycle_start_tag;
+  const resetTag = prodSettings?.reset_tag;
+  const statusValue = machineStatusTag && tagValues?.[machineStatusTag]?.value;
+  const statusEnumMapping: Record<string, string> | null = (() => {
+    if (!machineStatusTag) return null;
+    const raw = allTags.find(t => t.name === machineStatusTag)?.enum_mapping;
+    if (!raw) return null;
+    try { return typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return null; }
+  })();
+  const statusStyle = statusValue != null ? getStatusStyle(statusValue, statusEnumMapping) : null;
 
   // Persist sidebar state
   useEffect(() => {
@@ -267,19 +220,27 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
   }, [ackingAll, unackedAlarms]);
 
   const canManageSystem = user && (user.role === 'engineer' || user.role === 'designer');
+  const [showPowerMenu, setShowPowerMenu] = useState(false);
 
   const handleMinimize = useCallback(() => {
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => {});
     }
     window.blur();
+    setShowPowerMenu(false);
   }, []);
 
-  const handleClose = useCallback(async () => {
+  const handleCloseFrontend = useCallback(() => {
+    setShowPowerMenu(false);
+    window.close();
+  }, []);
+
+  const handleStopApplication = useCallback(async () => {
     const confirmed = window.confirm(
-      'Are you sure you want to shut down the HMI application?\n\nThis will stop the server and close the browser window.'
+      'Are you sure you want to stop the HMI application?\n\nThis will stop the server and close the browser window.'
     );
     if (!confirmed) return;
+    setShowPowerMenu(false);
     try {
       await api.shutdownSystem();
     } catch {
@@ -362,22 +323,13 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
                     Logout
                   </button>
                   {canManageSystem && (
-                    <>
-                      <button
-                        onClick={handleMinimize}
-                        title="Minimize"
-                        className="flex items-center justify-center min-w-[40px] min-h-[40px] rounded text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)] hover:bg-[var(--hmi-bg-elevated)] border border-[var(--hmi-border-subtle)]"
-                      >
-                        <Minus size={14} />
-                      </button>
-                      <button
-                        onClick={handleClose}
-                        title="Shut Down"
-                        className="flex items-center justify-center min-w-[40px] min-h-[40px] rounded text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/30"
-                      >
-                        <Power size={14} />
-                      </button>
-                    </>
+                    <button
+                      onClick={() => setShowPowerMenu(true)}
+                      title="System"
+                      className="flex items-center justify-center min-w-[40px] min-h-[40px] rounded text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)] hover:bg-[var(--hmi-bg-elevated)] border border-[var(--hmi-border-subtle)]"
+                    >
+                      <Power size={14} />
+                    </button>
                   )}
                 </div>
               </div>
@@ -394,22 +346,13 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
                   <LogOut size={20} />
                 </button>
                 {canManageSystem && (
-                  <>
-                    <button
-                      onClick={handleMinimize}
-                      title="Minimize"
-                      className="flex items-center justify-center w-[48px] h-[48px] rounded text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)] hover:bg-[var(--hmi-bg-elevated)]"
-                    >
-                      <Minus size={20} />
-                    </button>
-                    <button
-                      onClick={handleClose}
-                      title="Shut Down"
-                      className="flex items-center justify-center w-[48px] h-[48px] rounded text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                    >
-                      <Power size={20} />
-                    </button>
-                  </>
+                  <button
+                    onClick={() => setShowPowerMenu(true)}
+                    title="System"
+                    className="flex items-center justify-center w-[48px] h-[48px] rounded text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)] hover:bg-[var(--hmi-bg-elevated)]"
+                  >
+                    <Power size={20} />
+                  </button>
                 )}
               </div>
             )
@@ -464,22 +407,49 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
             </Link>
           )}
 
-          {/* Inline alarm display — auto-scrolling marquee that loops when overflowing */}
-          {activeAlarms.length > 0 ? (
-            <AlarmMarquee alarms={activeAlarms} />
-          ) : (
-            <TopBarControls tagValues={tagValues} />
+          {/* Machine status pill */}
+          {machineStatusTag && (
+            <div className={`flex items-center gap-2 px-4 h-12 rounded text-base font-medium shrink-0 ${
+              statusStyle ? `${statusStyle.bg} ${statusStyle.text}` : 'bg-slate-500/20 text-slate-400'
+            }`}>
+              <Activity size={18} />
+              <span>{statusStyle ? statusStyle.label : '---'}</span>
+            </div>
           )}
 
-          {/* Acknowledge All button — only when unacked alarms exist */}
-          {unackedAlarms.length > 0 && (
+          {/* Alarm marquee — fills middle space, empty acts as spacer */}
+          <AlarmMarquee alarms={activeAlarms} />
+
+          {/* Reset OR Ack All — same position, swap based on unacked alarms */}
+          {unackedAlarms.length > 0 ? (
             <button
               onClick={handleAcknowledgeAll}
               disabled={ackingAll}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors shrink-0"
+              title="Acknowledge All Alarms"
+              className="flex items-center justify-center w-12 h-12 rounded bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors shrink-0"
             >
-              <CheckCheck size={14} />
-              {ackingAll ? 'Acking...' : 'Ack All'}
+              <CheckCheck size={20} />
+            </button>
+          ) : resetTag ? (
+            <button
+              onClick={() => handleWriteTag(resetTag)}
+              disabled={writePending === resetTag}
+              title="Reset"
+              className="flex items-center justify-center w-12 h-12 rounded border border-blue-500/40 text-blue-400 hover:bg-blue-500/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
+            >
+              <RotateCcw size={20} />
+            </button>
+          ) : null}
+
+          {/* Cycle Start */}
+          {cycleStartTag && (
+            <button
+              onClick={() => handleWriteTag(cycleStartTag)}
+              disabled={writePending === cycleStartTag}
+              title="Cycle Start"
+              className="flex items-center justify-center w-12 h-12 rounded border border-green-500/40 text-green-400 hover:bg-green-500/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
+            >
+              <Play size={20} />
             </button>
           )}
         </header>
@@ -492,7 +462,7 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
         )}
 
         {/* Page content */}
-        <main className="flex-1 overflow-auto p-4" style={{ touchAction: 'pan-y pinch-zoom' }}>
+        <main className="flex-1 overflow-auto px-4 pt-1 pb-4" style={{ touchAction: 'pan-y pinch-zoom' }}>
           {children}
         </main>
       </div>
@@ -500,6 +470,53 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
       {/* Alarm severity tint — full-screen color wash for at-a-glance awareness */}
       {tintClass && (
         <div className={`fixed inset-0 z-40 pointer-events-none transition-colors duration-500 ${tintClass}`} />
+      )}
+
+      {/* Power / system menu dialog */}
+      {showPowerMenu && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowPowerMenu(false)}>
+          <div className="bg-[var(--hmi-bg-surface)] border border-[var(--hmi-border)] rounded-xl shadow-2xl w-80 p-5" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-[var(--hmi-text-primary)] mb-4">System</h3>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={handleMinimize}
+                className="flex items-center gap-3 w-full px-4 py-3 min-h-[48px] rounded-lg text-sm text-[var(--hmi-text-primary)] hover:bg-[var(--hmi-bg-elevated)] transition-colors text-left"
+              >
+                <Minus size={18} className="text-[var(--hmi-text-secondary)] shrink-0" />
+                <div>
+                  <div className="font-medium">Minimize</div>
+                  <div className="text-xs text-[var(--hmi-text-muted)]">Exit fullscreen and minimize window</div>
+                </div>
+              </button>
+              <button
+                onClick={handleCloseFrontend}
+                className="flex items-center gap-3 w-full px-4 py-3 min-h-[48px] rounded-lg text-sm text-[var(--hmi-text-primary)] hover:bg-[var(--hmi-bg-elevated)] transition-colors text-left"
+              >
+                <X size={18} className="text-[var(--hmi-text-secondary)] shrink-0" />
+                <div>
+                  <div className="font-medium">Close Frontend</div>
+                  <div className="text-xs text-[var(--hmi-text-muted)]">Close the browser window (server keeps running)</div>
+                </div>
+              </button>
+              <button
+                onClick={handleStopApplication}
+                className="flex items-center gap-3 w-full px-4 py-3 min-h-[48px] rounded-lg text-sm text-red-400 hover:bg-red-500/10 transition-colors text-left"
+              >
+                <Power size={18} className="text-red-400 shrink-0" />
+                <div>
+                  <div className="font-medium">Stop Application</div>
+                  <div className="text-xs text-red-400/70">Stop the server and close the browser</div>
+                </div>
+              </button>
+            </div>
+            <button
+              onClick={() => setShowPowerMenu(false)}
+              className="w-full mt-3 px-4 py-2.5 min-h-[44px] rounded-lg text-sm text-[var(--hmi-text-secondary)] hover:bg-[var(--hmi-bg-elevated)] border border-[var(--hmi-border-subtle)] transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
