@@ -365,7 +365,7 @@ export function DesignCanvas({
             /* Absolute positioning layout */
             <div
               data-canvas-absolute
-              className="relative"
+              className="relative bg-slate-900 ring-1 ring-slate-700 rounded"
               style={{
                 width: targetResolution?.width ?? 1920,
                 height: targetResolution?.height ?? 1080,
@@ -413,7 +413,7 @@ export function DesignCanvas({
             /* CSS Grid layout */
             <div
               data-canvas-grid
-              className="grid gap-4 relative"
+              className="grid gap-4 relative bg-slate-900 ring-1 ring-slate-700 rounded p-4"
               style={{
                 gridTemplateColumns: `repeat(${COL_COUNT}, 1fr)`,
                 gridAutoRows: `${ROW_HEIGHT}px`,

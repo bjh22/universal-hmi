@@ -17,7 +17,7 @@ export interface WidgetTypeInfo {
 
 /** Scale widget default sizes proportionally for smaller canvases. */
 export function getScaledDefaults(typeInfo: WidgetTypeInfo, canvasWidth: number): { absW: number; absH: number } {
-  const BASE_CANVAS_WIDTH = 1856; // Full HD canvas (1920 - 64 sidebar)
+  const BASE_CANVAS_WIDTH = 1840; // Full HD canvas (1920 - 80 sidebar)
   const scale = Math.min(1, canvasWidth / BASE_CANVAS_WIDTH);
   return {
     absW: Math.round(typeInfo.defaultAbsW * scale),
