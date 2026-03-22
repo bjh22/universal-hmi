@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { Dialog } from '../Dialog';
+import { TouchTextInput } from '../widgets/TouchTextInput';
 import type { ReasonCode } from '../../types';
 
 const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2.5 min-h-[44px] text-sm text-slate-200 outline-none focus:border-blue-500';
@@ -148,19 +149,19 @@ export function ReasonCodesSettings() {
           <div className="space-y-3">
             <div>
               <label className="block text-xs text-slate-400 mb-1">Code</label>
-              <input type="text" value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="e.g. MECHANICAL" className={inputCls} />
+              <TouchTextInput value={code} onChange={v => setCode(v.toUpperCase())} placeholder="e.g. MECHANICAL" title="Code" className={inputCls} />
             </div>
             <div>
               <label className="block text-xs text-slate-400 mb-1">Description</label>
-              <input type="text" value={description} onChange={e => setDescription(e.target.value)} placeholder="Brief description" className={inputCls} />
+              <TouchTextInput value={description} onChange={setDescription} placeholder="Brief description" title="Description" className={inputCls} />
             </div>
             <div>
               <label className="block text-xs text-slate-400 mb-1">Category</label>
-              <input type="text" value={category} onChange={e => setCategory(e.target.value)} placeholder="e.g. Equipment, Material, Planned" className={inputCls} />
+              <TouchTextInput value={category} onChange={setCategory} placeholder="e.g. Equipment, Material, Planned" title="Category" className={inputCls} />
             </div>
             <div>
               <label className="block text-xs text-slate-400 mb-1">Sort Order</label>
-              <input type="number" value={sortOrder} onChange={e => setSortOrder(parseInt(e.target.value, 10) || 0)} className={inputCls} />
+              <TouchTextInput type="number" value={String(sortOrder)} onChange={v => setSortOrder(parseInt(v, 10) || 0)} title="Sort Order" min={0} className={inputCls} />
             </div>
           </div>
           {error && <div className="text-red-400 text-sm mt-2">{error}</div>}

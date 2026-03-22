@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Save } from 'lucide-react';
 import { api } from '../../lib/api';
+import { TouchTextInput } from '../widgets/TouchTextInput';
 import type { Tag, ProductionSettings as ProductionSettingsType } from '../../types';
 
 const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-slate-200 outline-none focus:border-blue-500';
@@ -98,14 +99,15 @@ export function ProductionSettingsTab() {
         <p className="text-xs text-slate-400 mb-2">
           Target production rate used for OEE performance calculation. Performance = actual rate / target rate.
         </p>
-        <input
+        <TouchTextInput
           type="number"
-          value={settings.target_rate ?? ''}
-          onChange={e => setSettings({ ...settings, target_rate: e.target.value ? parseFloat(e.target.value) : null })}
+          value={settings.target_rate != null ? String(settings.target_rate) : ''}
+          onChange={v => setSettings({ ...settings, target_rate: v ? parseFloat(v) : null })}
           placeholder="e.g. 100"
+          title="Target Rate"
+          units="bags/hr"
+          min={0}
           className={inputCls + ' max-w-xs'}
-          min="0"
-          step="1"
         />
       </div>
 
