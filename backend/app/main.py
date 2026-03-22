@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import alarms, audit, auth, branding, datasources, integrations, jobs, logs, machine_profiles, media, preferences, production_settings, projects, reason_codes, reporting, screens, scripts, service_config, system_update, tags, trends, users, zpl_preview
+from app.api import alarms, audit, auth, branding, datasources, integrations, jobs, logs, machine_profiles, media, preferences, production_settings, project_git, projects, reason_codes, reporting, screens, scripts, service_config, system_update, tags, trends, users, zpl_preview
 from app.api.websocket import router as ws_router
 from app.core.config import settings
 from app.core.database import async_session, init_db
@@ -164,6 +164,7 @@ app.include_router(production_settings.router)
 app.include_router(reason_codes.router)
 app.include_router(scripts.router)
 app.include_router(projects.router)
+app.include_router(project_git.router)
 app.include_router(machine_profiles.router)
 app.include_router(service_config.router)
 app.include_router(integrations.router)

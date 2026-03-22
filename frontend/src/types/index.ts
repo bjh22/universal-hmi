@@ -429,6 +429,33 @@ export interface ImportResultResponse {
   warnings: string[];
 }
 
+// ─── Project Git ───
+
+export interface GitStatus {
+  available: boolean;
+  branch: string;
+  dirty: boolean;
+  changed_files: string[];
+  has_remote: boolean;
+  ahead: number;
+  behind: number;
+  reason?: string;
+}
+
+export interface GitCommitEntry {
+  hash: string;
+  short: string;
+  author: string;
+  date: string;
+  message: string;
+}
+
+export interface GitOperationResult {
+  success: boolean;
+  message: string;
+  details?: string;
+}
+
 export interface LogEntry {
   timestamp: string;
   level: string;

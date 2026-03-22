@@ -156,6 +156,7 @@ Environment variables prefixed with `HMI_` (or `.env` file):
 - `HMI_WS_UPDATE_INTERVAL_MS` — 500 (tag update frequency)
 - `HMI_TREND_RETENTION_DAYS` — 90
 - `HMI_SCRIPT_TIMEOUT_SECONDS` — 5
+- `HMI_PROJECTS_DIR` — override projects directory (point at a cloned git repo for sharing)
 - `HMI_HOST`, `HMI_PORT`, `HMI_DEBUG`
 
 ## Key API Endpoints
@@ -198,6 +199,13 @@ Environment variables prefixed with `HMI_` (or `.env` file):
 | GET | `/api/system/info` | System info (version, platform, install type) |
 | POST | `/api/system/update/validate` | Validate update package (source or compiled) |
 | POST | `/api/system/update/apply` | Apply update package and restart |
+| GET | `/api/projects/git/status` | Git repo status (branch, dirty, ahead/behind) |
+| GET | `/api/projects/git/log` | Recent git commit history |
+| POST | `/api/projects/git/commit` | Stage .hmi.json files and commit |
+| POST | `/api/projects/git/push` | Push to remote |
+| POST | `/api/projects/git/pull` | Pull from remote (rebase) |
+| GET | `/api/projects/git/branches` | List git branches |
+| POST | `/api/projects/git/checkout` | Switch git branch |
 | WS | `/ws` | Real-time tag values + alarms |
 
 **WebSocket messages:** `snapshot` (initial), `tag_update` (deltas), `alarm` (state changes), `keepalive` (30s)
@@ -271,6 +279,9 @@ See `DEVELOPER.md` → "Creating a Plugin Integration" for a full walkthrough wi
 - `backend/app/api/media.py` — Fault help image upload/serve/delete API
 - `backend/app/api/system_update.py` — In-app software update (supports source and compiled packages)
 - `backend/app/core/paths.py` — Frozen-aware path helpers for PyInstaller compatibility
+- `backend/app/services/git_service.py` — Async git CLI wrapper for project sharing
+- `backend/app/api/project_git.py` — Git operations API (status, commit, push, pull, branches)
+- `frontend/src/components/GitPanel.tsx` — Version control panel for Projects page
 - `backend/app/integrations/base.py` — Integration plugin base class
 - `backend/app/integrations/manager.py` — Plugin discovery and lifecycle management
 - `backend/hmi-server.spec` — PyInstaller spec file for compiling backend into native executable

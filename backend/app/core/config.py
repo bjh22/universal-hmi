@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     audit_retention_days: int = 365
     alarm_retention_days: int = 365
 
+    # Projects — override to point at a shared git repo (e.g., a cloned hmi-projects repo)
+    projects_dir: str | None = None
+
     # Scripting
     script_timeout_seconds: int = 5  # Max execution time for user scripts
 

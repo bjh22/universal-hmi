@@ -35,6 +35,9 @@ import type {
   ImportResultResponse,
   IntegrationType,
   IntegrationData,
+  GitStatus,
+  GitCommitEntry,
+  GitOperationResult,
   LogEntry,
   ServiceConfig,
 } from '../types/index';
@@ -392,6 +395,24 @@ export const api = {
         conflict_resolution: params.conflictResolution || {},
         default_conflict_resolution: params.defaultConflictResolution || 'skip',
       }),
+    }),
+
+  // Project Git
+  getGitStatus: () => request<GitStatus>('/projects/git/status'),
+  getGitLog: (limit = 20) => request<GitCommitEntry[]>(`/projects/git/log?limit=${limit}`),
+  gitCommit: (message: string) =>
+    request<GitOperationResult>('/projects/git/commit', {
+      method: 'POST', body: JSON.stringify({ message }),
+    }),
+  gitPush: () =>
+    request<GitOperationResult>('/projects/git/push', { method: 'POST' }),
+  gitPull: () =>
+    request<GitOperationResult>('/projects/git/pull', { method: 'POST' }),
+  getGitBranches: () =>
+    request<{ branches: string[]; current: string }>('/projects/git/branches'),
+  gitCheckout: (branch: string) =>
+    request<GitOperationResult>('/projects/git/checkout', {
+      method: 'POST', body: JSON.stringify({ branch }),
     }),
 
   // Integrations

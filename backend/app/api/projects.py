@@ -137,16 +137,23 @@ class ImportResultResponse(BaseModel):
 
 # ─── Helpers ───
 
-# Repo-root projects directory for auto-saved snapshots
+from app.core.config import settings
 from app.core.paths import data_dir
-_PROJECTS_DIR = data_dir() / "projects"
+
+
+def _get_projects_dir() -> Path:
+    """Return the projects directory, configurable via HMI_PROJECTS_DIR."""
+    if settings.projects_dir:
+        p = Path(settings.projects_dir)
+        return p if p.is_absolute() else Path.cwd() / p
+    return data_dir() / "projects"
 
 
 def _save_snapshot_to_disk(project_name: str, snapshot_data: dict) -> None:
     """Write a project snapshot to the projects/ directory as a .hmi.json file."""
-    _PROJECTS_DIR.mkdir(exist_ok=True)
+    _get_projects_dir().mkdir(parents=True, exist_ok=True)
     safe_name = re.sub(r"[^\w\-]+", "_", project_name).strip("_").lower()
-    path = _PROJECTS_DIR / f"{safe_name}.hmi.json"
+    path = _get_projects_dir() / f"{safe_name}.hmi.json"
     path.write_text(json.dumps(snapshot_data, indent=2) + "\n", encoding="utf-8")
 
 
