@@ -332,6 +332,7 @@ async def import_tags_csv(
     existing_map = {t.name: t for t in existing_q.scalars().all()}
 
     created, updated, skipped = [], [], []
+    seen: set[str] = set()
     for td in tags_data:
         existing = existing_map.get(td["name"])
         if existing:
@@ -353,6 +354,9 @@ async def import_tags_csv(
                 existing.data_source_id = ds
             updated.append(existing)
         else:
+            if td["name"] in seen:
+                continue
+            seen.add(td["name"])
             tag = Tag(
                 name=td["name"],
                 display_name=td.get("display_name") or td.get("description"),
@@ -571,8 +575,9 @@ def _codesys_parse_nodes(
     """Recursively walk CODESYS Node elements, collecting leaf tags.
 
     Container nodes (with child <Node> elements) are not included in the tag
-    name — only leaf variable names form the dot-path.  This strips OPC-UA
-    prefixes like Application, GVL names (Globals, HMIData, IO), etc.
+    name — only leaf variable names form the dot-path.  The *path_parts*
+    argument can seed the tag name prefix (e.g. ``["PLC_PRG"]``) so that
+    non-primary groups produce distinct names like ``PLC_PRG.clearAllLabels``.
     The most recent container name is passed as *group* for categorisation.
 
     *address_parts* accumulates the full container hierarchy for building
@@ -605,10 +610,13 @@ def _codesys_parse_nodes(
             type_attr, current_path, access, registry, group
         )
 
-        # Build OPC UA address for each expanded tag from the container
-        # hierarchy (address_parts) plus the tag's own dot-path name
+        # Build OPC UA address from container hierarchy + leaf-relative name.
+        # Tag names may include a path_parts prefix (e.g. "PLC_PRG.clearAllLabels")
+        # but addresses use address_parts for the hierarchy, so strip the prefix.
+        prefix_str = ".".join(path_parts) + "." if path_parts else ""
         for tag in expanded:
-            tag["address"] = ".".join(address_parts + [tag["name"]])
+            leaf_name = tag["name"].removeprefix(prefix_str) if prefix_str else tag["name"]
+            tag["address"] = ".".join(address_parts + [leaf_name])
 
         # Apply the node-level comment as display name to all expanded tags
         # (only if they don't already have one, and only for single-expansion)
@@ -664,6 +672,7 @@ async def import_tags_codesys(
     existing_map = {t.name: t for t in existing_q.scalars().all()}
 
     created, updated, skipped = [], [], []
+    seen: set[str] = set()
     for td in parsed_tags:
         enum_mapping_raw = td.get("enum_mapping")
         enum_json = json.dumps(enum_mapping_raw) if enum_mapping_raw else None
@@ -686,6 +695,9 @@ async def import_tags_codesys(
                 existing.data_source_id = ds_id
             updated.append(existing)
         else:
+            if td["name"] in seen:
+                continue
+            seen.add(td["name"])
             tag = Tag(
                 name=td["name"],
                 display_name=td.get("display_name"),
@@ -785,6 +797,7 @@ async def import_tags_rslogix500(
     existing_map = {t.name: t for t in existing_q.scalars().all()}
 
     created, updated, skipped = [], [], []
+    seen: set[str] = set()
     for td in parsed_tags:
         existing = existing_map.get(td["name"])
         if existing:
@@ -803,6 +816,9 @@ async def import_tags_rslogix500(
                 existing.data_source_id = ds_id
             updated.append(existing)
         else:
+            if td["name"] in seen:
+                continue
+            seen.add(td["name"])
             tag = Tag(
                 name=td["name"],
                 display_name=td.get("display_name"),
@@ -848,10 +864,23 @@ def _parse_codesys_xml(xml_str: str, prefix: str = "") -> list[dict]:
         # address paths — the driver's address_prefix already includes it.
         top_children = top_node.findall("sc:Node", ns) if ns else top_node.findall("Node")
         if top_children:
+            # Find the primary (largest) child group — its tags stay flat (no prefix).
+            # Other groups get their name prefixed to avoid collisions (e.g. HMIData
+            # tags stay flat while PLC_PRG tags become PLC_PRG.tagName).
+            child_counts: dict[str, int] = {}
+            for ch in top_children:
+                ch_name = ch.get("name", "")
+                ch_kids = ch.findall("sc:Node", ns) if ns else ch.findall("Node")
+                child_counts[ch_name] = len(ch_kids)
+            primary_group = max(child_counts, key=child_counts.get) if child_counts else ""
+
             top_name = top_node.get("name", "")
             for child in top_children:
+                child_name = child.get("name", "")
+                # Primary group stays flat; others get their name as a path prefix
+                path_prefix = [] if child_name == primary_group else [child_name]
                 parsed.extend(_codesys_parse_nodes(
-                    child, [], registry, ns_or_empty, group=top_name, address_parts=[],
+                    child, path_prefix, registry, ns_or_empty, group=child_name or top_name, address_parts=[],
                 ))
         else:
             parsed.extend(_codesys_parse_nodes(
@@ -859,8 +888,12 @@ def _parse_codesys_xml(xml_str: str, prefix: str = "") -> list[dict]:
             ))
 
     result = []
+    seen_names: set[str] = set()
     for td in parsed:
         tag_name = f"{prefix}.{td['name']}" if prefix else td["name"]
+        if tag_name in seen_names:
+            continue
+        seen_names.add(tag_name)
         enum_mapping = td.get("enum_mapping")
         result.append({
             "name": tag_name,
