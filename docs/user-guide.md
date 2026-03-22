@@ -474,6 +474,39 @@ Projects bundle your HMI configuration (screens, tags, data sources) into a port
 - Click **Save Current State** to snapshot the running configuration back to the active project.
 - Click **Save & Load** to save the current state, then switch to a different project in one operation.
 
+### Sharing Projects with Git
+
+Projects can be shared between engineers via a shared git repository. This allows multiple engineers to collaborate on machine line configurations, maintain version history, and deploy updates to factory floor machines.
+
+**Setup (one-time per engineer):**
+
+1. Create a shared GitHub repository for your team (e.g., `your-org/hmi-projects`).
+2. Clone the repository to your machine: `git clone https://github.com/your-org/hmi-projects.git`
+3. Set the `HMI_PROJECTS_DIR` environment variable to the cloned repo path (in your `.env` file or system environment).
+4. Restart the HMI server.
+
+**Using Version Control:**
+
+Once configured, a **Version Control** panel appears at the bottom of the Projects page:
+
+- **Branch name** — shows which git branch you are on.
+- **Unsaved changes** — indicates when project files have changed since the last commit.
+- **Ahead/behind** — shows how many commits you are ahead of or behind the remote.
+- **Commit** — saves the current project to disk, then stages and commits all `.hmi.json` files with your message.
+- **Push** — sends your commits to the shared remote so other engineers can pull them.
+- **Pull** — downloads commits from the remote. Uses rebase for clean linear history. If a merge conflict occurs, the pull is automatically aborted and you are prompted to resolve it manually via the git command line.
+- **Recent commits** — expandable list showing the last 10 commits with hash, message, author, and time.
+
+**Typical workflow:**
+
+1. Make changes to your project (edit screens, add tags, etc.).
+2. Click **Save** on the project to write the `.hmi.json` file to disk.
+3. Click **Commit** and enter a message describing what changed.
+4. Click **Push** to share with your team.
+5. Other engineers click **Pull** to get the latest changes, then **Load** the project.
+
+**Factory deployment:** Clone the projects repo on the factory machine, set `HMI_PROJECTS_DIR`, and pull to get the latest released project. No git UI is needed on the factory machine — a simple `git pull` via script or command line is sufficient.
+
 ---
 
 ## Factory Configuration

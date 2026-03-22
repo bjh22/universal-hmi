@@ -370,6 +370,7 @@ For production panel PC deployments, review these settings in the `.env` file at
 | `HMI_AUTO_LOGOUT_MINUTES` | `30` (default) — minutes of inactivity before the browser auto-logs out the user |
 | `HMI_WS_UPDATE_INTERVAL_MS` | `500` (twice per second) — lower for faster updates, higher to reduce CPU load on low-power devices |
 | `HMI_TREND_RETENTION_DAYS` | `90` — increase for longer history, but monitor disk usage on devices with limited storage |
+| `HMI_PROJECTS_DIR` | Set to the path of a cloned git repo to share projects between engineers (e.g., `/opt/hmi-projects`). If not set, projects are stored locally in the `projects/` directory |
 | `HMI_APP_VERSION` | Auto-set during install/update — do not edit manually |
 
 ## Deployment Directory Structure
