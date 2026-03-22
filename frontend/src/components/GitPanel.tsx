@@ -2,9 +2,10 @@ import { useEffect, useState, useCallback } from 'react';
 import {
   GitBranch, GitCommitHorizontal, Upload, Download, RefreshCw,
   ChevronDown, ChevronRight, AlertCircle, CheckCircle2, Info,
+  FilePlus, FilePenLine, FileX, FileQuestion,
 } from 'lucide-react';
 import { api } from '../lib/api';
-import type { GitStatus, GitCommitEntry, GitOperationResult } from '../types';
+import type { GitStatus, GitCommitEntry, GitOperationResult, GitChangedFile } from '../types';
 
 interface Props {
   onSaveFirst: () => Promise<void>;
@@ -18,6 +19,7 @@ export function GitPanel({ onSaveFirst, disabled }: Props) {
   const [log, setLog] = useState<GitCommitEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
+  const [showChanges, setShowChanges] = useState(true);
   const [showCommit, setShowCommit] = useState(false);
   const [commitMsg, setCommitMsg] = useState('');
   const [busy, setBusy] = useState(false);
@@ -163,6 +165,30 @@ export function GitPanel({ onSaveFirst, disabled }: Props) {
         </button>
       </div>
 
+      {/* Changed files */}
+      {status.dirty && status.changed_files.length > 0 && (
+        <div>
+          <button
+            onClick={() => setShowChanges(!showChanges)}
+            className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 transition-colors"
+          >
+            {showChanges ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            {status.changed_files.length} changed file{status.changed_files.length !== 1 ? 's' : ''}
+          </button>
+          {showChanges && (
+            <div className="mt-1.5 space-y-0.5">
+              {status.changed_files.map((f: GitChangedFile) => (
+                <div key={f.file} className="flex items-center gap-2 text-xs py-0.5 px-2 rounded bg-slate-900">
+                  <FileStatusIcon status={f.status} />
+                  <span className="text-slate-300 truncate">{f.file}</span>
+                  <span className={`shrink-0 ml-auto ${statusColor(f.status)}`}>{f.status}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Action buttons */}
       <div className="flex flex-wrap gap-2">
         <button
@@ -262,6 +288,24 @@ export function GitPanel({ onSaveFirst, disabled }: Props) {
       )}
     </div>
   );
+}
+
+function FileStatusIcon({ status }: { status: string }) {
+  switch (status) {
+    case 'added': case 'new': return <FilePlus size={13} className="text-green-400 shrink-0" />;
+    case 'modified': return <FilePenLine size={13} className="text-amber-400 shrink-0" />;
+    case 'deleted': return <FileX size={13} className="text-red-400 shrink-0" />;
+    default: return <FileQuestion size={13} className="text-slate-400 shrink-0" />;
+  }
+}
+
+function statusColor(status: string): string {
+  switch (status) {
+    case 'added': case 'new': return 'text-green-400';
+    case 'modified': return 'text-amber-400';
+    case 'deleted': return 'text-red-400';
+    default: return 'text-slate-400';
+  }
 }
 
 function formatRelative(isoDate: string): string {

@@ -43,9 +43,20 @@ async def git_status(directory: Path) -> dict:
         return {"available": False, "reason": "Not a git repository"}
     branch = branch.strip()
 
-    # Changed files
+    # Changed files — parse porcelain status codes into human-readable labels
     rc, porcelain, _ = await _run_git(directory, "status", "--porcelain")
-    changed_files = [line[3:] for line in porcelain.strip().splitlines() if line.strip()]
+    _status_labels = {
+        "M": "modified", "A": "added", "D": "deleted",
+        "R": "renamed", "?": "new",
+    }
+    changed_files = []
+    for line in porcelain.strip().splitlines():
+        if not line.strip():
+            continue
+        code = line[0] if line[0] != " " else line[1]
+        name = line[3:]
+        label = _status_labels.get(code, "changed")
+        changed_files.append({"file": name, "status": label})
 
     # Ahead/behind remote
     ahead, behind = 0, 0

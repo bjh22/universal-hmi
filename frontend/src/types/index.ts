@@ -431,11 +431,16 @@ export interface ImportResultResponse {
 
 // ─── Project Git ───
 
+export interface GitChangedFile {
+  file: string;
+  status: 'added' | 'modified' | 'deleted' | 'renamed' | 'new' | 'changed';
+}
+
 export interface GitStatus {
   available: boolean;
   branch: string;
   dirty: boolean;
-  changed_files: string[];
+  changed_files: GitChangedFile[];
   has_remote: boolean;
   ahead: number;
   behind: number;
