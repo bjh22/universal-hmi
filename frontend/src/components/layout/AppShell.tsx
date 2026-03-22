@@ -242,9 +242,9 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
   const hasUnackedCritical = alarms.some(a => a.state === 'active_unacked' && a.severity === 'critical');
   const hasUnackedWarning = alarms.some(a => a.state === 'active_unacked' && a.severity === 'warning');
   const tintClass = hasUnackedCritical
-    ? 'bg-red-500/10'
+    ? 'bg-red-600/25'
     : hasUnackedWarning
-      ? 'bg-amber-500/10'
+      ? 'bg-yellow-400/25'
       : null;
 
   const handleAcknowledgeAll = useCallback(async () => {
