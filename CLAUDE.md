@@ -152,6 +152,7 @@ Environment variables prefixed with `HMI_` (or `.env` file):
 - `HMI_DATABASE_URL` — default: `sqlite+aiosqlite:///./hmi.db`
 - `HMI_SECRET_KEY` — JWT signing key
 - `HMI_ACCESS_TOKEN_EXPIRE_MINUTES` — 480 (8 hours)
+- `HMI_AUTO_LOGOUT_MINUTES` — 30 (inactivity auto-logout)
 - `HMI_WS_UPDATE_INTERVAL_MS` — 500 (tag update frequency)
 - `HMI_TREND_RETENTION_DAYS` — 90
 - `HMI_SCRIPT_TIMEOUT_SECONDS` — 5

@@ -69,6 +69,7 @@ class SystemInfoResponse(BaseModel):
     database_path: str
     is_compiled: bool = False
     uptime_seconds: float | None = None
+    auto_logout_minutes: int = 30
 
     model_config = {"from_attributes": True}
 
@@ -392,6 +393,7 @@ async def get_system_info():
         database_path=_get_db_path(),
         is_compiled=FROZEN,
         uptime_seconds=round(uptime, 1),
+        auto_logout_minutes=settings.auto_logout_minutes,
     )
 
 

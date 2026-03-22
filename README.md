@@ -219,6 +219,7 @@ The backend is configured via environment variables (prefixed with `HMI_`) or a 
 | `HMI_DATABASE_URL` | `sqlite+aiosqlite:///./hmi.db` | Path to the database file (stores tags, screens, alarms, trends, users) |
 | `HMI_SECRET_KEY` | `change-me-in-production` | Security key for login tokens — change this on production systems |
 | `HMI_ACCESS_TOKEN_EXPIRE_MINUTES` | `480` | How long a login session lasts before requiring re-login (480 = 8 hours) |
+| `HMI_AUTO_LOGOUT_MINUTES` | `30` | Minutes of inactivity before the browser auto-logs out the user |
 | `HMI_WS_UPDATE_INTERVAL_MS` | `500` | How often live tag values are pushed to browsers (500 = twice per second) |
 | `HMI_HOST` | `0.0.0.0` | Network address to listen on (`0.0.0.0` = accept connections from any network interface) |
 | `HMI_PORT` | `8080` | TCP port the server listens on |
