@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { Dialog } from '../components/Dialog';
+import { GitPanel } from '../components/GitPanel';
 import { ImportWizard } from '../components/ImportWizard';
 import type { ProjectData, ProjectDetail, UserData } from '../types';
 
@@ -248,6 +249,7 @@ export function ProjectsPage({ user }: Props) {
           <p className="text-slate-500 text-sm mt-1">Create a project to save your HMI configuration</p>
         </div>
       ) : (
+        <>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Project list */}
           <div className="lg:col-span-1 space-y-2">
@@ -372,6 +374,15 @@ export function ProjectsPage({ user }: Props) {
             )}
           </div>
         </div>
+
+        {/* Version Control */}
+        {canEdit && (
+          <GitPanel
+            onSaveFirst={async () => { if (activeProject) await api.saveProject(activeProject.id); }}
+            disabled={busy}
+          />
+        )}
+        </>
       )}
 
       {/* Create Dialog */}

@@ -56,6 +56,7 @@ This HMI runs in a web browser — think of it like a Rockwell FactoryTalk or CO
 - **Multi-protocol PLC drivers** — OPC UA, Modbus TCP, EtherNet/IP, MQTT, and simulation
 - **CSV export** on all data pages (alarms, trends, reports, audit)
 - **Screen versioning** — automatic snapshots on every save with rollback capability
+- **Git-based project sharing** — share projects between engineers via a shared git repository with built-in commit, push, and pull from the Projects page
 - **Runs fully offline** — no internet connection or cloud service required
 
 ## Prerequisites
@@ -226,6 +227,7 @@ The backend is configured via environment variables (prefixed with `HMI_`) or a 
 | `HMI_DEBUG` | `false` | Enable verbose logging and auto-reload on code changes (development only) |
 | `HMI_TREND_RETENTION_DAYS` | `90` | How many days of trend history to keep before automatic cleanup |
 | `HMI_SCRIPT_TIMEOUT_SECONDS` | `5` | Maximum execution time for button scripts before they are killed |
+| `HMI_PROJECTS_DIR` | `backend/projects/` | Override the projects directory — point at a cloned git repo to share projects between engineers |
 
 ## Building for Production
 

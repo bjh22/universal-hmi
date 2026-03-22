@@ -65,12 +65,16 @@ class Settings(BaseSettings):
     audit_retention_days: int = 365
     alarm_retention_days: int = 365
 
+    # Projects — override to point at a shared git repo (e.g., a cloned hmi-projects repo)
+    projects_dir: str | None = None
+
     # Scripting
     script_timeout_seconds: int = 5  # Max execution time for user scripts
 
     # env_prefix: look for HMI_* environment variables (e.g., HMI_PORT=9000)
-    # env_file: also read from a .env file in the working directory
-    model_config = {"env_prefix": "HMI_", "env_file": ".env"}
+    # env_file: check both backend/.env and project-root .env so it works
+    # regardless of whether the server is started from backend/ or the project root
+    model_config = {"env_prefix": "HMI_", "env_file": [".env", "../.env"]}
 
 
 # Create a single global instance — imported by other modules as `settings`
