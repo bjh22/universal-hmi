@@ -367,6 +367,7 @@ For production panel PC deployments, review these settings in the `.env` file at
 | `HMI_HOST` | `0.0.0.0` to accept connections from any network interface (default) |
 | `HMI_PORT` | `8080` (default) — change if needed, and update firewall rules accordingly |
 | `HMI_ACCESS_TOKEN_EXPIRE_MINUTES` | `480` (8 hours) — adjust to match your shift length |
+| `HMI_AUTO_LOGOUT_MINUTES` | `30` (default) — minutes of inactivity before the browser auto-logs out the user |
 | `HMI_WS_UPDATE_INTERVAL_MS` | `500` (twice per second) — lower for faster updates, higher to reduce CPU load on low-power devices |
 | `HMI_TREND_RETENTION_DAYS` | `90` — increase for longer history, but monitor disk usage on devices with limited storage |
 | `HMI_APP_VERSION` | Auto-set during install/update — do not edit manually |

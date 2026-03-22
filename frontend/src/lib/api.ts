@@ -462,7 +462,7 @@ export const api = {
   getVersion: () =>
     request<{ version: string }>('/system/version'),
   getSystemInfo: () =>
-    request<{ app_version: string; platform: string; python_version: string; install_path: string; database_path: string; is_compiled: boolean; uptime_seconds: number | null }>('/system/info'),
+    request<{ app_version: string; platform: string; python_version: string; install_path: string; database_path: string; is_compiled: boolean; uptime_seconds: number | null; auto_logout_minutes: number }>('/system/info'),
   getSystemSettings: () =>
     request<{ plc_version_tag: string | null }>('/system/settings'),
   updateSystemSettings: (data: { plc_version_tag: string | null }) =>

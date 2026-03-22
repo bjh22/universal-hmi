@@ -8,8 +8,9 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { UserData } from '../types';
+import { api } from '../lib/api';
 
-const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+const DEFAULT_INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
 // TypeScript interface — defines the shape of the object this hook returns.
 // Any component using this hook gets exactly these properties and methods.
@@ -41,6 +42,7 @@ export function useAuthState(): AuthState {
   // useRef stores a mutable value that persists across renders WITHOUT triggering
   // re-renders when changed. Perfect for timer IDs that are internal bookkeeping.
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timeoutMsRef = useRef(DEFAULT_INACTIVITY_TIMEOUT_MS);
 
   // useCallback memoizes the function so the same reference is reused across renders.
   // Without it, a new function object is created every render, which would cause
@@ -59,10 +61,20 @@ export function useAuthState(): AuthState {
     setUser(null);
   }, []);
 
+  // Fetch the configured inactivity timeout from the backend on mount.
+  useEffect(() => {
+    api.getSystemInfo().then(info => {
+      timeoutMsRef.current = info.auto_logout_minutes * 60 * 1000;
+    }).catch(() => {
+      // Fall back to default if the backend is unreachable
+    });
+  }, []);
+
   // useEffect runs side effects after rendering. This one sets up an inactivity
   // auto-logout: it listens for mouse/keyboard/touch activity and resets a countdown
-  // timer on each event. If no activity happens for 30 minutes, it auto-logs out
-  // for security — important in industrial environments with shared terminals.
+  // timer on each event. If no activity happens within the configured timeout, it
+  // auto-logs out for security — important in industrial environments with shared
+  // terminals. The timeout is configured via HMI_AUTO_LOGOUT_MINUTES (default 30).
   useEffect(() => {
     // If not logged in, there's nothing to time out — skip setup entirely.
     if (!token) return;
@@ -78,7 +90,7 @@ export function useAuthState(): AuthState {
 
     const resetTimer = () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      timeoutRef.current = setTimeout(onInactivityTimeout, INACTIVITY_TIMEOUT_MS);
+      timeoutRef.current = setTimeout(onInactivityTimeout, timeoutMsRef.current);
     };
 
     const events = ['mousedown', 'mousemove', 'keydown', 'touchstart', 'scroll'];
