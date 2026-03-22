@@ -22,7 +22,7 @@ import {
   Minus, Power, LogOut, LogIn,
   Play, RotateCcw, Activity,
 } from 'lucide-react';
-import type { UserData, AlarmData, DatasourceStatus, TagValue, ProductionSettings } from '../../types';
+import type { UserData, AlarmData, DatasourceStatus, TagValue, Tag, ProductionSettings } from '../../types';
 import { api } from '../../lib/api';
 import { SeverityIcon } from '../shared/SeverityIcon';
 
@@ -125,18 +125,22 @@ function AlarmMarquee({ alarms }: { alarms: AlarmData[] }) {
   );
 }
 
-/** Machine status color mapping — maps common PLC state strings/values to colors. */
-function getStatusStyle(value: unknown): { bg: string; text: string; label: string } {
-  const s = String(value).toLowerCase().trim();
+/** Machine status color mapping — maps common PLC state strings/values to colors.
+ *  When an enum_mapping is available, the resolved display name is used for both
+ *  color matching and display label instead of the raw integer value. */
+function getStatusStyle(value: unknown, enumMapping?: Record<string, string> | null): { bg: string; text: string; label: string } {
+  const raw = String(value);
+  const display = enumMapping?.[raw] ?? raw;
+  const s = display.toLowerCase().trim();
   if (['running', 'cycling', 'auto', '1', 'true'].includes(s))
-    return { bg: 'bg-green-500/20', text: 'text-green-300', label: String(value) };
+    return { bg: 'bg-green-500/20', text: 'text-green-300', label: display };
   if (['faulted', 'fault', 'error', 'alarm'].includes(s))
-    return { bg: 'bg-red-500/20', text: 'text-red-300', label: String(value) };
+    return { bg: 'bg-red-500/20', text: 'text-red-300', label: display };
   if (['idle', 'standby', 'waiting'].includes(s))
-    return { bg: 'bg-yellow-500/20', text: 'text-yellow-300', label: String(value) };
+    return { bg: 'bg-yellow-500/20', text: 'text-yellow-300', label: display };
   if (['stopped', 'off', '0', 'false'].includes(s))
-    return { bg: 'bg-slate-500/20', text: 'text-slate-300', label: String(value) };
-  return { bg: 'bg-slate-500/20', text: 'text-slate-300', label: String(value) };
+    return { bg: 'bg-slate-500/20', text: 'text-slate-300', label: display };
+  return { bg: 'bg-slate-500/20', text: 'text-slate-300', label: display };
 }
 
 /** Top bar controls — machine status indicator + cycle start / reset buttons.
@@ -144,10 +148,12 @@ function getStatusStyle(value: unknown): { bg: string; text: string; label: stri
  *  determine which tags to display. */
 function TopBarControls({ tagValues }: { tagValues?: Record<string, TagValue> }) {
   const [settings, setSettings] = useState<ProductionSettings | null>(null);
+  const [tags, setTags] = useState<Tag[]>([]);
   const [pending, setPending] = useState<string | null>(null);
 
   useEffect(() => {
     api.getProductionSettings().then(setSettings).catch(() => {});
+    api.getTags().then(setTags).catch(() => {});
   }, []);
 
   const handleWrite = useCallback(async (tagName: string) => {
@@ -169,7 +175,8 @@ function TopBarControls({ tagValues }: { tagValues?: Record<string, TagValue> })
   if (!hasAny) return <div className="flex-1" />;
 
   const statusValue = machine_status_tag && tagValues?.[machine_status_tag]?.value;
-  const statusStyle = statusValue != null ? getStatusStyle(statusValue) : null;
+  const statusEnumMapping = machine_status_tag ? tags.find(t => t.name === machine_status_tag)?.enum_mapping : null;
+  const statusStyle = statusValue != null ? getStatusStyle(statusValue, statusEnumMapping) : null;
 
   return (
     <div className="flex-1 flex items-center gap-3">
