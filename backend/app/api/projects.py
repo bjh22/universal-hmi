@@ -693,10 +693,11 @@ async def load_project(
 
     await _set_active_project(session, project.id)
 
-    # Reload tag engine and alarm service so in-memory state matches new DB
+    # Reload tag engine, alarm service, and trend service so in-memory state matches new DB
     await tag_engine.reload(session)
     await request.app.state.alarm_service.load_alarm_configs(session)
     request.app.state.alarm_service.broadcast_alarms_snapshot()
+    await request.app.state.trend_service.reload_trending_tags()
 
     return {"status": "loaded", "project_name": project.name}
 
@@ -739,6 +740,7 @@ async def create_blank_project(
     await tag_engine.reload(session)
     await request.app.state.alarm_service.load_alarm_configs(session)
     request.app.state.alarm_service.broadcast_alarms_snapshot()
+    await request.app.state.trend_service.reload_trending_tags()
 
     return ProjectOut(
         id=project.id, name=project.name, description=project.description, version=project.version,
@@ -784,6 +786,7 @@ async def create_demo_project(
     await tag_engine.reload(session)
     await request.app.state.alarm_service.load_alarm_configs(session)
     request.app.state.alarm_service.broadcast_alarms_snapshot()
+    await request.app.state.trend_service.reload_trending_tags()
 
     return ProjectOut(
         id=project.id, name=project.name, description=project.description, version=project.version,
