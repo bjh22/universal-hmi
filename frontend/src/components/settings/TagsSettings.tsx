@@ -854,6 +854,7 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
   const [selectedNames, setSelectedNames] = useState<Set<string>>(new Set());
   const [conflictMode, setConflictMode] = useState<ImportConflictMode>('skip');
   const [updateFields, setUpdateFields] = useState<Set<string>>(new Set(['display_name', 'data_type', 'access_mode', 'address', 'enum_mapping', 'engineering_units']));
+  const [filterText, setFilterText] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
   const resetState = useCallback(() => {
@@ -868,6 +869,7 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
     setSelectedNames(new Set());
     setConflictMode('skip');
     setUpdateFields(new Set(['display_name', 'data_type', 'access_mode', 'address', 'enum_mapping', 'engineering_units']));
+    setFilterText('');
     if (fileRef.current) fileRef.current.value = '';
   }, []);
 
@@ -951,6 +953,26 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
     });
   }, []);
 
+  // Filtering
+  const filterLower = filterText.toLowerCase();
+  const filteredRows = useMemo(() => {
+    if (!filterText) return rows;
+    return rows.filter(r => {
+      const name = (r.name || '').toLowerCase();
+      const desc = (r.description || r.display_name || '').toLowerCase();
+      return name.includes(filterLower) || desc.includes(filterLower);
+    });
+  }, [rows, filterText, filterLower]);
+
+  const filteredPreviewTags = useMemo(() => {
+    if (!filterText) return previewTags;
+    return previewTags.filter(t =>
+      t.name.toLowerCase().includes(filterLower) ||
+      (t.display_name || '').toLowerCase().includes(filterLower) ||
+      (t.group || '').toLowerCase().includes(filterLower)
+    );
+  }, [previewTags, filterText, filterLower]);
+
   // Selection helpers
   const allNames = format === 'hmi_csv'
     ? rows.map((r, i) => r.name || String(i))
@@ -958,17 +980,40 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
   const selectedCount = selectedNames.size;
   const totalCount = allNames.length;
 
+  const filteredNames = format === 'hmi_csv'
+    ? filteredRows.map((r, i) => r.name || String(i))
+    : filteredPreviewTags.map(t => t.name);
+  const filteredCount = filteredNames.length;
+  const filteredSelectedCount = filteredNames.filter(n => selectedNames.has(n)).length;
+
   const toggleSelectAll = useCallback(() => {
-    if (format === 'hmi_csv') {
-      const all = rows.map((r, i) => r.name || String(i));
-      setSelectedNames(prev => prev.size === all.length ? new Set() : new Set(all));
+    if (filterText) {
+      // When filtering, toggle only the visible (filtered) tags
+      const visible = format === 'hmi_csv'
+        ? filteredRows.map((r, i) => r.name || String(i))
+        : filteredPreviewTags.map(t => t.name);
+      setSelectedNames(prev => {
+        const next = new Set(prev);
+        const allVisible = visible.every(n => next.has(n));
+        if (allVisible) {
+          visible.forEach(n => next.delete(n));
+        } else {
+          visible.forEach(n => next.add(n));
+        }
+        return next;
+      });
     } else {
-      setSelectedNames(prev => prev.size === previewTags.length ? new Set() : new Set(previewTags.map(t => t.name)));
+      if (format === 'hmi_csv') {
+        const all = rows.map((r, i) => r.name || String(i));
+        setSelectedNames(prev => prev.size === all.length ? new Set() : new Set(all));
+      } else {
+        setSelectedNames(prev => prev.size === previewTags.length ? new Set() : new Set(previewTags.map(t => t.name)));
+      }
     }
-  }, [format, rows, previewTags]);
+  }, [format, rows, previewTags, filterText, filteredRows, filteredPreviewTags]);
 
   const toggleGroupSelection = useCallback((group: string) => {
-    const groupTagNames = previewTags.filter(t => (t.group || 'Ungrouped') === group).map(t => t.name);
+    const groupTagNames = filteredPreviewTags.filter(t => (t.group || 'Ungrouped') === group).map(t => t.name);
     setSelectedNames(prev => {
       const next = new Set(prev);
       const allSelected = groupTagNames.every(n => next.has(n));
@@ -979,7 +1024,7 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
       }
       return next;
     });
-  }, [previewTags]);
+  }, [filteredPreviewTags]);
 
   const toggleTagSelection = useCallback((name: string) => {
     setSelectedNames(prev => {
@@ -1082,14 +1127,37 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
           </div>
         )}
 
+        {/* Search filter — shown when any data is loaded */}
+        {hasData && (
+          <div className="relative mb-3">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--hmi-text-muted)]" />
+            <input
+              type="text"
+              value={filterText}
+              onChange={e => setFilterText(e.target.value)}
+              placeholder="Filter tags by name..."
+              className="w-full pl-8 pr-8 py-1.5 bg-[var(--hmi-bg-surface)] border border-[var(--hmi-border-subtle)] rounded-lg text-sm text-[var(--hmi-text-primary)] placeholder:text-[var(--hmi-text-muted)]"
+            />
+            {filterText && (
+              <button
+                onClick={() => setFilterText('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--hmi-text-muted)] hover:text-[var(--hmi-text-secondary)]"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        )}
+
         {/* HMI CSV preview */}
         {format === 'hmi_csv' && rows.length > 0 && (
           <>
             <div className="flex items-center gap-3 mb-2">
               <button onClick={toggleSelectAll} className="text-xs text-blue-400 hover:text-blue-300">
-                {selectedCount === totalCount ? 'Deselect All' : 'Select All'}
+                {filteredSelectedCount === filteredCount && filteredCount > 0 ? 'Deselect All' : 'Select All'}
               </button>
               <span className="text-sm text-[var(--hmi-text-secondary)]">{selectedCount} of {totalCount} selected</span>
+              {filterText && <span className="text-xs text-[var(--hmi-text-muted)]">({filteredCount} shown)</span>}
             </div>
             <div className="overflow-auto mb-4">
               <table className="w-full text-xs">
@@ -1098,7 +1166,8 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
                     <th className="px-2 py-1 w-8">
                       <input
                         type="checkbox"
-                        checked={selectedCount === totalCount}
+                        checked={filteredSelectedCount === filteredCount && filteredCount > 0}
+                        ref={el => { if (el) el.indeterminate = filteredSelectedCount > 0 && filteredSelectedCount < filteredCount; }}
                         onChange={toggleSelectAll}
                         className="accent-blue-600"
                       />
@@ -1107,11 +1176,11 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row, i) => {
+                  {filteredRows.map((row, i) => {
                     const key = row.name || String(i);
                     const checked = selectedNames.has(key);
                     return (
-                      <tr key={i} className={`border-b border-[var(--hmi-border)]/50 cursor-pointer ${checked ? '' : 'opacity-50'}`} onClick={() => toggleTagSelection(key)}>
+                      <tr key={key} className={`border-b border-[var(--hmi-border)]/50 cursor-pointer ${checked ? '' : 'opacity-50'}`} onClick={() => toggleTagSelection(key)}>
                         <td className="px-2 py-1" onClick={e => e.stopPropagation()}>
                           <input type="checkbox" checked={checked} onChange={() => toggleTagSelection(key)} className="accent-blue-600" />
                         </td>
@@ -1140,9 +1209,10 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
             {/* Summary + selection controls */}
             <div className="flex flex-wrap items-center gap-3 mb-3 text-sm">
               <button onClick={toggleSelectAll} className="text-xs text-blue-400 hover:text-blue-300">
-                {selectedCount === totalCount ? 'Deselect All' : 'Select All'}
+                {filteredSelectedCount === filteredCount && filteredCount > 0 ? 'Deselect All' : 'Select All'}
               </button>
               <span className="text-[var(--hmi-text-secondary)]">{selectedCount} of {totalCount} selected</span>
+              {filterText && <span className="text-xs text-[var(--hmi-text-muted)]">({filteredCount} shown)</span>}
               <span className="text-[var(--hmi-text-muted)]">|</span>
               <span className="text-[var(--hmi-text-secondary)]">{Object.keys(previewGroups).length} groups</span>
               {previewEnumCount > 0 && (
@@ -1157,11 +1227,15 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
             <div className="overflow-auto mb-4 border border-[var(--hmi-border)] rounded-lg">
               {Object.entries(previewGroups)
                 .sort(([, a], [, b]) => b - a)
+                .filter(([group]) => {
+                  if (!filterText) return true;
+                  return filteredPreviewTags.some(t => (t.group || 'Ungrouped') === group);
+                })
                 .map(([group]) => {
-                  const isExpanded = expandedGroups.has(group);
-                  const groupTags = previewTags.filter(t => (t.group || 'Ungrouped') === group);
+                  const isExpanded = expandedGroups.has(group) || !!filterText;
+                  const groupTags = filteredPreviewTags.filter(t => (t.group || 'Ungrouped') === group);
                   const groupSelectedCount = groupTags.filter(t => selectedNames.has(t.name)).length;
-                  const allGroupSelected = groupSelectedCount === groupTags.length;
+                  const allGroupSelected = groupSelectedCount === groupTags.length && groupTags.length > 0;
                   const someGroupSelected = groupSelectedCount > 0 && !allGroupSelected;
                   return (
                     <div key={group}>
