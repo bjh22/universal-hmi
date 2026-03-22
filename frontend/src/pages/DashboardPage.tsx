@@ -650,7 +650,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
       {/* Widget rendering */}
       {screenLayoutMode === 'absolute' && screenResolution ? (
         /* Absolute mode: scaled canvas with letterboxing */
-        <div ref={absContainerRef} className="flex-1 relative bg-black overflow-hidden select-none touch-manipulation" style={{ minHeight: 400 }}>
+        <div ref={absContainerRef} className="flex-1 relative bg-[var(--hmi-bg-body)] overflow-hidden select-none touch-manipulation" style={{ minHeight: 400 }}>
           <div
             style={{
               width: screenResolution.width,

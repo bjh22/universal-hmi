@@ -7,8 +7,8 @@
  * and a helper for custom resolutions.
  */
 
-export const HEADER_HEIGHT = 64;
-export const SIDEBAR_COLLAPSED_WIDTH = 64;
+export const HEADER_HEIGHT = 56;
+export const SIDEBAR_COLLAPSED_WIDTH = 80;
 
 export interface ResolutionPreset {
   /** Display label (e.g., "1920 × 1080 (Full HD)") */

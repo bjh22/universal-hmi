@@ -37,10 +37,10 @@ interface NumericKeypadProps {
 export function NumericKeypad({ value: initialValue, title, units, min, max, decimalPlaces, onSubmit, onClose }: NumericKeypadProps) {
   const [value, setValue] = useState('');
   const [hasTyped, setHasTyped] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    inputRef.current?.focus();
+    containerRef.current?.focus();
   }, []);
 
   const displayValue = hasTyped ? value : initialValue;
@@ -85,12 +85,25 @@ export function NumericKeypad({ value: initialValue, title, units, min, max, dec
     onSubmit(displayValue);
   }, [displayValue, onSubmit]);
 
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key >= '0' && e.key <= '9') { append(e.key); }
+    else if (e.key === '.') { append('.'); }
+    else if (e.key === '-') { append('-'); }
+    else if (e.key === 'Backspace') { backspace(); }
+    else if (e.key === 'Delete') { clear(); }
+    else if (e.key === 'Enter') { handleSubmit(); }
+    else if (e.key === 'Escape') { onClose(); }
+    else { return; }
+    e.preventDefault();
+    e.stopPropagation();
+  }, [append, backspace, clear, handleSubmit, onClose]);
+
   const numVal = Number(displayValue);
   const isValid = displayValue !== '' && !isNaN(numVal) && (min === undefined || numVal >= min) && (max === undefined || numVal <= max);
 
   return (
     <Backdrop onClose={onClose}>
-      <div className="bg-slate-800 border border-slate-700 rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden">
+      <div ref={containerRef} tabIndex={-1} onKeyDown={handleKeyDown} className="bg-slate-800 border border-slate-700 rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden outline-none">
         {/* Display */}
         <div className="px-4 pt-4 pb-2">
           {title && (
@@ -100,13 +113,9 @@ export function NumericKeypad({ value: initialValue, title, units, min, max, dec
             </div>
           )}
           <div className="bg-slate-900 rounded-xl px-4 py-3 flex items-baseline justify-between">
-            <input
-              ref={inputRef}
-              readOnly
-              tabIndex={-1}
-              className="bg-transparent text-3xl font-bold text-white outline-none w-full text-right tabular-nums caret-transparent"
-              value={displayValue || '0'}
-            />
+            <div className="bg-transparent text-3xl font-bold text-white outline-none w-full text-right tabular-nums">
+              {displayValue || '0'}
+            </div>
             {units && <span className="text-sm text-slate-500 ml-2 flex-shrink-0">{units}</span>}
           </div>
           {min !== undefined && max !== undefined && (
@@ -173,6 +182,11 @@ interface AlphaKeyboardProps {
 export function AlphaKeyboard({ value: initialValue, title, onSubmit, onClose }: AlphaKeyboardProps) {
   const [value, setValue] = useState(initialValue);
   const [shift, setShift] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    containerRef.current?.focus();
+  }, []);
 
   const append = useCallback((ch: string) => {
     const c = shift ? ch.toUpperCase() : ch;
@@ -188,11 +202,21 @@ export function AlphaKeyboard({ value: initialValue, title, onSubmit, onClose }:
     onSubmit(value);
   }, [value, onSubmit]);
 
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace') { backspace(); }
+    else if (e.key === 'Enter') { handleSubmit(); }
+    else if (e.key === 'Escape') { onClose(); }
+    else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) { setValue(prev => prev + e.key); }
+    else { return; }
+    e.preventDefault();
+    e.stopPropagation();
+  }, [backspace, handleSubmit, onClose]);
+
   const kbBtn = `${btnBase} bg-slate-700 hover:bg-slate-600 text-white h-11 min-w-[2rem] text-base`;
 
   return (
     <Backdrop onClose={onClose}>
-      <div className="bg-slate-800 border border-slate-700 rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden">
+      <div ref={containerRef} tabIndex={-1} onKeyDown={handleKeyDown} className="bg-slate-800 border border-slate-700 rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden outline-none">
         {/* Display */}
         <div className="px-4 pt-4 pb-2">
           <div className="flex items-center justify-between mb-1">
