@@ -24,7 +24,7 @@ ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # CalVer: YYYY.MM.DD.N where N = number of git commits today + 1
 CALVER_DATE=$(date +%Y.%m.%d)
 if [ -d "$ROOT_DIR/.git" ]; then
-    DAILY_COMMITS=$(git -C "$ROOT_DIR" log --oneline --since="$(date +%Y-%m-%d)" 2>/dev/null | wc -l | tr -d ' ')
+    DAILY_COMMITS=$(git -C "$ROOT_DIR" log --oneline --since="$(date +%Y-%m-%d) 00:00:00" 2>/dev/null | wc -l | tr -d ' ')
 else
     DAILY_COMMITS=0
 fi
