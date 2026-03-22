@@ -500,6 +500,17 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
             onToggleLock={() => selectedWidget && dm.toggleLock(selectedWidget.id)}
           />
         </div>
+
+        {/* Save Confirmation Dialog */}
+        {saveConfirm && (
+          <SaveConfirmDialog
+            originalWidgets={runtimeWidgets}
+            currentWidgets={dm.widgets}
+            onSave={handleSaveConfirm}
+            onCancel={() => setSaveConfirm(null)}
+            saveAndExit={saveConfirm === 'save-exit'}
+          />
+        )}
       </div>
     );
   }
@@ -683,17 +694,6 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
             {isDesigner ? 'Press Ctrl+E or click Edit to design this screen' : 'Add widgets using the screen designer'}
           </p>
         </div>
-      )}
-
-      {/* Save Confirmation Dialog */}
-      {saveConfirm && (
-        <SaveConfirmDialog
-          originalWidgets={runtimeWidgets}
-          currentWidgets={dm.widgets}
-          onSave={handleSaveConfirm}
-          onCancel={() => setSaveConfirm(null)}
-          saveAndExit={saveConfirm === 'save-exit'}
-        />
       )}
 
       {/* New Screen Dialog */}
