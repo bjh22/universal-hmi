@@ -699,9 +699,17 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
       {runtimeWidgets.length === 0 && !activeScreen && (
         <div className="text-center text-slate-500 mt-20">
           <p className="text-lg">No screen found</p>
-          <p className="text-sm mt-1">
-            {isDesigner ? 'Create a screen using the + button above' : 'No screens have been created yet'}
-          </p>
+          {isDesigner ? (
+            <button
+              onClick={() => { setShowNewScreenDialog(true); setCreateScreenError(null); }}
+              className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-md bg-[var(--hmi-accent)] text-white text-sm hover:opacity-90 transition-opacity"
+            >
+              <Plus size={14} />
+              Create Screen
+            </button>
+          ) : (
+            <p className="text-sm mt-1">No screens have been created yet</p>
+          )}
         </div>
       )}
 
