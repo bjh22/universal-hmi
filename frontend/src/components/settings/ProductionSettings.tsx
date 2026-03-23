@@ -17,6 +17,7 @@ export function ProductionSettingsTab() {
     machine_status_tag: null,
     cycle_start_tag: null,
     reset_tag: null,
+    alarm_marquee_speed: null,
   });
   const [tags, setTags] = useState<Tag[]>([]);
   const [saving, setSaving] = useState(false);
@@ -247,6 +248,25 @@ export function ProductionSettingsTab() {
             ))}
           </select>
         </div>
+      </div>
+
+      {/* Alarm Marquee Speed */}
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-slate-200 mb-1">Alarm Scroll Speed (seconds)</label>
+        <p className="text-xs text-slate-400 mb-2">
+          How many seconds it takes for the alarm marquee to complete one full scroll cycle. Lower = faster. Default is 8 seconds.
+        </p>
+        <TouchTextInput
+          type="number"
+          value={settings.alarm_marquee_speed != null ? String(settings.alarm_marquee_speed) : ''}
+          onChange={v => setSettings({ ...settings, alarm_marquee_speed: v ? parseInt(v, 10) : null })}
+          placeholder="8"
+          title="Alarm Scroll Speed"
+          units="seconds"
+          min={1}
+          max={60}
+          className={inputCls + ' max-w-xs'}
+        />
       </div>
 
       {/* Save */}

@@ -304,6 +304,7 @@ export interface ProductionSettings {
   machine_status_tag: string | null;
   cycle_start_tag: string | null;
   reset_tag: string | null;
+  alarm_marquee_speed: number | null;
 }
 
 export interface ServiceTagOverride {
