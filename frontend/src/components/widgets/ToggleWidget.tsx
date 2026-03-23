@@ -34,11 +34,9 @@ export const ToggleWidget = memo(function ToggleWidget({ title, tag, tagValues, 
     await api.writeTag(tag, !value);
   }, [tag, value]);
 
-  const isNone = chrome === 'none';
-
   return (
-    <div className={`${getContainerClasses(chrome)} h-full flex ${isNone ? 'flex-row items-center gap-2' : 'flex-col justify-center items-center'}`}>
-      {shouldShowTitle(chrome) && <div className={`${getTitleClasses(chrome)} ${isNone ? '' : 'mb-3'}`} style={textStyleToCSS(titleStyle)}>{title}</div>}
+    <div className={`${getContainerClasses(chrome)} h-full flex flex-col justify-center items-center`}>
+      {shouldShowTitle(chrome) && <div className={getTitleClasses(chrome)} style={textStyleToCSS(titleStyle)}>{title}</div>}
       {/* The toggle track — `transition-colors` animates the background color change.
           When value is true, the track turns green; when false, it's gray. */}
       {/* Track and knob use fixed px sizes so they don't scale with root font-size */}
@@ -54,7 +52,7 @@ export const ToggleWidget = memo(function ToggleWidget({ title, tag, tagValues, 
           style={{ top: 6, width: 32, height: 32, left: value ? 42 : 6 }}
         />
       </button>
-      <div className={`text-base font-medium ${value ? 'text-green-400' : 'text-slate-400'} ${isNone ? '' : 'mt-2'}`} style={textStyleToCSS(valueStyle)}>
+      <div className={`text-base font-medium ${value ? 'text-green-400' : 'text-slate-400'} mt-1`} style={textStyleToCSS(valueStyle)}>
         {value ? 'ON' : 'OFF'}
       </div>
     </div>

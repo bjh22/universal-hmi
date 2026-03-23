@@ -453,7 +453,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
   // ─── DESIGN MODE ───
   if (dm.editing) {
     return (
-      <div className="flex flex-col h-full -m-4">
+      <div className="flex flex-col h-full -mx-4 -mt-1 -mb-4">
         <EditorToolbar
           screenName={activeScreen?.name || 'Screen'}
           dirty={dm.dirty}
