@@ -63,20 +63,30 @@ function AlarmMarquee({ alarms, speed }: { alarms: AlarmData[]; speed?: number |
   const containerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [needsScroll, setNeedsScroll] = useState(false);
+  const [duration, setDuration] = useState('8s');
   const [paused, setPaused] = useState(false);
 
-  // Check if content overflows the container
+  // Check if content overflows and compute animation duration based on content width.
+  // Uses a constant pixels-per-second rate so scroll speed stays consistent
+  // regardless of how many alarms are displayed.
   useEffect(() => {
     const check = () => {
       if (containerRef.current && innerRef.current) {
-        setNeedsScroll(innerRef.current.scrollWidth > containerRef.current.clientWidth);
+        const overflows = innerRef.current.scrollWidth > containerRef.current.clientWidth;
+        setNeedsScroll(overflows);
+        if (overflows) {
+          // Content is duplicated, so half = one copy's width = the distance scrolled per cycle
+          const contentWidth = innerRef.current.scrollWidth / 2;
+          const pxPerSecond = speed ? (100 * (8 / speed)) : 100;
+          setDuration(`${Math.max(2, contentWidth / pxPerSecond)}s`);
+        }
       }
     };
     check();
     // Re-check when alarms change
     const timer = setTimeout(check, 100);
     return () => clearTimeout(timer);
-  }, [alarms]);
+  }, [alarms, speed]);
 
   const alarmPill = (alarm: AlarmData, keySuffix: string) => (
     <Link
@@ -115,7 +125,7 @@ function AlarmMarquee({ alarms, speed }: { alarms: AlarmData[]; speed?: number |
       <div
         ref={innerRef}
         className={`flex items-center gap-1.5 ${needsScroll ? 'alarm-marquee' : ''}`}
-        style={needsScroll ? { animationPlayState: paused ? 'paused' : 'running', '--marquee-duration': `${speed || 8}s` } as React.CSSProperties : undefined}
+        style={needsScroll ? { animationPlayState: paused ? 'paused' : 'running', '--marquee-duration': duration } as React.CSSProperties : undefined}
       >
         {alarms.map(a => alarmPill(a, 'a'))}
         {/* Duplicate for seamless loop */}
@@ -161,6 +171,11 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
     api.getVersion().then(info => setAppVersion(info.version)).catch(() => {});
     api.getProductionSettings().then(setProdSettings).catch(() => {});
     api.getTags().then(setAllTags).catch(() => {});
+    // Re-fetch production settings periodically so changes (e.g. marquee speed) take effect
+    const interval = setInterval(() => {
+      api.getProductionSettings().then(setProdSettings).catch(() => {});
+    }, 30_000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleWriteTag = useCallback(async (tagName: string) => {
