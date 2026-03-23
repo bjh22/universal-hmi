@@ -77,7 +77,7 @@ function AlarmMarquee({ alarms, speed }: { alarms: AlarmData[]; speed?: number |
         if (overflows) {
           // Content is duplicated, so half = one copy's width = the distance scrolled per cycle
           const contentWidth = innerRef.current.scrollWidth / 2;
-          const pxPerSecond = speed ? (150 * (8 / speed)) : 150;
+          const pxPerSecond = speed ? (100 * (8 / speed)) : 100;
           setDuration(`${Math.max(2, contentWidth / pxPerSecond)}s`);
         }
       }
