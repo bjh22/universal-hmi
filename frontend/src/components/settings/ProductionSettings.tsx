@@ -252,9 +252,9 @@ export function ProductionSettingsTab() {
 
       {/* Alarm Marquee Speed */}
       <div className="mb-4">
-        <label className="block text-sm font-medium text-slate-200 mb-1">Alarm Scroll Speed (seconds)</label>
+        <label className="block text-sm font-medium text-slate-200 mb-1">Alarm Scroll Speed</label>
         <p className="text-xs text-slate-400 mb-2">
-          How many seconds it takes for the alarm marquee to complete one full scroll cycle. Lower = faster. Default is 8 seconds.
+          Controls how fast the alarm marquee scrolls. Lower = faster. Default is 8. Scroll speed is consistent regardless of how many alarms are active.
         </p>
         <TouchTextInput
           type="number"
