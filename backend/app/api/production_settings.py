@@ -22,6 +22,7 @@ _KEYS = {
     "machine_status_tag": "production.machine_status_tag",
     "cycle_start_tag": "production.cycle_start_tag",
     "reset_tag": "production.reset_tag",
+    "alarm_marquee_speed": "production.alarm_marquee_speed",
 }
 
 
@@ -34,6 +35,7 @@ class ProductionSettingsBody(BaseModel):
     machine_status_tag: str | None = None
     cycle_start_tag: str | None = None
     reset_tag: str | None = None
+    alarm_marquee_speed: int | None = None
 
 
 async def _get_setting(session: AsyncSession, key: str) -> str | None:
@@ -71,6 +73,7 @@ async def load_production_settings(session: AsyncSession) -> dict:
     machine_status_tag = await _get_setting(session, _KEYS["machine_status_tag"])
     cycle_start_tag = await _get_setting(session, _KEYS["cycle_start_tag"])
     reset_tag = await _get_setting(session, _KEYS["reset_tag"])
+    alarm_marquee_speed_raw = await _get_setting(session, _KEYS["alarm_marquee_speed"])
     result = {
         "good_count_tag": good_count_tag,
         "reject_fault_tags": json.loads(reject_raw) if reject_raw else [],
@@ -80,6 +83,7 @@ async def load_production_settings(session: AsyncSession) -> dict:
         "machine_status_tag": machine_status_tag,
         "cycle_start_tag": cycle_start_tag,
         "reset_tag": reset_tag,
+        "alarm_marquee_speed": int(alarm_marquee_speed_raw) if alarm_marquee_speed_raw else None,
     }
     _settings_cache = result
     _settings_cache_time = time.monotonic()
@@ -111,6 +115,7 @@ async def update_production_settings(
     await _set_setting(session, _KEYS["machine_status_tag"], body.machine_status_tag)
     await _set_setting(session, _KEYS["cycle_start_tag"], body.cycle_start_tag)
     await _set_setting(session, _KEYS["reset_tag"], body.reset_tag)
+    await _set_setting(session, _KEYS["alarm_marquee_speed"], str(body.alarm_marquee_speed) if body.alarm_marquee_speed is not None else None)
     await session.commit()
     invalidate_production_settings_cache()
     return await load_production_settings(session)

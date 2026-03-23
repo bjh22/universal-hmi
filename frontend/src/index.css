@@ -60,6 +60,6 @@ body {
   100% { transform: translateX(-50%); }
 }
 .alarm-marquee {
-  animation: alarm-marquee 20s linear infinite;
+  animation: alarm-marquee var(--marquee-duration, 8s) linear infinite;
   width: max-content;
 }

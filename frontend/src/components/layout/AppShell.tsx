@@ -59,7 +59,7 @@ const NAV_ITEMS = [
 
 /** Auto-scrolling alarm marquee — duplicates the list so it loops seamlessly.
  *  Pauses on hover/touch so users can tap an alarm to navigate. */
-function AlarmMarquee({ alarms }: { alarms: AlarmData[] }) {
+function AlarmMarquee({ alarms, speed }: { alarms: AlarmData[]; speed?: number | null }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [needsScroll, setNeedsScroll] = useState(false);
@@ -115,7 +115,7 @@ function AlarmMarquee({ alarms }: { alarms: AlarmData[] }) {
       <div
         ref={innerRef}
         className={`flex items-center gap-1.5 ${needsScroll ? 'alarm-marquee' : ''}`}
-        style={needsScroll ? { animationPlayState: paused ? 'paused' : 'running' } : undefined}
+        style={needsScroll ? { animationPlayState: paused ? 'paused' : 'running', '--marquee-duration': `${speed || 8}s` } as React.CSSProperties : undefined}
       >
         {alarms.map(a => alarmPill(a, 'a'))}
         {/* Duplicate for seamless loop */}
@@ -418,7 +418,7 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
           )}
 
           {/* Alarm marquee — fills middle space, empty acts as spacer */}
-          <AlarmMarquee alarms={activeAlarms} />
+          <AlarmMarquee alarms={activeAlarms} speed={prodSettings?.alarm_marquee_speed} />
 
           {/* Reset OR Ack All — same position, swap based on unacked alarms */}
           {unackedAlarms.length > 0 ? (
