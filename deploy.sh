@@ -540,15 +540,21 @@ fi
 # Detect the desktop session user — Chromium must run as this user to
 # access the display.  The HMI server can run as root, but the browser
 # needs the session owner's display/dbus environment.
+# Retry for up to 30s when running as a service — graphical.target may
+# be reached before auto-login completes.
 DESKTOP_USER=""
 RUN_CHROME=""   # command prefix to run Chromium as the desktop user
 if [ "$(id -u)" = "0" ]; then
-    DESKTOP_USER=$(who 2>/dev/null | grep -v root | head -1 | awk '{print $1}')
-    if [ -z "$DESKTOP_USER" ]; then
-        # Fallback: check logind for graphical sessions
-        DESKTOP_USER=$(loginctl list-sessions --no-legend 2>/dev/null \
-            | awk '{print $3}' | grep -v root | head -1)
-    fi
+    for i in $(seq 1 30); do
+        DESKTOP_USER=$(who 2>/dev/null | grep -v root | head -1 | awk '{print $1}')
+        if [ -z "$DESKTOP_USER" ]; then
+            DESKTOP_USER=$(loginctl list-sessions --no-legend 2>/dev/null \
+                | awk '{print $3}' | grep -v root | head -1)
+        fi
+        [ -n "$DESKTOP_USER" ] && break
+        echo "Waiting for desktop session... ($i/30)"
+        sleep 1
+    done
 fi
 
 for arg in "$@"; do
@@ -557,12 +563,42 @@ for arg in "$@"; do
     esac
 done
 
-# Build the command prefix for launching Chromium
+# Build the command prefix for launching Chromium.
+# When running as root, sudo -u resets the environment — we must resolve
+# and preserve DISPLAY, XAUTHORITY, XDG_RUNTIME_DIR, and
+# DBUS_SESSION_BUS_ADDRESS so Chromium can reach the graphical session.
 CHROME_EXTRA_FLAGS=""
 if [ -n "$DESKTOP_USER" ]; then
-    # Run Chromium as the desktop user so it inherits display access
-    RUN_CHROME="sudo -u $DESKTOP_USER"
     echo "Running Chromium as user: $DESKTOP_USER"
+    DU_UID=$(id -u "$DESKTOP_USER")
+
+    export DISPLAY="${DISPLAY:-:0}"
+    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$DU_UID}"
+
+    # XAUTHORITY — check home dir then runtime dir
+    if [ -z "${XAUTHORITY:-}" ]; then
+        DU_HOME=$(eval echo "~$DESKTOP_USER")
+        if [ -f "$DU_HOME/.Xauthority" ]; then
+            export XAUTHORITY="$DU_HOME/.Xauthority"
+        elif [ -f "$XDG_RUNTIME_DIR/.Xauthority" ]; then
+            export XAUTHORITY="$XDG_RUNTIME_DIR/.Xauthority"
+        fi
+    fi
+
+    # DBUS — check well-known socket, then sniff from a running process
+    if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+        DBUS_SOCKET="$XDG_RUNTIME_DIR/bus"
+        if [ -S "$DBUS_SOCKET" ]; then
+            export DBUS_SESSION_BUS_ADDRESS="unix:path=$DBUS_SOCKET"
+        else
+            DBUS_FROM_PROC=$(grep -z DBUS_SESSION_BUS_ADDRESS \
+                /proc/$(pgrep -u "$DU_UID" -o)/environ 2>/dev/null \
+                | tr '\0' '\n' | sed 's/^DBUS_SESSION_BUS_ADDRESS=//' || true)
+            [ -n "$DBUS_FROM_PROC" ] && export DBUS_SESSION_BUS_ADDRESS="$DBUS_FROM_PROC"
+        fi
+    fi
+
+    RUN_CHROME="sudo --preserve-env=DISPLAY,XAUTHORITY,XDG_RUNTIME_DIR,DBUS_SESSION_BUS_ADDRESS -u $DESKTOP_USER"
 else
     # Not root, or no desktop user found — run directly
     RUN_CHROME=""
@@ -570,10 +606,8 @@ else
         CHROME_EXTRA_FLAGS="--no-sandbox"
         echo "WARNING: Running as root with no desktop user detected."
     fi
+    export DISPLAY="${DISPLAY:-:0}"
 fi
-
-# Default DISPLAY if not set (systemd won't have it)
-export DISPLAY="${DISPLAY:-:0}"
 
 # Force X11 rendering — Chromium's native Wayland support causes invisible
 # windows on RPi OS Bookworm's labwc compositor.  XWayland is always available
@@ -1066,15 +1100,21 @@ fi
 # Detect the desktop session user — Chromium must run as this user to
 # access the display.  The HMI server can run as root, but the browser
 # needs the session owner's display/dbus environment.
+# Retry for up to 30s when running as a service — graphical.target may
+# be reached before auto-login completes.
 DESKTOP_USER=""
 RUN_CHROME=""   # command prefix to run Chromium as the desktop user
 if [ "$(id -u)" = "0" ]; then
-    DESKTOP_USER=$(who 2>/dev/null | grep -v root | head -1 | awk '{print $1}')
-    if [ -z "$DESKTOP_USER" ]; then
-        # Fallback: check logind for graphical sessions
-        DESKTOP_USER=$(loginctl list-sessions --no-legend 2>/dev/null \
-            | awk '{print $3}' | grep -v root | head -1)
-    fi
+    for i in $(seq 1 30); do
+        DESKTOP_USER=$(who 2>/dev/null | grep -v root | head -1 | awk '{print $1}')
+        if [ -z "$DESKTOP_USER" ]; then
+            DESKTOP_USER=$(loginctl list-sessions --no-legend 2>/dev/null \
+                | awk '{print $3}' | grep -v root | head -1)
+        fi
+        [ -n "$DESKTOP_USER" ] && break
+        echo "Waiting for desktop session... ($i/30)"
+        sleep 1
+    done
 fi
 
 for arg in "$@"; do
@@ -1083,12 +1123,42 @@ for arg in "$@"; do
     esac
 done
 
-# Build the command prefix for launching Chromium
+# Build the command prefix for launching Chromium.
+# When running as root, sudo -u resets the environment — we must resolve
+# and preserve DISPLAY, XAUTHORITY, XDG_RUNTIME_DIR, and
+# DBUS_SESSION_BUS_ADDRESS so Chromium can reach the graphical session.
 CHROME_EXTRA_FLAGS=""
 if [ -n "$DESKTOP_USER" ]; then
-    # Run Chromium as the desktop user so it inherits display access
-    RUN_CHROME="sudo -u $DESKTOP_USER"
     echo "Running Chromium as user: $DESKTOP_USER"
+    DU_UID=$(id -u "$DESKTOP_USER")
+
+    export DISPLAY="${DISPLAY:-:0}"
+    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$DU_UID}"
+
+    # XAUTHORITY — check home dir then runtime dir
+    if [ -z "${XAUTHORITY:-}" ]; then
+        DU_HOME=$(eval echo "~$DESKTOP_USER")
+        if [ -f "$DU_HOME/.Xauthority" ]; then
+            export XAUTHORITY="$DU_HOME/.Xauthority"
+        elif [ -f "$XDG_RUNTIME_DIR/.Xauthority" ]; then
+            export XAUTHORITY="$XDG_RUNTIME_DIR/.Xauthority"
+        fi
+    fi
+
+    # DBUS — check well-known socket, then sniff from a running process
+    if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+        DBUS_SOCKET="$XDG_RUNTIME_DIR/bus"
+        if [ -S "$DBUS_SOCKET" ]; then
+            export DBUS_SESSION_BUS_ADDRESS="unix:path=$DBUS_SOCKET"
+        else
+            DBUS_FROM_PROC=$(grep -z DBUS_SESSION_BUS_ADDRESS \
+                /proc/$(pgrep -u "$DU_UID" -o)/environ 2>/dev/null \
+                | tr '\0' '\n' | sed 's/^DBUS_SESSION_BUS_ADDRESS=//' || true)
+            [ -n "$DBUS_FROM_PROC" ] && export DBUS_SESSION_BUS_ADDRESS="$DBUS_FROM_PROC"
+        fi
+    fi
+
+    RUN_CHROME="sudo --preserve-env=DISPLAY,XAUTHORITY,XDG_RUNTIME_DIR,DBUS_SESSION_BUS_ADDRESS -u $DESKTOP_USER"
 else
     # Not root, or no desktop user found — run directly
     RUN_CHROME=""
@@ -1096,10 +1166,8 @@ else
         CHROME_EXTRA_FLAGS="--no-sandbox"
         echo "WARNING: Running as root with no desktop user detected."
     fi
+    export DISPLAY="${DISPLAY:-:0}"
 fi
-
-# Default DISPLAY if not set (systemd won't have it)
-export DISPLAY="${DISPLAY:-:0}"
 
 # Force X11 rendering — Chromium's native Wayland support causes invisible
 # windows on RPi OS Bookworm's labwc compositor.  XWayland is always available
