@@ -464,7 +464,7 @@ cd "$(dirname "$0")"
 START_EOF
 chmod +x "$INSTALL_DIR/start.sh"
 
-# ── Install Chromium for kiosk mode (if present in package) ──
+# ── Chromium for kiosk mode ──
 ARCH=$(uname -m)
 CHROMIUM_SRC=""
 KIOSK_ENABLED=false
@@ -479,19 +479,31 @@ if [ -n "$CHROMIUM_SRC" ] && [ -d "$CHROMIUM_SRC" ]; then
     echo "    Chromium installed to $INSTALL_DIR/chromium/"
     KIOSK_ENABLED=true
 elif [ "$ARCH" = "aarch64" ] && [ -f "$SCRIPT_DIR/.chromium-kiosk" ]; then
-    # Chrome for Testing doesn't publish ARM builds — install from system packages
-    echo "==> Installing Chromium from system packages (aarch64)..."
-    if command -v apt-get > /dev/null 2>&1; then
-        apt-get update -qq && apt-get install -y -qq chromium-browser 2>/dev/null \
-            || apt-get install -y -qq chromium 2>/dev/null
-    fi
-    # Verify it's available
+    # Chrome for Testing doesn't publish ARM builds — use system packages
     if command -v chromium-browser > /dev/null 2>&1 || command -v chromium > /dev/null 2>&1; then
-        echo "    Chromium installed from system packages."
+        echo "==> Chromium already installed (aarch64)."
         KIOSK_ENABLED=true
     else
-        echo "    WARNING: Could not install Chromium. Install manually: apt install chromium-browser"
-        echo "    Kiosk mode will not be available until Chromium is installed."
+        echo "==> Installing Chromium from system packages (aarch64)..."
+        if command -v apt-get > /dev/null 2>&1; then
+            (apt-get update -qq && apt-get install -y -qq chromium-browser 2>/dev/null \
+                || apt-get install -y -qq chromium 2>/dev/null) || true
+        fi
+        if command -v chromium-browser > /dev/null 2>&1 || command -v chromium > /dev/null 2>&1; then
+            echo "    Chromium installed from system packages."
+            KIOSK_ENABLED=true
+        else
+            echo "    WARNING: Could not install Chromium. Install manually: apt install chromium-browser"
+            echo "    Kiosk mode will not be available until Chromium is installed."
+        fi
+    fi
+fi
+
+# Fallback: detect any system-installed Chromium even without --chromium flag
+if ! $KIOSK_ENABLED; then
+    if command -v chromium-browser > /dev/null 2>&1 || command -v chromium > /dev/null 2>&1; then
+        echo "==> Detected system Chromium — enabling kiosk mode."
+        KIOSK_ENABLED=true
     fi
 fi
 
@@ -976,7 +988,7 @@ python -m app.seed
 SEED_EOF
 chmod +x "$INSTALL_DIR/seed.sh"
 
-# ── Install Chromium for kiosk mode (if present in package) ──
+# ── Chromium for kiosk mode ──
 # NOTE: This must run BEFORE the seed step so that a seed failure
 #       (which exits the script via set -e) does not skip kiosk setup.
 ARCH=$(uname -m)
@@ -993,19 +1005,31 @@ if [ -n "$CHROMIUM_SRC" ] && [ -d "$CHROMIUM_SRC" ]; then
     echo "    Chromium installed to $INSTALL_DIR/chromium/"
     KIOSK_ENABLED=true
 elif [ "$ARCH" = "aarch64" ] && [ -f "$SCRIPT_DIR/.chromium-kiosk" ]; then
-    # Chrome for Testing doesn't publish ARM builds — install from system packages
-    echo "==> Installing Chromium from system packages (aarch64)..."
-    if command -v apt-get > /dev/null 2>&1; then
-        apt-get update -qq && apt-get install -y -qq chromium-browser 2>/dev/null \
-            || apt-get install -y -qq chromium 2>/dev/null
-    fi
-    # Verify it's available
+    # Chrome for Testing doesn't publish ARM builds — use system packages
     if command -v chromium-browser > /dev/null 2>&1 || command -v chromium > /dev/null 2>&1; then
-        echo "    Chromium installed from system packages."
+        echo "==> Chromium already installed (aarch64)."
         KIOSK_ENABLED=true
     else
-        echo "    WARNING: Could not install Chromium. Install manually: apt install chromium-browser"
-        echo "    Kiosk mode will not be available until Chromium is installed."
+        echo "==> Installing Chromium from system packages (aarch64)..."
+        if command -v apt-get > /dev/null 2>&1; then
+            (apt-get update -qq && apt-get install -y -qq chromium-browser 2>/dev/null \
+                || apt-get install -y -qq chromium 2>/dev/null) || true
+        fi
+        if command -v chromium-browser > /dev/null 2>&1 || command -v chromium > /dev/null 2>&1; then
+            echo "    Chromium installed from system packages."
+            KIOSK_ENABLED=true
+        else
+            echo "    WARNING: Could not install Chromium. Install manually: apt install chromium-browser"
+            echo "    Kiosk mode will not be available until Chromium is installed."
+        fi
+    fi
+fi
+
+# Fallback: detect any system-installed Chromium even without --chromium flag
+if ! $KIOSK_ENABLED; then
+    if command -v chromium-browser > /dev/null 2>&1 || command -v chromium > /dev/null 2>&1; then
+        echo "==> Detected system Chromium — enabling kiosk mode."
+        KIOSK_ENABLED=true
     fi
 fi
 
