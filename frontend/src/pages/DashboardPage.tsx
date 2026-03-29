@@ -668,7 +668,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
       {/* Widget rendering */}
       {screenLayoutMode === 'absolute' && screenResolution ? (
         /* Absolute mode: scaled canvas with letterboxing */
-        <div ref={absContainerRef} className="flex-1 relative bg-[var(--hmi-bg-body)] overflow-hidden select-none touch-manipulation" style={{ minHeight: 400 }}>
+        <div ref={absContainerRef} className="flex-1 relative bg-[var(--hmi-bg-body)] overflow-hidden select-none touch-pan-y" style={{ minHeight: 400 }}>
           <div
             style={{
               width: screenResolution.width,
@@ -687,7 +687,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
       ) : (
         /* Grid mode: CSS grid layout — top-level widgets in grid, children inside containers */
         <div
-          className="grid gap-4 select-none touch-manipulation"
+          className="grid gap-4 select-none touch-pan-y"
           style={{ gridTemplateColumns: 'repeat(12, 1fr)', gridAutoRows: '80px' }}
         >
           {runtimeWidgets.filter(w => !w.parentId).map((w, index) => (
