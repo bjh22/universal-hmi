@@ -639,6 +639,7 @@ $RUN_CHROME "$CHROME_BIN" \
     $KIOSK_FLAGS \
     $CHROME_EXTRA_FLAGS \
     $DISPLAY_FLAGS \
+    --disable-gpu \
     --no-first-run \
     --disable-infobars \
     --disable-session-crashed-bubble \
@@ -1202,6 +1203,7 @@ $RUN_CHROME "$CHROME_BIN" \
     $KIOSK_FLAGS \
     $CHROME_EXTRA_FLAGS \
     $DISPLAY_FLAGS \
+    --disable-gpu \
     --no-first-run \
     --disable-infobars \
     --disable-session-crashed-bubble \
