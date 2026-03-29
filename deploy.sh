@@ -639,7 +639,6 @@ $RUN_CHROME "$CHROME_BIN" \
     $KIOSK_FLAGS \
     $CHROME_EXTRA_FLAGS \
     $DISPLAY_FLAGS \
-    --disable-gpu \
     --no-first-run \
     --disable-infobars \
     --disable-session-crashed-bubble \
@@ -652,6 +651,9 @@ $RUN_CHROME "$CHROME_BIN" \
     --noerrdialogs \
     --disable-pinch \
     --overscroll-history-navigation=0 \
+    --disable-smooth-scrolling \
+    --disable-software-rasterizer \
+    --force-prefers-reduced-motion \
     "$HMI_URL" &
 CHROME_PID=$!
 
@@ -813,7 +815,7 @@ if exist "%SCRIPT_DIR%chromium-windows\chrome-win64\" (
         echo.
         echo :: Launch Chromium in kiosk mode
         echo echo Launching Chromium kiosk...
-        echo start "" "%%~dp0chromium\chrome.exe" --kiosk --no-first-run --disable-infobars --disable-session-crashed-bubble --disable-features=TranslateUI --autoplay-policy=no-user-gesture-required --user-data-dir="%%~dp0data\chromium-profile" --disable-background-networking --disable-sync --disable-default-apps --noerrdialogs --disable-pinch --overscroll-history-navigation=0 "http://localhost:8080"
+        echo start "" "%%~dp0chromium\chrome.exe" --kiosk --no-first-run --disable-infobars --disable-session-crashed-bubble --disable-features=TranslateUI --autoplay-policy=no-user-gesture-required --user-data-dir="%%~dp0data\chromium-profile" --disable-background-networking --disable-sync --disable-default-apps --noerrdialogs --disable-pinch --overscroll-history-navigation=0 --disable-smooth-scrolling --disable-software-rasterizer --force-prefers-reduced-motion "http://localhost:8080"
     ) > "%INSTALL_DIR%\start-kiosk.bat"
     echo     Created start-kiosk.bat
 )
@@ -1200,7 +1202,6 @@ $RUN_CHROME "$CHROME_BIN" \
     $KIOSK_FLAGS \
     $CHROME_EXTRA_FLAGS \
     $DISPLAY_FLAGS \
-    --disable-gpu \
     --no-first-run \
     --disable-infobars \
     --disable-session-crashed-bubble \
@@ -1213,6 +1214,9 @@ $RUN_CHROME "$CHROME_BIN" \
     --noerrdialogs \
     --disable-pinch \
     --overscroll-history-navigation=0 \
+    --disable-smooth-scrolling \
+    --disable-software-rasterizer \
+    --force-prefers-reduced-motion \
     "$HMI_URL" &
 CHROME_PID=$!
 
@@ -1493,7 +1497,7 @@ if exist "%SCRIPT_DIR%chromium-windows\chrome-win64\" (
         echo.
         echo :: Launch Chromium in kiosk mode
         echo echo Launching Chromium kiosk...
-        echo start "" "%%~dp0chromium\chrome.exe" --kiosk --no-first-run --disable-infobars --disable-session-crashed-bubble --disable-features=TranslateUI --autoplay-policy=no-user-gesture-required --user-data-dir="%%~dp0data\chromium-profile" --disable-background-networking --disable-sync --disable-default-apps --noerrdialogs --disable-pinch --overscroll-history-navigation=0 "http://localhost:8080"
+        echo start "" "%%~dp0chromium\chrome.exe" --kiosk --no-first-run --disable-infobars --disable-session-crashed-bubble --disable-features=TranslateUI --autoplay-policy=no-user-gesture-required --user-data-dir="%%~dp0data\chromium-profile" --disable-background-networking --disable-sync --disable-default-apps --noerrdialogs --disable-pinch --overscroll-history-navigation=0 --disable-smooth-scrolling --disable-software-rasterizer --force-prefers-reduced-motion "http://localhost:8080"
     ) > "%INSTALL_DIR%\start-kiosk.bat"
     echo     Created start-kiosk.bat
 )
