@@ -430,15 +430,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
 
   const swipeRef = useRef({ startX: 0, startY: 0, swiping: false });
 
-  const handleSwipeStart = useCallback((e: React.TouchEvent) => {
-    swipeRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, swiping: true };
-  }, []);
-
-  const handleSwipeEnd = useCallback((e: React.TouchEvent) => {
-    if (!swipeRef.current.swiping) return;
-    swipeRef.current.swiping = false;
-    const dx = e.changedTouches[0].clientX - swipeRef.current.startX;
-    const dy = e.changedTouches[0].clientY - swipeRef.current.startY;
+  const handleSwipeNavigate = useCallback((dx: number, dy: number) => {
     if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) {
       if (dx < 0 && activeScreenIndex < visibleScreens.length - 1) {
         navigate(`/screen/${visibleScreens[activeScreenIndex + 1].slug}`);
@@ -447,6 +439,32 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
       }
     }
   }, [activeScreenIndex, visibleScreens, navigate]);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    swipeRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, swiping: true };
+  }, []);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (!swipeRef.current.swiping) return;
+    swipeRef.current.swiping = false;
+    handleSwipeNavigate(
+      e.changedTouches[0].clientX - swipeRef.current.startX,
+      e.changedTouches[0].clientY - swipeRef.current.startY,
+    );
+  }, [handleSwipeNavigate]);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    swipeRef.current = { startX: e.clientX, startY: e.clientY, swiping: true };
+  }, []);
+
+  const handleMouseUp = useCallback((e: React.MouseEvent) => {
+    if (!swipeRef.current.swiping) return;
+    swipeRef.current.swiping = false;
+    handleSwipeNavigate(
+      e.clientX - swipeRef.current.startX,
+      e.clientY - swipeRef.current.startY,
+    );
+  }, [handleSwipeNavigate]);
 
   const [showDesignerTabs, setShowDesignerTabs] = useState(false);
 
@@ -537,8 +555,10 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
   return (
     <div
       className={screenLayoutMode === 'absolute' && screenResolution ? 'flex flex-col h-full overflow-hidden' : ''}
-      onTouchStart={handleSwipeStart}
-      onTouchEnd={handleSwipeEnd}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
     >
       {/* Screen carousel indicators + designer controls */}
       {visibleScreens.length > 1 && (

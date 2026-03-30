@@ -14,7 +14,7 @@
  *   - Collapsible sidebar for more screen real estate
  */
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, TrendingUp, Bell, ClipboardList, BarChart3,
   Settings, User, Menu, X, FolderOpen, CheckCheck,
@@ -208,6 +208,31 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
     localStorage.setItem('hmi_sidebar_open', String(sidebarOpen));
   }, [sidebarOpen]);
   const location = useLocation();
+  const navigate = useNavigate();
+
+  // Track drag distance so nav links only navigate on tap, not scroll-drag.
+  // Touchscreens that report mouse events cause mousedown→mouseup on links
+  // even when the user is trying to scroll the sidebar.
+  const navDragRef = useRef({ startY: 0, dragged: false });
+
+  const handleNavPointerDown = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    const y = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    navDragRef.current = { startY: y, dragged: false };
+  }, []);
+
+  const handleNavPointerMove = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    const y = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    if (Math.abs(y - navDragRef.current.startY) > 10) {
+      navDragRef.current.dragged = true;
+    }
+  }, []);
+
+  const handleNavLinkClick = useCallback((e: React.MouseEvent, to: string) => {
+    e.preventDefault();
+    if (!navDragRef.current.dragged) {
+      navigate(to);
+    }
+  }, [navigate]);
 
   const activeAlarms = alarms.filter(a => a.state === 'active_unacked' || a.state === 'active_acked' || a.state === 'inactive_unacked');
   const unackedAlarms = alarms.filter(a => a.state === 'active_unacked' || a.state === 'inactive_unacked');
@@ -284,7 +309,13 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
 
         {/* Role-based filtering: only show nav items the current user is allowed to see.
             If roles is null, everyone sees it. Otherwise, the user's role must be in the list. */}
-        <nav className="flex-1 py-2 overflow-y-auto min-h-0">
+        <nav
+          className="flex-1 py-2 overflow-y-auto min-h-0"
+          onMouseDown={handleNavPointerDown}
+          onMouseMove={handleNavPointerMove}
+          onTouchStart={handleNavPointerDown}
+          onTouchMove={handleNavPointerMove}
+        >
           {NAV_ITEMS.filter(item => !item.roles || (user && item.roles.includes(user.role))).map((item) => {
             const active = location.pathname === item.to ||
               (item.to !== '/' && location.pathname.startsWith(item.to));
@@ -292,6 +323,7 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
               <Link
                 key={item.to}
                 to={item.to}
+                onClick={(e) => handleNavLinkClick(e, item.to)}
                 className={`relative flex items-center rounded-lg transition-colors ${
                   sidebarOpen
                     ? 'gap-3 px-4 py-3 mx-2'
