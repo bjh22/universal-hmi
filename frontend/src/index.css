@@ -50,6 +50,12 @@ input, textarea, [contenteditable] {
 
 * {
   box-sizing: border-box;
+  /* Prevent HTML5 drag on links/images so touch-drag scrolls instead */
+  -webkit-user-drag: none;
+}
+
+[draggable="true"] {
+  -webkit-user-drag: element;
 }
 
 ::-webkit-scrollbar {
