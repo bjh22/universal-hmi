@@ -341,6 +341,8 @@ async def import_tags_csv(
                 continue
             if not update_fields or "display_name" in update_fields:
                 existing.display_name = td.get("display_name") or td.get("description") or existing.display_name
+            if not update_fields or "description" in update_fields:
+                existing.description = td.get("description") or existing.description
             if not update_fields or "data_type" in update_fields:
                 existing.data_type = TagDataType(td.get("data_type", "float"))
             if not update_fields or "access_mode" in update_fields:
@@ -360,6 +362,7 @@ async def import_tags_csv(
             tag = Tag(
                 name=td["name"],
                 display_name=td.get("display_name") or td.get("description"),
+                description=td.get("description"),
                 data_type=TagDataType(td.get("data_type", "float")),
                 address=td.get("address"),
                 data_source_id=td.get("data_source_id") or default_ds_id,

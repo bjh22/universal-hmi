@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { Search, Download, Plus, Pencil, Trash2, Upload, X, FolderSearch, Tag as TagIcon, CheckSquare, Square, MinusSquare, Filter, Columns3, ChevronRight, ChevronDown, Folder, FolderOpen, Loader2 } from 'lucide-react';
 import { api } from '../../lib/api';
+import { parseCSV } from '../../lib/csvParser';
 import { InlineTagValue, DeleteConfirmDialog, Field, inputCls, EMPTY_TAG, LABEL_COLORS, EnumMappingEditor, parseAlarmConfig, FaultHelpConfig } from './shared';
 import { parseVisibilityConditions } from '../../lib/tagVisibility';
 import { buildTagTree, getDescendantTags, getMatchingPaths, countDescendantTags } from '../../lib/tagTree';
@@ -855,7 +856,7 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [selectedNames, setSelectedNames] = useState<Set<string>>(new Set());
   const [conflictMode, setConflictMode] = useState<ImportConflictMode>('skip');
-  const [updateFields, setUpdateFields] = useState<Set<string>>(new Set(['display_name', 'data_type', 'access_mode', 'address', 'enum_mapping', 'engineering_units']));
+  const [updateFields, setUpdateFields] = useState<Set<string>>(new Set(['display_name', 'description', 'data_type', 'access_mode', 'address', 'enum_mapping', 'engineering_units']));
   const [filterText, setFilterText] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -870,7 +871,7 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
     setExpandedGroups(new Set());
     setSelectedNames(new Set());
     setConflictMode('skip');
-    setUpdateFields(new Set(['display_name', 'data_type', 'access_mode', 'address', 'enum_mapping', 'engineering_units']));
+    setUpdateFields(new Set(['display_name', 'description', 'data_type', 'access_mode', 'address', 'enum_mapping', 'engineering_units']));
     setFilterText('');
     if (fileRef.current) fileRef.current.value = '';
   }, []);
@@ -915,12 +916,11 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
     reader.onload = () => {
       const text = reader.result as string;
       if (format === 'hmi_csv') {
-        const lines = text.split(/\r?\n/).filter(l => l.trim());
-        if (lines.length < 2) return;
-        const hdr = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+        const allRows = parseCSV(text);
+        if (allRows.length < 2) return;
+        const hdr = allRows[0].map(h => h.trim());
         setHeaders(hdr);
-        const parsed = lines.slice(1).map(line => {
-          const vals = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+        const parsed = allRows.slice(1).map(vals => {
           const row: Record<string, string> = {};
           hdr.forEach((h, i) => { row[h] = vals[i] || ''; });
           return row;
@@ -1326,6 +1326,7 @@ function TagImportDialog({ dataSources, existingTagNames, onImportCsv, onImportC
                 <span className="text-xs text-[var(--hmi-text-muted)] w-full mb-0.5">Fields to update:</span>
                 {[
                   { key: 'display_name', label: 'Display Name' },
+                  ...(format === 'hmi_csv' ? [{ key: 'description', label: 'Description' }] : []),
                   { key: 'data_type', label: 'Data Type' },
                   { key: 'access_mode', label: 'Access Mode' },
                   { key: 'address', label: 'Address' },
