@@ -65,6 +65,7 @@ interface Props {
   onSendBackward: () => void;
   onToggleLock: (id: string) => void;
   onSelectAll: () => void;
+  onSaveAsTemplate?: (widgetId: string) => void;
   // Alignment
   onAlign: (direction: 'left' | 'right' | 'top' | 'bottom' | 'center-h' | 'center-v') => void;
   onDistribute: (direction: 'horizontal' | 'vertical') => void;
@@ -80,7 +81,7 @@ export function DesignCanvas({
   onSelect, onSelectMultiple, onClearSelection, onMoveWidget, onResizeWidget,
   onCopy, onCut, onPaste, onDuplicate, onDelete,
   onBringToFront, onSendToBack, onBringForward, onSendBackward,
-  onToggleLock, onSelectAll, onAlign, onDistribute,
+  onToggleLock, onSelectAll, onSaveAsTemplate, onAlign, onDistribute,
 }: Props) {
   const isAbsolute = layoutMode === 'absolute';
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -563,6 +564,15 @@ export function DesignCanvas({
                   label={lockedIds.has(contextMenu.widgetId) ? 'Unlock Position' : 'Lock Position'}
                   onClick={() => contextMenu.widgetId && onToggleLock(contextMenu.widgetId)}
                 />
+                {onSaveAsTemplate && contextMenu.widgetId && (() => {
+                  const cw = widgets.find(ww => ww.id === contextMenu.widgetId);
+                  return cw?.type === 'container' ? (
+                    <>
+                      <ContextMenuDivider />
+                      <ContextMenuItem label="Save as Template" onClick={() => onSaveAsTemplate(contextMenu.widgetId!)} />
+                    </>
+                  ) : null;
+                })()}
                 <ContextMenuDivider />
                 <ContextMenuItem label="Delete" shortcut="Del" onClick={onDelete} danger />
               </>

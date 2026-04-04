@@ -21,7 +21,7 @@
  * callbacks — there is no "save" button; the designer sees changes in real time.
  */
 import { useState, useEffect, useRef, useMemo } from 'react';
-import type { Widget, TextStyle, LayoutMode } from '../../types';
+import type { Widget, TextStyle, LayoutMode, WidgetTemplate } from '../../types';
 import { api } from '../../lib/api';
 import { WIDGET_TYPES } from './WidgetPalette';
 import { GAUGE_DEFAULTS, type GaugeDisplayMode } from '../widgets/GaugeWidget';
@@ -30,6 +30,42 @@ import { TagPicker } from './TagPickerField';
 import { TextStyleEditor } from './TextStyleField';
 import { RoleSelector } from './RoleSelectorField';
 import { ControlGroupEditor, TagOrderEditor, DropdownOptionsEditor } from './ControlGroupEditor';
+
+function TemplateInstanceSection({ templateName, tagPrefix, onChangeTemplate, onChangePrefix }: {
+  templateName: string; tagPrefix: string;
+  onChangeTemplate: (name: string) => void; onChangePrefix: (prefix: string) => void;
+}) {
+  const [templates, setTemplates] = useState<WidgetTemplate[]>([]);
+  useEffect(() => { api.getWidgetTemplates().then(setTemplates).catch(() => {}); }, []);
+  return (
+    <>
+      <Section title="Template">
+        <Field label="Template">
+          <select
+            value={templateName}
+            onChange={e => onChangeTemplate(e.target.value)}
+            className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+          >
+            <option value="">Select template...</option>
+            {templates.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Tag Prefix">
+          <input
+            type="text"
+            value={tagPrefix}
+            onChange={e => onChangePrefix(e.target.value)}
+            className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+            placeholder="e.g. Moves.clampOpen"
+          />
+        </Field>
+        <p className="text-[10px] text-slate-500 -mt-1">
+          Template tags starting with &quot;.&quot; resolve relative to this prefix
+        </p>
+      </Section>
+    </>
+  );
+}
 
 interface Props {
   widget: Widget | null;
@@ -128,6 +164,24 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
                 <option value="carousel">Carousel</option>
               </select>
             </Field>
+          </Section>
+        )}
+
+        {/* Container Tag Prefix (for template-like relative tag resolution) */}
+        {widget.type === 'container' && (
+          <Section title="Tag Prefix">
+            <Field label="Prefix">
+              <input
+                type="text"
+                value={p.tagPrefix || ''}
+                onChange={e => setProp('tagPrefix', e.target.value)}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+                placeholder="e.g. Moves.clampOpen"
+              />
+            </Field>
+            <p className="text-[10px] text-slate-500 -mt-1">
+              Child widget tags starting with &quot;.&quot; resolve relative to this prefix
+            </p>
           </Section>
         )}
 
@@ -267,7 +321,7 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
         </Section>
 
         {/* Tag Binding */}
-        {widget.type !== 'text_label' && widget.type !== 'alarm_summary' && widget.type !== 'multi_value' && widget.type !== 'control_group' && widget.type !== 'auto_fill' && widget.type !== 'container' && widget.type !== 'cognex_viewer' && widget.type !== 'zebra_printer' && widget.type !== 'trend' && (
+        {widget.type !== 'text_label' && widget.type !== 'alarm_summary' && widget.type !== 'multi_value' && widget.type !== 'control_group' && widget.type !== 'auto_fill' && widget.type !== 'container' && widget.type !== 'cognex_viewer' && widget.type !== 'zebra_printer' && widget.type !== 'trend' && widget.type !== 'template_instance' && (
           <Section title="Tag Binding">
             <Field label="Tag Name">
               <TagPicker value={p.tag || ''} onChange={v => setProp('tag', v)} />
@@ -492,6 +546,10 @@ export function PropertyPanel({ widget, widgets, layoutMode, onUpdateProps, onUp
               </label>
             </Field>
           </Section>
+        )}
+
+        {widget.type === 'template_instance' && (
+          <TemplateInstanceSection templateName={p.templateName as string || ''} tagPrefix={p.tagPrefix as string || ''} onChangeTemplate={name => setProp('templateName', name)} onChangePrefix={prefix => setProp('tagPrefix', prefix)} />
         )}
 
         {widget.type === 'zpl_preview' && (
