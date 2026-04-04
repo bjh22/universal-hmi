@@ -411,9 +411,17 @@ export const api = {
       `/projects/${id}/save-as`,
       { method: 'POST', body: JSON.stringify({ name }) },
     ),
+  deleteProjectFile: (filename: string) =>
+    request<void>(`/projects/files/${encodeURIComponent(filename)}`, { method: 'DELETE' }),
+  downloadProjectFile: (filename: string) =>
+    request<Record<string, unknown>>(`/projects/files/${encodeURIComponent(filename)}/download`),
 
   // Project Git
   getGitStatus: () => request<GitStatus>('/projects/git/status'),
+  getGitDiff: (file: string, maxLines = 500) =>
+    request<{ file: string; diff: string; truncated: boolean; total_lines: number }>(
+      `/projects/git/diff?file=${encodeURIComponent(file)}&max_lines=${maxLines}`,
+    ),
   getGitLog: (limit = 20) => request<GitCommitEntry[]>(`/projects/git/log?limit=${limit}`),
   gitCommit: (message: string) =>
     request<GitOperationResult>('/projects/git/commit', {

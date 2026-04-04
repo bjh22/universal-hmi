@@ -243,7 +243,7 @@ export default function App() {
                   <Route path="/trends" element={<TrendsPage />} />
                   <Route path="/jobs" element={<JobsPage user={auth.user} tagVisibilityMap={tagVisibilityMap} tagValues={tagValues} />} />
                   <Route path="/reports" element={<ReportsPage />} />
-                  <Route path="/projects" element={<ProjectsPage user={auth.user} />} />
+                  <Route path="/projects" element={<ProjectsPage user={auth.user} onProjectChanged={handleProjectChanged} />} />
                   <Route path="/settings" element={<SettingsPage user={auth.user} tagValues={tagValues} onTagsChanged={refreshTags} />} />
                   <Route path="/factory-config" element={<FactoryConfigPage user={auth.user} tagValues={tagValues} tagVisibilityMap={tagVisibilityMap} />} />
                   <Route path="/service" element={<ServicePage user={auth.user} tagValues={tagValues} tagVisibilityMap={tagVisibilityMap} />} />

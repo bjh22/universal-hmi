@@ -24,6 +24,11 @@ export function GitPanel({ onSaveFirst, disabled }: Props) {
   const [commitMsg, setCommitMsg] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<GitOperationResult | null>(null);
+  const [expandedFile, setExpandedFile] = useState<string | null>(null);
+  const [diffContent, setDiffContent] = useState<string | null>(null);
+  const [diffTruncated, setDiffTruncated] = useState(false);
+  const [diffTotalLines, setDiffTotalLines] = useState(0);
+  const [diffLoading, setDiffLoading] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -42,6 +47,32 @@ export function GitPanel({ onSaveFirst, disabled }: Props) {
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  const fetchDiff = useCallback(async (file: string, maxLines = 500) => {
+    setDiffLoading(true);
+    try {
+      const r = await api.getGitDiff(file, maxLines);
+      setDiffContent(r.diff);
+      setDiffTruncated(r.truncated);
+      setDiffTotalLines(r.total_lines);
+    } catch {
+      setDiffContent('Failed to load diff');
+      setDiffTruncated(false);
+      setDiffTotalLines(0);
+    } finally {
+      setDiffLoading(false);
+    }
+  }, []);
+
+  const toggleDiff = useCallback((file: string) => {
+    if (expandedFile === file) {
+      setExpandedFile(null);
+      setDiffContent(null);
+    } else {
+      setExpandedFile(file);
+      fetchDiff(file);
+    }
+  }, [expandedFile, fetchDiff]);
 
   const clearResult = useCallback(() => {
     setTimeout(() => setResult(null), 5000);
@@ -178,10 +209,55 @@ export function GitPanel({ onSaveFirst, disabled }: Props) {
           {showChanges && (
             <div className="mt-1.5 space-y-0.5">
               {status.changed_files.map((f: GitChangedFile) => (
-                <div key={f.file} className="flex items-center gap-2 text-xs py-0.5 px-2 rounded bg-slate-900">
-                  <FileStatusIcon status={f.status} />
-                  <span className="text-slate-300 truncate">{f.file}</span>
-                  <span className={`shrink-0 ml-auto ${statusColor(f.status)}`}>{f.status}</span>
+                <div key={f.file}>
+                  <button
+                    onClick={() => toggleDiff(f.file)}
+                    className="w-full flex items-center gap-2 text-xs py-0.5 px-2 rounded bg-slate-900 hover:bg-slate-800 transition-colors cursor-pointer"
+                  >
+                    {expandedFile === f.file ? <ChevronDown size={12} className="shrink-0 text-slate-400" /> : <ChevronRight size={12} className="shrink-0 text-slate-400" />}
+                    <FileStatusIcon status={f.status} />
+                    <span className="text-slate-300 truncate text-left">{f.file}</span>
+                    <span className={`shrink-0 ml-auto ${statusColor(f.status)}`}>{f.status}</span>
+                  </button>
+                  {expandedFile === f.file && (
+                    <div className="mt-1 mb-2 rounded bg-slate-950 border border-slate-700 overflow-hidden">
+                      {diffLoading ? (
+                        <div className="text-xs text-slate-400 p-3">Loading diff...</div>
+                      ) : diffContent ? (
+                        <>
+                          <pre className="text-xs font-mono p-3 overflow-x-auto max-h-96 overflow-y-auto leading-relaxed">
+                            {diffContent.split('\n').map((line, i) => (
+                              <div
+                                key={i}
+                                className={
+                                  line.startsWith('+++') || line.startsWith('---') ? 'text-slate-500'
+                                  : line.startsWith('@@') ? 'text-cyan-400'
+                                  : line.startsWith('+') ? 'text-green-400 bg-green-500/10'
+                                  : line.startsWith('-') ? 'text-red-400 bg-red-500/10'
+                                  : 'text-slate-400'
+                                }
+                              >{line || ' '}</div>
+                            ))}
+                          </pre>
+                          {diffTruncated && (
+                            <div className="border-t border-slate-700 px-3 py-2 flex items-center justify-between">
+                              <span className="text-xs text-slate-500">
+                                Showing 500 of {diffTotalLines} lines
+                              </span>
+                              <button
+                                onClick={() => fetchDiff(f.file, 0)}
+                                className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                              >
+                                Show all ({diffTotalLines} lines)
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="text-xs text-slate-500 p-3">No diff available</div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

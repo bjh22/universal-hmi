@@ -7,22 +7,37 @@ PY=""
 # --- Prerequisite checks ---
 
 check_python() {
-  if ! command -v python3 &>/dev/null && ! command -v python &>/dev/null; then
-    echo "[ERROR] Python is not installed or not on PATH."
+  # Try candidates in order: python3 from PATH, then common Homebrew locations
+  local candidates=()
+  command -v python3 &>/dev/null && candidates+=($(command -v python3))
+  command -v python &>/dev/null && candidates+=($(command -v python))
+  [ -x /opt/homebrew/bin/python3 ] && candidates+=(/opt/homebrew/bin/python3)
+  [ -x /usr/local/bin/python3 ] && candidates+=(/usr/local/bin/python3)
+
+  PY=""
+  for candidate in "${candidates[@]}"; do
+    local VER MAJOR MINOR
+    VER=$("$candidate" --version 2>&1 | awk '{print $2}')
+    MAJOR=$(echo "$VER" | cut -d. -f1)
+    MINOR=$(echo "$VER" | cut -d. -f2)
+    if [ "$MAJOR" -ge 3 ] && { [ "$MAJOR" -gt 3 ] || [ "$MINOR" -ge 10 ]; }; then
+      PY="$candidate"
+      return 0
+    fi
+  done
+
+  if [ -z "$PY" ]; then
+    if [ ${#candidates[@]} -gt 0 ]; then
+      local VER
+      VER=$("${candidates[0]}" --version 2>&1 | awk '{print $2}')
+      echo "[ERROR] Python 3.10+ required, found $VER"
+    else
+      echo "[ERROR] Python is not installed or not on PATH."
+    fi
     echo ""
     echo "  macOS:   brew install python@3.12"
     echo "  Ubuntu:  sudo apt install python3 python3-pip python3-venv"
     echo "  Or download from https://www.python.org/downloads/"
-    return 1
-  fi
-  PY=$(command -v python3 || command -v python)
-  local VER
-  VER=$($PY --version 2>&1 | awk '{print $2}')
-  local MAJOR MINOR
-  MAJOR=$(echo "$VER" | cut -d. -f1)
-  MINOR=$(echo "$VER" | cut -d. -f2)
-  if [ "$MAJOR" -lt 3 ] || { [ "$MAJOR" -eq 3 ] && [ "$MINOR" -lt 10 ]; }; then
-    echo "[ERROR] Python 3.10+ required, found $VER"
     return 1
   fi
 }
@@ -57,6 +72,15 @@ check_all() {
   check_python
   check_node
   check_npm
+}
+
+ensure_venv() {
+  check_python
+  if [ ! -f "$ROOT_DIR/.venv/bin/python" ]; then
+    echo "    Creating virtual environment (.venv/)..."
+    "$PY" -m venv "$ROOT_DIR/.venv"
+  fi
+  PY="$ROOT_DIR/.venv/bin/python"
 }
 
 # --- Process management ---
@@ -186,6 +210,7 @@ cmd_stop() {
 
 cmd_dev() {
   check_all
+  ensure_venv
   kill_existing
   echo "==> Starting backend and frontend dev servers..."
   echo "    Backend:  http://localhost:8080"
@@ -199,7 +224,7 @@ cmd_dev() {
 }
 
 cmd_seed() {
-  check_python
+  ensure_venv
   echo "==> Seeding database..."
   cd "$ROOT_DIR/backend" && "$PY" -m app.seed
 }
@@ -212,7 +237,7 @@ cmd_test() {
 }
 
 cmd_test_backend() {
-  check_python
+  ensure_venv
   echo "==> Running backend tests..."
   cd "$ROOT_DIR/backend" && "$PY" -m pytest tests/ -v
 }
@@ -225,6 +250,7 @@ cmd_test_frontend() {
 
 cmd_install() {
   check_all
+  ensure_venv
   echo "==> Installing backend dependencies..."
   if [ -d "$ROOT_DIR/backend/wheels" ]; then
     echo "    Found bundled wheels — installing offline (no internet required)."

@@ -379,6 +379,11 @@ export interface ProjectFile {
   description: string;
   size_bytes: number;
   modified_at: string;
+  tag_count: number;
+  screen_count: number;
+  data_source_count: number;
+  job_count: number;
+  is_active: boolean;
 }
 
 export interface IntegrationType {

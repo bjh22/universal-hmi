@@ -74,6 +74,17 @@ call :check_npm
 if errorlevel 1 exit /b 1
 exit /b 0
 
+:ensure_venv
+call :check_python
+if errorlevel 1 exit /b 1
+if not exist "%ROOT_DIR%.venv\Scripts\python.exe" (
+    echo     Creating virtual environment (.venv\)...
+    python -m venv "%ROOT_DIR%.venv"
+)
+set "PY=%ROOT_DIR%.venv\Scripts\python.exe"
+set "PIP=%ROOT_DIR%.venv\Scripts\pip.exe"
+exit /b 0
+
 :doctor
 echo === HMI Development Environment Check ===
 echo.
@@ -185,31 +196,35 @@ goto end
 :dev
 call :check_all
 if errorlevel 1 goto end
+call :ensure_venv
+if errorlevel 1 goto end
 call :kill_existing
 echo ==^> Starting backend and frontend dev servers...
 echo     Backend:  http://localhost:8080
 echo     Frontend: http://localhost:5173
 echo     (Close this window or press Ctrl+C to stop both)
-start "HMI Backend" cmd /c "cd /d "%ROOT_DIR%backend" && python run.py"
+start "HMI Backend" cmd /c "cd /d "%ROOT_DIR%backend" && "%PY%" run.py"
 cd /d "%ROOT_DIR%frontend" && npm run dev
 goto end
 
 :seed
-call :check_python
+call :ensure_venv
 if errorlevel 1 goto end
 echo ==^> Seeding database...
-cd /d "%ROOT_DIR%backend" && python -m app.seed
+cd /d "%ROOT_DIR%backend" && "%PY%" -m app.seed
 goto end
 
 :install_deps
 call :check_all
 if errorlevel 1 goto end
+call :ensure_venv
+if errorlevel 1 goto end
 echo ==^> Installing backend dependencies...
 if exist "%ROOT_DIR%backend\wheels" (
     echo     Found bundled wheels -- installing offline (no internet required).
-    cd /d "%ROOT_DIR%backend" && pip install --no-index --find-links=wheels -r requirements.txt
+    cd /d "%ROOT_DIR%backend" && "%PIP%" install --no-index --find-links=wheels -r requirements.txt
 ) else (
-    cd /d "%ROOT_DIR%backend" && pip install -r requirements.txt
+    cd /d "%ROOT_DIR%backend" && "%PIP%" install -r requirements.txt
 )
 if errorlevel 1 (
     echo [ERROR] Backend dependency install failed.

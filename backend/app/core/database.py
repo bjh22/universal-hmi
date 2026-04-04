@@ -113,6 +113,7 @@ async def init_db():
         # Projects
         await _add_column_if_missing(conn, "projects", "snapshot", "TEXT")
         await _add_column_if_missing(conn, "projects", "snapshot_saved_at", "DATETIME")
+        await _add_column_if_missing(conn, "projects", "source_filename", "VARCHAR(300)")
         # Alarm history
         await _add_column_if_missing(conn, "alarm_history", "tag_display_name", "VARCHAR(300)")
         # System tags

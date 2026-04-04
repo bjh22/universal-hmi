@@ -60,6 +60,18 @@ function Assert-Python { if (-not (Test-Python)) { exit 1 } }
 function Assert-Node   { if (-not (Test-Node))   { exit 1 } }
 function Assert-All    { Assert-Python; Assert-Node; if (-not (Test-Npm)) { exit 1 } }
 
+$script:VenvPy = $null
+
+function Ensure-Venv {
+    Assert-Python
+    $venvPython = Join-Path $RootDir ".venv\Scripts\python.exe"
+    if (-not (Test-Path $venvPython)) {
+        Write-Host "    Creating virtual environment (.venv\)..." -ForegroundColor DarkGray
+        python -m venv (Join-Path $RootDir ".venv")
+    }
+    $script:VenvPy = $venvPython
+}
+
 # --- Process management ---
 
 function Stop-ExistingServers {
@@ -186,13 +198,14 @@ function Invoke-Stop {
 
 function Invoke-Dev {
     Assert-All
+    Ensure-Venv
     Stop-ExistingServers
     Write-Host "==> Starting backend and frontend dev servers..." -ForegroundColor Cyan
     Write-Host "    Backend:  http://localhost:8080"
     Write-Host "    Frontend: http://localhost:5173"
     Write-Host "    (Press Ctrl+C to stop both)" -ForegroundColor DarkGray
 
-    $backend = Start-Process -PassThru -NoNewWindow -FilePath "python" `
+    $backend = Start-Process -PassThru -NoNewWindow -FilePath $script:VenvPy `
         -ArgumentList "run.py" -WorkingDirectory "$RootDir\backend"
 
     try {
@@ -207,22 +220,23 @@ function Invoke-Dev {
 }
 
 function Invoke-Seed {
-    Assert-Python
+    Ensure-Venv
     Write-Host "==> Seeding database..." -ForegroundColor Cyan
     Push-Location "$RootDir\backend"
-    try { python -m app.seed } finally { Pop-Location }
+    try { & $script:VenvPy -m app.seed } finally { Pop-Location }
 }
 
 function Invoke-Install {
     Assert-All
+    Ensure-Venv
     Write-Host "==> Installing backend dependencies..." -ForegroundColor Cyan
     Push-Location "$RootDir\backend"
     try {
         if (Test-Path "wheels") {
             Write-Host "    Found bundled wheels - installing offline (no internet required)." -ForegroundColor DarkGray
-            pip install --no-index --find-links=wheels -r requirements.txt
+            & $script:VenvPy -m pip install --no-index --find-links=wheels -r requirements.txt
         } else {
-            pip install -r requirements.txt
+            & $script:VenvPy -m pip install -r requirements.txt
         }
     } finally { Pop-Location }
 

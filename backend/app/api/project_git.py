@@ -45,6 +45,14 @@ async def get_status(_=_ROLE):
     return await git_service.git_status(d)
 
 
+@router.get("/diff")
+async def get_diff(file: str, max_lines: int = 500, _=_ROLE):
+    d = _projects_dir()
+    if not git_service.is_git_repo(d):
+        return {"file": file, "diff": "", "truncated": False, "total_lines": 0}
+    return await git_service.git_diff(d, file, max_lines=max_lines)
+
+
 @router.get("/log")
 async def get_log(limit: int = 20, _=_ROLE):
     d = _projects_dir()

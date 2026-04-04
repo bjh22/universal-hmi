@@ -149,11 +149,16 @@ def _get_projects_dir() -> Path:
     return data_dir() / "projects"
 
 
+def _project_name_to_filename(name: str) -> str:
+    """Convert a project name to its canonical .hmi.json filename."""
+    safe_name = re.sub(r"[^\w\-]+", "_", name).strip("_").lower()
+    return f"{safe_name}.hmi.json"
+
+
 def _save_snapshot_to_disk(project_name: str, snapshot_data: dict) -> None:
     """Write a project snapshot to the projects/ directory as a .hmi.json file."""
     _get_projects_dir().mkdir(parents=True, exist_ok=True)
-    safe_name = re.sub(r"[^\w\-]+", "_", project_name).strip("_").lower()
-    path = _get_projects_dir() / f"{safe_name}.hmi.json"
+    path = _get_projects_dir() / _project_name_to_filename(project_name)
     path.write_text(json.dumps(snapshot_data, indent=2) + "\n", encoding="utf-8")
 
 
@@ -185,12 +190,12 @@ async def list_projects(session: AsyncSession = Depends(get_db)):
 
 @router.get("/active")
 async def get_active_project(session: AsyncSession = Depends(get_db)):
-    """Return the currently active project's id and name, or null if none."""
+    """Return the currently active project's id, name, and filename, or null if none."""
     result = await session.execute(select(Project).where(Project.is_active == True))  # noqa: E712
     project = result.scalar_one_or_none()
     if not project:
-        return {"id": None, "name": None}
-    return {"id": project.id, "name": project.name}
+        return {"id": None, "name": None, "filename": None}
+    return {"id": project.id, "name": project.name, "filename": project.source_filename}
 
 
 def _snapshot_comparable(snapshot: dict) -> dict:
@@ -319,6 +324,103 @@ async def create_project(
         id=project.id, name=project.name, description=project.description, version=project.version,
         is_active=project.is_active, has_snapshot=True, snapshot_saved_at=project.snapshot_saved_at,
         created_at=project.created_at, updated_at=project.updated_at,
+    )
+
+
+@router.get("/files")
+async def list_project_files(
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    """List .hmi.json files in the projects directory."""
+    projects_dir = _get_projects_dir()
+    if not projects_dir.is_dir():
+        return {"files": []}
+
+    # Determine which file is currently active
+    result = await session.execute(select(Project).where(Project.is_active == True))  # noqa: E712
+    active_project = result.scalar_one_or_none()
+    active_filename = active_project.source_filename if active_project else None
+
+    files = []
+    for f in sorted(projects_dir.glob("*.hmi.json")):
+        stat = f.stat()
+        try:
+            raw = json.loads(f.read_text(encoding="utf-8"))
+            proj = raw.get("project", {})
+            name = proj.get("name", f.stem)
+            version = proj.get("version", "")
+            description = proj.get("description") or ""
+            tag_count = len(raw.get("tags", []))
+            screen_count = len(raw.get("screens", []))
+            data_source_count = len(raw.get("data_sources", []))
+            job_count = len(raw.get("jobs", []))
+        except Exception:
+            name = f.stem
+            version = ""
+            description = ""
+            tag_count = screen_count = data_source_count = job_count = 0
+        files.append({
+            "filename": f.name,
+            "project_name": name,
+            "version": version,
+            "description": description,
+            "size_bytes": stat.st_size,
+            "modified_at": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+            "tag_count": tag_count,
+            "screen_count": screen_count,
+            "data_source_count": data_source_count,
+            "job_count": job_count,
+            "is_active": f.name == active_filename,
+        })
+    return {"files": files}
+
+
+@router.get("/files/{filename}/download")
+async def download_project_file(
+    filename: str,
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    """Download a .hmi.json file from the projects directory."""
+    projects_dir = _get_projects_dir()
+    file_path = projects_dir / filename
+    if not file_path.resolve().parent == projects_dir.resolve():
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    data = file_path.read_text(encoding="utf-8")
+    return JSONResponse(
+        content=json.loads(data),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.delete("/files/{filename}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_project_file(
+    filename: str,
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.DESIGNER)),
+):
+    """Delete a .hmi.json file from the projects directory."""
+    projects_dir = _get_projects_dir()
+    file_path = projects_dir / filename
+    if not file_path.resolve().parent == projects_dir.resolve():
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Refuse to delete the currently active project's file
+    result = await session.execute(select(Project).where(Project.is_active == True))  # noqa: E712
+    active_project = result.scalar_one_or_none()
+    if active_project and active_project.source_filename == filename:
+        raise HTTPException(status_code=409, detail="Cannot delete the currently active project")
+
+    file_path.unlink()
+
+    # Clean up any DB project record referencing this file
+    await session.execute(
+        delete(Project).where(Project.source_filename == filename)
     )
 
 
@@ -593,6 +695,8 @@ async def save_project(
     snapshot_data = await _build_snapshot(session, project)
     project.snapshot = json.dumps(snapshot_data)
     project.snapshot_saved_at = datetime.now(timezone.utc)
+    if not project.source_filename:
+        project.source_filename = _project_name_to_filename(project.name)
     await session.flush()
     _save_snapshot_to_disk(project.name, snapshot_data)
     return {"status": "saved", "snapshot_saved_at": project.snapshot_saved_at.isoformat()}
@@ -725,6 +829,7 @@ async def create_blank_project(
         raise HTTPException(status_code=409, detail="Project name already exists")
 
     project = Project(**body.model_dump())
+    project.source_filename = _project_name_to_filename(body.name)
     session.add(project)
     await session.flush()
 
@@ -772,6 +877,7 @@ async def create_demo_project(
         raise HTTPException(status_code=409, detail="Project name already exists")
 
     project = Project(**body.model_dump())
+    project.source_filename = _project_name_to_filename(body.name)
     session.add(project)
     await session.flush()
 
@@ -1559,37 +1665,6 @@ class SaveAsBody(BaseModel):
     name: str
 
 
-@router.get("/files")
-async def list_project_files(
-    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
-):
-    """List .hmi.json files in the projects directory."""
-    projects_dir = _get_projects_dir()
-    if not projects_dir.is_dir():
-        return {"files": []}
-    files = []
-    for f in sorted(projects_dir.glob("*.hmi.json")):
-        stat = f.stat()
-        try:
-            raw = json.loads(f.read_text(encoding="utf-8"))
-            name = raw.get("project", {}).get("name", f.stem)
-            version = raw.get("project", {}).get("version", "")
-            description = raw.get("project", {}).get("description") or ""
-        except Exception:
-            name = f.stem
-            version = ""
-            description = ""
-        files.append({
-            "filename": f.name,
-            "project_name": name,
-            "version": version,
-            "description": description,
-            "size_bytes": stat.st_size,
-            "modified_at": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
-        })
-    return {"files": files}
-
-
 @router.post("/open-file")
 async def open_project_file(
     body: OpenFileBody,
@@ -1636,6 +1711,7 @@ async def open_project_file(
     project.snapshot_saved_at = datetime.now(timezone.utc)
     project.version = project_meta.get("version", project.version)
     project.description = project_meta.get("description", project.description)
+    project.source_filename = body.filename
     await session.flush()
 
     # Wipe and restore
@@ -1745,6 +1821,7 @@ async def save_project_as(
         name=body.name,
         description=source.description,
         version=source.version,
+        source_filename=_project_name_to_filename(body.name),
     )
     session.add(new_project)
     await session.flush()

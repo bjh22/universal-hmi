@@ -50,7 +50,7 @@ async def git_status(directory: Path) -> dict:
         "R": "renamed", "?": "new",
     }
     changed_files = []
-    for line in porcelain.strip().splitlines():
+    for line in porcelain.rstrip().splitlines():
         if not line.strip():
             continue
         code = line[0] if line[0] != " " else line[1]
@@ -127,6 +127,38 @@ async def git_commit(directory: Path, message: str) -> dict:
         "success": True,
         "message": f"Committed {hash_out.strip()}" if rc2 == 0 else "Committed",
         "details": out.strip(),
+    }
+
+
+async def git_diff(directory: Path, file: str, max_lines: int = 500) -> dict:
+    """Return the diff for a specific file. Tries staged+unstaged first, then unstaged only."""
+    # Try HEAD diff (staged + unstaged changes)
+    rc, diff_text, _ = await _run_git(directory, "diff", "HEAD", "--", file)
+    if rc != 0 or not diff_text.strip():
+        # Fall back to unstaged diff (for new untracked files, show the whole file)
+        rc, diff_text, _ = await _run_git(directory, "diff", "--", file)
+    if rc != 0 or not diff_text.strip():
+        # Untracked file — show contents as additions
+        path = directory / file
+        if path.is_file():
+            try:
+                content = path.read_text(encoding="utf-8")
+                lines = [f"+{l}" for l in content.splitlines()]
+                diff_text = f"--- /dev/null\n+++ b/{file}\n" + "\n".join(lines)
+            except Exception:
+                diff_text = ""
+
+    all_lines = diff_text.splitlines()
+    total_lines = len(all_lines)
+    truncated = max_lines > 0 and total_lines > max_lines
+    if truncated:
+        diff_text = "\n".join(all_lines[:max_lines])
+
+    return {
+        "file": file,
+        "diff": diff_text,
+        "truncated": truncated,
+        "total_lines": total_lines,
     }
 
 

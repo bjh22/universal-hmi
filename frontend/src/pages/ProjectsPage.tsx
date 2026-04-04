@@ -1,208 +1,198 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
-  FolderOpen, Plus, Trash2, Edit, Download, Upload, Save, PlayCircle, X,
-  Package, Tag as TagIcon, Monitor, Database, ClipboardList,
+  FolderOpen, Plus, Trash2, Download, Upload, X,
+  Package, Tag as TagIcon, Monitor, Database, ClipboardList, PlayCircle, FileText,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { Dialog } from '../components/Dialog';
 import { GitPanel } from '../components/GitPanel';
 import { ImportWizard } from '../components/ImportWizard';
-import type { ProjectData, ProjectDetail, UserData } from '../types';
+import type { ProjectData, ProjectFile, UserData } from '../types';
 
 interface Props {
   user: UserData | null;
+  onProjectChanged?: () => void;
 }
 
 const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-sm text-white outline-none focus:border-blue-500';
 const btnPrimary = 'bg-[var(--hmi-accent)] hover:bg-[var(--hmi-accent-dark)] text-white px-4 py-2 rounded-md text-sm font-medium transition-colors';
 const btnSecondary = 'bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2 rounded-md text-sm font-medium transition-colors';
 const btnDanger = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors';
-const btnSuccess = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors';
 
-type CreateTemplate = 'empty' | 'blank' | 'demo';
+type CreateTemplate = 'blank' | 'demo';
 
-export function ProjectsPage({ user }: Props) {
-  const [projects, setProjects] = useState<ProjectData[]>([]);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [detail, setDetail] = useState<ProjectDetail | null>(null);
+export function ProjectsPage({ user, onProjectChanged }: Props) {
+  const [files, setFiles] = useState<ProjectFile[]>([]);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Active project info (for dirty-check on open)
+  const [activeProjectId, setActiveProjectId] = useState<number | null>(null);
+
   // Dialog state
   const [showCreate, setShowCreate] = useState(false);
-  const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [showLoadConfirm, setShowLoadConfirm] = useState(false);
+  const [showOpenConfirm, setShowOpenConfirm] = useState(false);
   const [dirtyChanges, setDirtyChanges] = useState<{ section: string; added: string[]; removed: string[]; modified: { name: string; fields: string[] }[] }[]>([]);
+
+  // For ImportWizard (needs DB project list)
+  const [dbProjects, setDbProjects] = useState<ProjectData[]>([]);
 
   // Form state
   const [formName, setFormName] = useState('');
   const [formDesc, setFormDesc] = useState('');
   const [formVersion, setFormVersion] = useState('1.0.0');
-  const [formTemplate, setFormTemplate] = useState<CreateTemplate>('empty');
+  const [formTemplate, setFormTemplate] = useState<CreateTemplate>('blank');
 
   const canEdit = user && (user.role === 'engineer' || user.role === 'designer');
 
-  const loadProjects = useCallback(async () => {
+  const loadFiles = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await api.getProjects();
-      setProjects(data);
+      const result = await api.listProjectFiles();
+      setFiles(result.files);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load projects');
+      setError(e instanceof Error ? e.message : 'Failed to load project files');
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const loadDetail = useCallback(async (id: number) => {
+  const loadActiveProject = useCallback(async () => {
     try {
-      const d = await api.getProject(id);
-      setDetail(d);
-    } catch {
-      setDetail(null);
-    }
+      const p = await api.getActiveProject();
+      setActiveProjectId(p.id);
+    } catch { /* no active project */ }
   }, []);
 
-  useEffect(() => { loadProjects(); }, [loadProjects]);
-
-  useEffect(() => {
-    if (selectedId) {
-      loadDetail(selectedId);
-    } else {
-      setDetail(null);
-    }
-  }, [selectedId, loadDetail]);
+  useEffect(() => { loadFiles(); loadActiveProject(); }, [loadFiles, loadActiveProject]);
 
   const showSuccessMsg = useCallback((msg: string) => {
     setSuccess(msg);
     setTimeout(() => setSuccess(null), 3000);
   }, []);
 
+  const selected = files.find(f => f.filename === selectedFile) || null;
+  const activeFile = files.find(f => f.is_active) || null;
+
   const handleCreate = useCallback(async () => {
     try {
       setBusy(true);
       const data = { name: formName, description: formDesc || undefined, version: formVersion };
-      let created: ProjectData;
-      if (formTemplate === 'blank') {
-        created = await api.createBlankProject(data);
-      } else if (formTemplate === 'demo') {
-        created = await api.createDemoProject(data);
+      if (formTemplate === 'demo') {
+        await api.createDemoProject(data);
       } else {
-        created = await api.createProject(data);
+        await api.createBlankProject(data);
       }
       setShowCreate(false);
-      setFormName(''); setFormDesc(''); setFormVersion('1.0.0'); setFormTemplate('empty');
-      await loadProjects();
-      setSelectedId(created.id);
-      if (formTemplate !== 'empty') {
-        showSuccessMsg(`Project "${created.name}" created and loaded`);
-      }
+      setFormName(''); setFormDesc(''); setFormVersion('1.0.0'); setFormTemplate('blank');
+      await loadFiles();
+      await loadActiveProject();
+      onProjectChanged?.();
+      showSuccessMsg(`Project "${formName}" created`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Create failed');
     } finally {
       setBusy(false);
     }
-  }, [formName, formDesc, formVersion, formTemplate, loadProjects, showSuccessMsg]);
+  }, [formName, formDesc, formVersion, formTemplate, loadFiles, loadActiveProject, onProjectChanged, showSuccessMsg]);
 
-  const handleUpdate = useCallback(async () => {
-    if (!selectedId) return;
+  const handleOpen = useCallback(async (filename: string) => {
     try {
-      await api.updateProject(selectedId, { name: formName, description: formDesc, version: formVersion });
-      setShowEdit(false);
-      await loadProjects();
-      await loadDetail(selectedId);
+      setBusy(true);
+      await api.openProjectFile(filename);
+      await loadFiles();
+      await loadActiveProject();
+      setShowOpenConfirm(false);
+      onProjectChanged?.();
+      showSuccessMsg('Project opened');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Update failed');
+      setError(e instanceof Error ? e.message : 'Open failed');
+    } finally {
+      setBusy(false);
     }
-  }, [selectedId, formName, formDesc, formVersion, loadProjects, loadDetail]);
+  }, [loadFiles, loadActiveProject, onProjectChanged, showSuccessMsg]);
+
+  const handleSaveAndOpen = useCallback(async (filename: string) => {
+    try {
+      setBusy(true);
+      if (activeProjectId) {
+        await api.saveProject(activeProjectId);
+      }
+      await api.openProjectFile(filename);
+      await loadFiles();
+      await loadActiveProject();
+      setShowOpenConfirm(false);
+      onProjectChanged?.();
+      showSuccessMsg('Saved current project and opened new one');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Save & Open failed');
+    } finally {
+      setBusy(false);
+    }
+  }, [activeProjectId, loadFiles, loadActiveProject, onProjectChanged, showSuccessMsg]);
 
   const handleDelete = useCallback(async () => {
-    if (!selectedId) return;
+    if (!selectedFile) return;
     try {
-      await api.deleteProject(selectedId);
+      await api.deleteProjectFile(selectedFile);
       setShowDelete(false);
-      setSelectedId(null);
-      setDetail(null);
-      await loadProjects();
+      setSelectedFile(null);
+      await loadFiles();
+      showSuccessMsg('Project file deleted');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Delete failed');
     }
-  }, [selectedId, loadProjects]);
+  }, [selectedFile, loadFiles, showSuccessMsg]);
 
-  const handleSave = useCallback(async (id: number) => {
+  const handleDownload = useCallback(async (filename: string) => {
     try {
-      setBusy(true);
-      await api.saveProject(id);
-      await loadProjects();
-      await loadDetail(id);
-      showSuccessMsg('Project saved');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Save failed');
-    } finally {
-      setBusy(false);
-    }
-  }, [loadProjects, loadDetail, showSuccessMsg]);
-
-  const handleLoad = useCallback(async (id: number) => {
-    try {
-      setBusy(true);
-      await api.loadProject(id);
-      await loadProjects();
-      await loadDetail(id);
-      setShowLoadConfirm(false);
-      showSuccessMsg('Project loaded');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Load failed');
-    } finally {
-      setBusy(false);
-    }
-  }, [loadProjects, loadDetail, showSuccessMsg]);
-
-  const handleSaveAndLoad = useCallback(async (saveId: number, loadId: number) => {
-    try {
-      setBusy(true);
-      await api.saveProject(saveId);
-      await api.loadProject(loadId);
-      await loadProjects();
-      await loadDetail(loadId);
-      setShowLoadConfirm(false);
-      showSuccessMsg('Saved current state and loaded project');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Save & Load failed');
-    } finally {
-      setBusy(false);
-    }
-  }, [loadProjects, loadDetail, showSuccessMsg]);
-
-  const handleExport = useCallback(async (id: number) => {
-    try {
-      const data = await api.exportProject(id);
+      const data = await api.downloadProjectFile(filename);
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      const proj = projects.find(p => p.id === id);
       a.href = url;
-      a.download = `${proj?.name || 'project'}.hmi.json`;
+      a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Export failed');
+      setError(e instanceof Error ? e.message : 'Download failed');
     }
-  }, [projects]);
-
-  const openEdit = useCallback((p: ProjectData) => {
-    setFormName(p.name);
-    setFormDesc(p.description || '');
-    setFormVersion(p.version);
-    setShowEdit(true);
   }, []);
 
-  // Find which project currently has the most recent snapshot_saved_at (the "active" one)
-  const activeProject = projects.find(p => p.is_active) || null;
+  const initiateOpen = useCallback(async (filename: string) => {
+    // If the file is already active, nothing to do
+    const target = files.find(f => f.filename === filename);
+    if (target?.is_active) return;
+
+    // Check for unsaved changes on current project
+    if (activeProjectId) {
+      try {
+        const result = await api.getActiveProjectDirty();
+        if (result.dirty) {
+          setDirtyChanges(result.changes);
+          setShowOpenConfirm(true);
+          return;
+        }
+      } catch {
+        // Can't check dirty state — proceed with confirmation anyway
+        setDirtyChanges([]);
+        setShowOpenConfirm(true);
+        return;
+      }
+    }
+    handleOpen(filename);
+  }, [files, activeProjectId, handleOpen]);
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
 
   return (
     <div className="space-y-4">
@@ -214,10 +204,13 @@ export function ProjectsPage({ user }: Props) {
         </div>
         {canEdit && (
           <div className="flex gap-2">
-            <button onClick={() => setShowImport(true)} className={btnSecondary}>
+            <button onClick={async () => {
+              try { setDbProjects(await api.getProjects()); } catch { setDbProjects([]); }
+              setShowImport(true);
+            }} className={btnSecondary}>
               <span className="flex items-center gap-1.5"><Upload size={16} /> Import</span>
             </button>
-            <button onClick={() => { setFormName(''); setFormDesc(''); setFormVersion('1.0.0'); setFormTemplate('empty'); setShowCreate(true); }} className={btnPrimary}>
+            <button onClick={() => { setFormName(''); setFormDesc(''); setFormVersion('1.0.0'); setFormTemplate('blank'); setShowCreate(true); }} className={btnPrimary}>
               <span className="flex items-center gap-1.5"><Plus size={16} /> New Project</span>
             </button>
           </div>
@@ -241,44 +234,39 @@ export function ProjectsPage({ user }: Props) {
       )}
 
       {loading ? (
-        <div className="text-slate-400 text-center py-12">Loading projects...</div>
-      ) : projects.length === 0 ? (
+        <div className="text-slate-400 text-center py-12">Loading project files...</div>
+      ) : files.length === 0 ? (
         <div className="text-center py-12">
           <Package size={48} className="mx-auto text-slate-600 mb-3" />
-          <p className="text-slate-400">No projects yet</p>
-          <p className="text-slate-500 text-sm mt-1">Create a project to save your HMI configuration</p>
+          <p className="text-slate-400">No project files</p>
+          <p className="text-slate-500 text-sm mt-1">Create a project to get started</p>
         </div>
       ) : (
         <>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Project list */}
+          {/* File list */}
           <div className="lg:col-span-1 space-y-2">
-            {projects.map(p => (
+            {files.map(f => (
               <button
-                key={p.id}
-                onClick={() => setSelectedId(p.id)}
+                key={f.filename}
+                onClick={() => setSelectedFile(f.filename)}
                 className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                  selectedId === p.id
+                  selectedFile === f.filename
                     ? 'bg-[var(--hmi-accent-bg)] border-[var(--hmi-accent)]/50'
                     : 'bg-slate-800 border-slate-700 hover:border-slate-600'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-white text-sm flex items-center gap-1.5">
-                    {p.name}
-                    {p.is_active && (
+                    {f.project_name}
+                    {f.is_active && (
                       <span className="text-xs bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded font-normal">Active</span>
                     )}
                   </span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-400">v{p.version}</span>
-                    {p.has_snapshot && (
-                      <span className="text-xs bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">Saved</span>
-                    )}
-                  </div>
+                  <span className="text-xs text-slate-400">v{f.version}</span>
                 </div>
-                {p.description && (
-                  <p className="text-xs text-slate-400 mt-1 truncate">{p.description}</p>
+                {f.description && (
+                  <p className="text-xs text-slate-400 mt-1 truncate">{f.description}</p>
                 )}
               </button>
             ))}
@@ -286,17 +274,18 @@ export function ProjectsPage({ user }: Props) {
 
           {/* Detail panel */}
           <div className="lg:col-span-2">
-            {detail ? (
+            {selected ? (
               <div className="bg-slate-800 rounded-lg border border-slate-700 p-5 space-y-4">
                 <div>
-                  <h2 className="text-lg font-bold text-white">{detail.name}</h2>
-                  {detail.description && <p className="text-sm text-slate-400 mt-1">{detail.description}</p>}
-                  <div className="flex items-center gap-3 mt-2">
-                    <span className="text-xs text-slate-500">Version {detail.version}</span>
-                    <span className="text-xs text-slate-500">Created {new Date(detail.created_at).toLocaleDateString()}</span>
-                    {detail.snapshot_saved_at && (
-                      <span className="text-xs text-slate-500">Last saved {new Date(detail.snapshot_saved_at).toLocaleString()}</span>
-                    )}
+                  <h2 className="text-lg font-bold text-white">{selected.project_name}</h2>
+                  {selected.description && <p className="text-sm text-slate-400 mt-1">{selected.description}</p>}
+                  <div className="flex items-center gap-3 mt-2 flex-wrap">
+                    <span className="text-xs text-slate-500">Version {selected.version}</span>
+                    <span className="text-xs text-slate-500 flex items-center gap-1">
+                      <FileText size={12} /> {selected.filename}
+                    </span>
+                    <span className="text-xs text-slate-500">{formatFileSize(selected.size_bytes)}</span>
+                    <span className="text-xs text-slate-500">Modified {new Date(selected.modified_at).toLocaleString()}</span>
                   </div>
                 </div>
 
@@ -304,22 +293,22 @@ export function ProjectsPage({ user }: Props) {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="bg-slate-900 rounded-lg p-3 text-center">
                     <TagIcon size={20} className="mx-auto text-blue-400 mb-1" />
-                    <div className="text-lg font-bold text-white">{detail.tag_count}</div>
+                    <div className="text-lg font-bold text-white">{selected.tag_count}</div>
                     <div className="text-xs text-slate-400">Tags</div>
                   </div>
                   <div className="bg-slate-900 rounded-lg p-3 text-center">
                     <Monitor size={20} className="mx-auto text-purple-400 mb-1" />
-                    <div className="text-lg font-bold text-white">{detail.screen_count}</div>
+                    <div className="text-lg font-bold text-white">{selected.screen_count}</div>
                     <div className="text-xs text-slate-400">Screens</div>
                   </div>
                   <div className="bg-slate-900 rounded-lg p-3 text-center">
                     <Database size={20} className="mx-auto text-amber-400 mb-1" />
-                    <div className="text-lg font-bold text-white">{detail.data_source_count}</div>
+                    <div className="text-lg font-bold text-white">{selected.data_source_count}</div>
                     <div className="text-xs text-slate-400">Data Sources</div>
                   </div>
                   <div className="bg-slate-900 rounded-lg p-3 text-center">
                     <ClipboardList size={20} className="mx-auto text-green-400 mb-1" />
-                    <div className="text-lg font-bold text-white">{detail.job_count}</div>
+                    <div className="text-lg font-bold text-white">{selected.job_count}</div>
                     <div className="text-xs text-slate-400">Jobs</div>
                   </div>
                 </div>
@@ -327,42 +316,23 @@ export function ProjectsPage({ user }: Props) {
                 {/* Actions */}
                 {canEdit && (
                   <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-700">
-                    <button onClick={() => handleSave(detail.id)} disabled={busy} className={btnSuccess}>
-                      <span className="flex items-center gap-1.5"><Save size={16} /> Save</span>
+                    {!selected.is_active && (
+                      <button
+                        onClick={() => initiateOpen(selected.filename)}
+                        disabled={busy}
+                        className={btnPrimary}
+                      >
+                        <span className="flex items-center gap-1.5"><PlayCircle size={16} /> Open</span>
+                      </button>
+                    )}
+                    <button onClick={() => handleDownload(selected.filename)} className={btnSecondary}>
+                      <span className="flex items-center gap-1.5"><Download size={16} /> Download</span>
                     </button>
-                    <button
-                      onClick={async () => {
-                        if (activeProject && activeProject.id !== detail.id) {
-                          try {
-                            const result = await api.getActiveProjectDirty();
-                            if (result.dirty) {
-                              setDirtyChanges(result.changes);
-                              setShowLoadConfirm(true);
-                              return;
-                            }
-                          } catch {
-                            setDirtyChanges([]);
-                            setShowLoadConfirm(true);
-                            return;
-                          }
-                        }
-                        handleLoad(detail.id);
-                      }}
-                      disabled={busy || !detail.has_snapshot}
-                      className={btnPrimary}
-                      title={!detail.has_snapshot ? 'No saved snapshot to load' : undefined}
-                    >
-                      <span className="flex items-center gap-1.5"><PlayCircle size={16} /> Load</span>
-                    </button>
-                    <button onClick={() => handleExport(detail.id)} className={btnSecondary}>
-                      <span className="flex items-center gap-1.5"><Download size={16} /> Export</span>
-                    </button>
-                    <button onClick={() => openEdit(detail)} className={btnSecondary}>
-                      <span className="flex items-center gap-1.5"><Edit size={16} /> Edit</span>
-                    </button>
-                    <button onClick={() => setShowDelete(true)} className={btnDanger}>
-                      <span className="flex items-center gap-1.5"><Trash2 size={16} /> Delete</span>
-                    </button>
+                    {!selected.is_active && (
+                      <button onClick={() => setShowDelete(true)} className={btnDanger}>
+                        <span className="flex items-center gap-1.5"><Trash2 size={16} /> Delete</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -378,7 +348,7 @@ export function ProjectsPage({ user }: Props) {
         {/* Version Control */}
         {canEdit && (
           <GitPanel
-            onSaveFirst={async () => { if (activeProject) await api.saveProject(activeProject.id); }}
+            onSaveFirst={async () => { if (activeProjectId) await api.saveProject(activeProjectId); }}
             disabled={busy}
           />
         )}
@@ -405,8 +375,7 @@ export function ProjectsPage({ user }: Props) {
               <label className="text-xs text-slate-400 mb-2 block">Template</label>
               <div className="space-y-2">
                 {([
-                  { value: 'empty' as const, label: 'Empty', desc: 'Just create the project label (no changes to current HMI)' },
-                  { value: 'blank' as const, label: 'Blank', desc: 'Wipe all current tags, screens, and resources' },
+                  { value: 'blank' as const, label: 'Blank', desc: 'Start fresh with an empty project' },
                   { value: 'demo' as const, label: 'Demo', desc: 'Load demo packaging machine with tags, screens, and alarms' },
                 ]).map(opt => (
                   <label
@@ -442,35 +411,11 @@ export function ProjectsPage({ user }: Props) {
         </Dialog>
       )}
 
-      {/* Edit Dialog */}
-      {showEdit && (
-        <Dialog title="Edit Project" onClose={() => setShowEdit(false)}>
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs text-slate-400 mb-1 block">Name</label>
-              <input value={formName} onChange={e => setFormName(e.target.value)} className={inputCls} autoFocus />
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 mb-1 block">Description</label>
-              <input value={formDesc} onChange={e => setFormDesc(e.target.value)} className={inputCls} />
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 mb-1 block">Version</label>
-              <input value={formVersion} onChange={e => setFormVersion(e.target.value)} className={inputCls} />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setShowEdit(false)} className={btnSecondary}>Cancel</button>
-              <button onClick={handleUpdate} disabled={!formName.trim()} className={btnPrimary}>Save</button>
-            </div>
-          </div>
-        </Dialog>
-      )}
-
       {/* Delete Confirm */}
-      {showDelete && detail && (
-        <Dialog title="Delete Project" onClose={() => setShowDelete(false)}>
+      {showDelete && selected && (
+        <Dialog title="Delete Project File" onClose={() => setShowDelete(false)}>
           <p className="text-sm text-slate-300 mb-4">
-            Delete <strong>{detail.name}</strong>? This removes the project and its saved snapshot. Current tags, screens, and resources are not affected.
+            Delete <strong>{selected.project_name}</strong> ({selected.filename})? This permanently removes the file from disk.
           </p>
           <div className="flex justify-end gap-2">
             <button onClick={() => setShowDelete(false)} className={btnSecondary}>Cancel</button>
@@ -479,11 +424,11 @@ export function ProjectsPage({ user }: Props) {
         </Dialog>
       )}
 
-      {/* Load Confirm */}
-      {showLoadConfirm && detail && activeProject && (
-        <Dialog title="Switch Project" onClose={() => setShowLoadConfirm(false)}>
+      {/* Open Confirm (unsaved changes) */}
+      {showOpenConfirm && selected && activeFile && (
+        <Dialog title="Switch Project" onClose={() => setShowOpenConfirm(false)}>
           <p className="text-sm text-slate-300 mb-4">
-            Switch from <strong>{activeProject.name}</strong> to <strong>{detail.name}</strong>? There are unsaved changes:
+            Switch from <strong>{activeFile.project_name}</strong> to <strong>{selected.project_name}</strong>? There are unsaved changes:
           </p>
           {dirtyChanges.length > 0 && (
             <div className="bg-slate-900 rounded-md border border-slate-700 p-3 mb-4 max-h-64 overflow-y-auto space-y-1">
@@ -524,16 +469,16 @@ export function ProjectsPage({ user }: Props) {
             </div>
           )}
           <div className="flex justify-end gap-2">
-            <button onClick={() => setShowLoadConfirm(false)} className={btnSecondary} disabled={busy}>Cancel</button>
+            <button onClick={() => setShowOpenConfirm(false)} className={btnSecondary} disabled={busy}>Cancel</button>
             <button
-              onClick={() => handleLoad(detail.id)}
+              onClick={() => handleOpen(selected.filename)}
               disabled={busy}
               className={btnSecondary}
             >
               {busy ? 'Working...' : 'Switch without saving'}
             </button>
             <button
-              onClick={() => handleSaveAndLoad(activeProject.id, detail.id)}
+              onClick={() => handleSaveAndOpen(selected.filename)}
               disabled={busy}
               className={btnPrimary}
             >
@@ -546,9 +491,9 @@ export function ProjectsPage({ user }: Props) {
       {/* Import Wizard */}
       {showImport && (
         <ImportWizard
-          projects={projects}
+          projects={dbProjects}
           onClose={() => setShowImport(false)}
-          onComplete={() => { setShowImport(false); loadProjects(); }}
+          onComplete={() => { setShowImport(false); loadFiles(); }}
         />
       )}
     </div>
