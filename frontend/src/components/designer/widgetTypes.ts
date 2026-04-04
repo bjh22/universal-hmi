@@ -15,20 +15,22 @@ export interface WidgetTypeInfo {
   defaultProps: Record<string, unknown>;
 }
 
-/** Scale widget default sizes proportionally for smaller canvases. */
+/** Scale widget default sizes proportionally for smaller canvases.
+ *  Width scales with canvas; height is kept at full size because widget
+ *  content (text, padding, min-heights) does not shrink with the canvas. */
 export function getScaledDefaults(typeInfo: WidgetTypeInfo, canvasWidth: number): { absW: number; absH: number } {
   const BASE_CANVAS_WIDTH = 1840; // Full HD canvas (1920 - 80 sidebar)
   const scale = Math.min(1, canvasWidth / BASE_CANVAS_WIDTH);
   return {
     absW: Math.round(typeInfo.defaultAbsW * scale),
-    absH: Math.round(typeInfo.defaultAbsH * scale),
+    absH: typeInfo.defaultAbsH,
   };
 }
 
 export const WIDGET_TYPES: WidgetTypeInfo[] = [
   {
     type: 'status_indicator', label: 'Status Indicator', icon: Activity, category: 'display',
-    defaultW: 4, defaultH: 2, defaultAbsW: 240, defaultAbsH: 100,
+    defaultW: 4, defaultH: 2, defaultAbsW: 240, defaultAbsH: 120,
     defaultProps: { title: 'Status', tag: '', mapping: {} },
   },
   {
@@ -38,37 +40,37 @@ export const WIDGET_TYPES: WidgetTypeInfo[] = [
   },
   {
     type: 'counter', label: 'Counter', icon: Hash, category: 'display',
-    defaultW: 3, defaultH: 2, defaultAbsW: 200, defaultAbsH: 80,
+    defaultW: 3, defaultH: 2, defaultAbsW: 200, defaultAbsH: 120,
     defaultProps: { title: 'Counter', tag: '' },
   },
   {
     type: 'toggle', label: 'Toggle', icon: ToggleLeft, category: 'input',
-    defaultW: 3, defaultH: 2, defaultAbsW: 180, defaultAbsH: 60,
+    defaultW: 3, defaultH: 2, defaultAbsW: 180, defaultAbsH: 140,
     defaultProps: { title: 'Toggle', tag: '' },
   },
   {
     type: 'command_button', label: 'Button', icon: MousePointerClick, category: 'input',
-    defaultW: 3, defaultH: 2, defaultAbsW: 200, defaultAbsH: 60,
+    defaultW: 3, defaultH: 2, defaultAbsW: 200, defaultAbsH: 100,
     defaultProps: { title: 'Button', tag: '', value: null, color: 'blue', variant: 'filled', shape: 'rectangle', icon: '', iconPosition: 'left' },
   },
   {
     type: 'parameter_input', label: 'Parameter Input', icon: SlidersHorizontal, category: 'input',
-    defaultW: 4, defaultH: 2, defaultAbsW: 240, defaultAbsH: 80,
+    defaultW: 4, defaultH: 2, defaultAbsW: 240, defaultAbsH: 110,
     defaultProps: { title: 'Parameter', tag: '', min: 0, max: 100, step: 1, units: '' },
   },
   {
     type: 'text_value', label: 'Text Value', icon: FileText, category: 'display',
-    defaultW: 3, defaultH: 2, defaultAbsW: 200, defaultAbsH: 60,
+    defaultW: 3, defaultH: 2, defaultAbsW: 200, defaultAbsH: 100,
     defaultProps: { title: 'Value', tag: '', units: '', format: '' },
   },
   {
     type: 'alarm_summary', label: 'Alarm Summary', icon: Bell, category: 'display',
-    defaultW: 5, defaultH: 2, defaultAbsW: 440, defaultAbsH: 140,
+    defaultW: 5, defaultH: 2, defaultAbsW: 440, defaultAbsH: 200,
     defaultProps: { title: 'Alarms' },
   },
   {
     type: 'dropdown_select', label: 'Dropdown Select', icon: ChevronDown, category: 'input',
-    defaultW: 3, defaultH: 2, defaultAbsW: 240, defaultAbsH: 60,
+    defaultW: 3, defaultH: 2, defaultAbsW: 240, defaultAbsH: 110,
     defaultProps: { title: 'Select', tag: '', options: [] },
   },
   {
@@ -88,7 +90,7 @@ export const WIDGET_TYPES: WidgetTypeInfo[] = [
   },
   {
     type: 'light_indicator', label: 'Light Indicator', icon: Circle, category: 'display',
-    defaultW: 3, defaultH: 2, defaultAbsW: 200, defaultAbsH: 60,
+    defaultW: 3, defaultH: 2, defaultAbsW: 200, defaultAbsH: 80,
     defaultProps: { title: 'Indicator', tag: '', onColor: '#22c55e', offColor: '#6b7280', size: 'medium' },
   },
   {
@@ -103,7 +105,7 @@ export const WIDGET_TYPES: WidgetTypeInfo[] = [
   },
   {
     type: 'text_label', label: 'Text Label', icon: Type, category: 'layout',
-    defaultW: 4, defaultH: 1, defaultAbsW: 240, defaultAbsH: 50,
+    defaultW: 4, defaultH: 1, defaultAbsW: 240, defaultAbsH: 60,
     defaultProps: { title: 'Label', text: 'Text' },
   },
   {

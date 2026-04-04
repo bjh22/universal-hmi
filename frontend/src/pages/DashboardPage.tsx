@@ -973,7 +973,7 @@ const RuntimeWidget = memo(function RuntimeWidget({ widget: w, index, isAbsolute
   if (isAbsolute) {
     return (
       <div
-        className={`absolute ${isEnabled ? '' : 'opacity-50 pointer-events-none'}`}
+        className={`absolute overflow-hidden ${isEnabled ? '' : 'opacity-50 pointer-events-none'}`}
         style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: index }}
       >
         {showInfoBtn && <InfoButton description={infoDesc!} title={(rw.props as Record<string, unknown>).title as string} />}
