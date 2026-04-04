@@ -638,15 +638,26 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
             <span className="text-sm text-slate-500 ml-1">{activeScreen.name}</span>
           )}
 
-          {/* Designer toggle */}
+          {/* Designer controls */}
           {isDesigner && (
-            <button
-              onClick={() => setShowDesignerTabs(prev => !prev)}
-              className="ml-auto px-2 py-1 text-xs text-slate-500 hover:text-slate-300"
-              title="Show screen tabs"
-            >
-              <GripVertical size={14} />
-            </button>
+            <div className="ml-auto flex items-center gap-1">
+              {activeScreen && (
+                <button
+                  onClick={handleEnterEdit}
+                  className="flex items-center gap-1 px-2 py-1 rounded text-xs text-slate-500 hover:text-slate-300 hover:bg-slate-700 transition-colors"
+                  title="Edit screen (Ctrl+E)"
+                >
+                  <Pencil size={14} />
+                </button>
+              )}
+              <button
+                onClick={() => setShowDesignerTabs(prev => !prev)}
+                className="px-2 py-1 text-xs text-slate-500 hover:text-slate-300"
+                title="Show screen tabs"
+              >
+                <GripVertical size={14} />
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -705,16 +716,6 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
                 title="Delete screen"
               >
                 <Trash2 size={14} />
-              </button>
-            )}
-            {activeScreen && (
-              <button
-                onClick={handleEnterEdit}
-                className="flex items-center gap-1 px-2.5 py-2 min-h-[36px] rounded-md text-xs font-medium bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
-                title="Edit screen (Ctrl+E)"
-              >
-                <Pencil size={14} />
-                Edit
               </button>
             )}
           </div>
