@@ -560,41 +560,45 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
       onMouseUp={handleMouseUp}
     >
       {/* Screen carousel indicators + designer controls */}
-      {visibleScreens.length > 1 && (
+      {(visibleScreens.length > 1 || isDesigner) && (
         <div className="flex items-center justify-center gap-2 mb-0.5">
-          {/* Prev arrow */}
-          <button
-            onClick={() => activeScreenIndex > 0 && navigate(`/screen/${visibleScreens[activeScreenIndex - 1].slug}`)}
-            disabled={activeScreenIndex <= 0}
-            className="p-1 text-slate-500 hover:text-slate-300 disabled:opacity-30 disabled:cursor-default"
-          >
-            <ChevronLeft size={16} />
-          </button>
-
-          {/* Dot indicators */}
-          <div className="flex items-center gap-1.5">
-            {visibleScreens.map((s, i) => (
+          {visibleScreens.length > 1 && (
+            <>
+              {/* Prev arrow */}
               <button
-                key={s.id}
-                onClick={() => navigate(`/screen/${s.slug}`)}
-                title={s.name}
-                className={`rounded-full transition-all ${
-                  i === activeScreenIndex
-                    ? 'w-3 h-3 bg-[var(--hmi-accent)]'
-                    : 'w-2 h-2 bg-slate-600 hover:bg-slate-400'
-                }`}
-              />
-            ))}
-          </div>
+                onClick={() => activeScreenIndex > 0 && navigate(`/screen/${visibleScreens[activeScreenIndex - 1].slug}`)}
+                disabled={activeScreenIndex <= 0}
+                className="p-1 text-slate-500 hover:text-slate-300 disabled:opacity-30 disabled:cursor-default"
+              >
+                <ChevronLeft size={16} />
+              </button>
 
-          {/* Next arrow */}
-          <button
-            onClick={() => activeScreenIndex < visibleScreens.length - 1 && navigate(`/screen/${visibleScreens[activeScreenIndex + 1].slug}`)}
-            disabled={activeScreenIndex >= visibleScreens.length - 1}
-            className="p-1 text-slate-500 hover:text-slate-300 disabled:opacity-30 disabled:cursor-default"
-          >
-            <ChevronRight size={16} />
-          </button>
+              {/* Dot indicators */}
+              <div className="flex items-center gap-1.5">
+                {visibleScreens.map((s, i) => (
+                  <button
+                    key={s.id}
+                    onClick={() => navigate(`/screen/${s.slug}`)}
+                    title={s.name}
+                    className={`rounded-full transition-all ${
+                      i === activeScreenIndex
+                        ? 'w-3 h-3 bg-[var(--hmi-accent)]'
+                        : 'w-2 h-2 bg-slate-600 hover:bg-slate-400'
+                    }`}
+                  />
+                ))}
+              </div>
+
+              {/* Next arrow */}
+              <button
+                onClick={() => activeScreenIndex < visibleScreens.length - 1 && navigate(`/screen/${visibleScreens[activeScreenIndex + 1].slug}`)}
+                disabled={activeScreenIndex >= visibleScreens.length - 1}
+                className="p-1 text-slate-500 hover:text-slate-300 disabled:opacity-30 disabled:cursor-default"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </>
+          )}
 
           {/* Screen name */}
           {activeScreen && (
