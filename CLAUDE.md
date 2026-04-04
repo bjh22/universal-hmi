@@ -293,7 +293,6 @@ See `DEVELOPER.md` → "Creating a Plugin Integration" for a full walkthrough wi
 - `frontend/vitest.config.ts` — Vitest test configuration
 - `frontend/src/hooks/__tests__/` — Frontend hook tests (useDesignMode, useWebSocket, useAuth)
 - `frontend/src/components/widgets/__tests__/` — Widget tests (Gauge, StatusIndicator, WidgetRenderer)
-- `TESTING_STRATEGY.md` — Original testing plan and architecture decisions
 
 ## Database Tables
 

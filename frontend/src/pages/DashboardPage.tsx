@@ -87,16 +87,15 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
 
   // Parse screen layout mode and resolution
   const screenLayoutMode: LayoutMode = activeScreen?.layout_mode || 'grid';
-  const [editResolution, setEditResolution] = useState<ScreenResolution | null>(null);
+  // editResolution resets when the screen or editing mode changes via resetKey
+  const editResResetKey = `${activeScreen?.id}_${dm.editing}`;
+  const [editResState, setEditResState] = useState<{ key: string; value: ScreenResolution | null }>({ key: editResResetKey, value: null });
+  const editResolution = editResState.key === editResResetKey ? editResState.value : null;
+  const setEditResolution = useCallback((v: ScreenResolution | null) => setEditResState({ key: editResResetKey, value: v }), [editResResetKey]);
   const screenResolution: ScreenResolution | null = editResolution ?? (() => {
     if (!activeScreen?.target_resolution) return null;
     try { return JSON.parse(activeScreen.target_resolution); } catch { return null; }
   })();
-
-  // Reset edit resolution when switching screens or exiting edit mode
-  useEffect(() => {
-    setEditResolution(null);
-  }, [activeScreen?.id, dm.editing]);
 
   const refreshScreens = useCallback(() => {
     api.getScreens().then(setScreens).catch(() => {});
@@ -169,7 +168,7 @@ export function DashboardPage({ tagValues, alarms = [], userRole, tagVisibilityM
   const handleResolutionChange = useCallback((resolution: ScreenResolution) => {
     setEditResolution(resolution);
     dm.markDirty();
-  }, [dm]);
+  }, [dm, setEditResolution]);
 
   // Perform the actual save (called after confirmation)
   const performSave = useCallback(async () => {

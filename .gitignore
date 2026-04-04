@@ -26,6 +26,6 @@ frontend/dist/
 .DS_Store
 Thumbs.db
 screenshot*.mjs
-package.json
-package-lock.json
+/package.json
+/package-lock.json
 screenshots/10-counter-fix.png
