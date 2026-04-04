@@ -3,6 +3,8 @@ import { Search, Download, Plus, Pencil, Trash2, Upload, X, FolderSearch, Tag as
 import { api } from '../../lib/api';
 import { InlineTagValue, DeleteConfirmDialog, Field, inputCls, EMPTY_TAG, LABEL_COLORS, EnumMappingEditor, parseAlarmConfig, FaultHelpConfig } from './shared';
 import { parseVisibilityConditions } from '../../lib/tagVisibility';
+import { buildTagTree, getDescendantTags, getMatchingPaths, countDescendantTags } from '../../lib/tagTree';
+import type { TagTreeNode } from '../../lib/tagTree';
 import type { Tag, TagLabel, DataSourceData, BrowsedTag, BrowsedNode, ImportPreviewTag, ImportConflictMode, TagValue, VisibilityCondition } from '../../types';
 
 // ─── Visibility Condition Editor ───
@@ -1901,6 +1903,9 @@ export function TagsSettings({ tags, dataSources, allLabels, tagValues, canManag
     return () => document.removeEventListener('mousedown', handler);
   }, [showColumnMenu]);
 
+  // Tree grouping state
+  const [expandedTagPaths, setExpandedTagPaths] = useState<Set<string>>(new Set());
+
   // Label management state
   const [editLabel, setEditLabel] = useState<{ id?: number; name: string; color: string; description: string } | null>(null);
   const [deleteLabelTarget, setDeleteLabelTarget] = useState<TagLabel | null>(null);
@@ -1936,6 +1941,54 @@ export function TagsSettings({ tags, dataSources, allLabels, tagValues, canManag
       return true;
     });
   }, [tags, tagSearch, tagLabelFilter, tagTypeFilter, tagSourceFilter, tagFeatureFilter]);
+
+  const tagTree = useMemo(() => buildTagTree(filteredTags), [filteredTags]);
+
+  const autoExpandPaths = useMemo(() => {
+    if (!tagSearch) return null;
+    return getMatchingPaths(tagTree, tagSearch);
+  }, [tagTree, tagSearch]);
+
+  const isTreeExpanded = useCallback((path: string) => {
+    if (autoExpandPaths) return autoExpandPaths.has(path);
+    return expandedTagPaths.has(path);
+  }, [autoExpandPaths, expandedTagPaths]);
+
+  const toggleTreePath = useCallback((path: string) => {
+    setExpandedTagPaths(prev => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path); else next.add(path);
+      return next;
+    });
+  }, []);
+
+  const allTreePaths = useMemo(() => {
+    const paths = new Set<string>();
+    function walk(nodes: TagTreeNode[]) {
+      for (const n of nodes) { paths.add(n.path); walk(n.children); }
+    }
+    walk(tagTree.children);
+    return paths;
+  }, [tagTree]);
+
+  const toggleExpandAll = useCallback(() => {
+    setExpandedTagPaths(prev => prev.size >= allTreePaths.size ? new Set() : new Set(allTreePaths));
+  }, [allTreePaths]);
+
+  const toggleTreeGroupSelection = useCallback((node: TagTreeNode) => {
+    const descendants = getDescendantTags(node).filter(t => !t.is_system);
+    const ids = descendants.map(t => t.id);
+    setSelectedTagIds(prev => {
+      const allSelected = ids.every(id => prev.has(id));
+      const next = new Set(prev);
+      if (allSelected) {
+        ids.forEach(id => next.delete(id));
+      } else {
+        ids.forEach(id => next.add(id));
+      }
+      return next;
+    });
+  }, []);
 
   // Clear selection when filters change
   useEffect(() => {
@@ -2178,6 +2231,16 @@ export function TagsSettings({ tags, dataSources, allLabels, tagValues, canManag
             </div>
           )}
         </div>
+        {allTreePaths.size > 0 && (
+          <button
+            onClick={toggleExpandAll}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm bg-[var(--hmi-bg-elevated)] border border-[var(--hmi-border)] text-[var(--hmi-text-secondary)] hover:text-[var(--hmi-text-primary)]"
+            title={expandedTagPaths.size >= allTreePaths.size ? 'Collapse all groups' : 'Expand all groups'}
+          >
+            {expandedTagPaths.size >= allTreePaths.size ? <FolderOpen size={14} /> : <Folder size={14} />}
+            {expandedTagPaths.size >= allTreePaths.size ? 'Collapse' : 'Expand'}
+          </button>
+        )}
         <span className="self-center text-xs text-[var(--hmi-text-muted)]">{filteredTags.length} / {tags.length} tags</span>
         {canManage && (
           <div className="flex gap-2 ml-auto">
@@ -2326,79 +2389,150 @@ export function TagsSettings({ tags, dataSources, allLabels, tagValues, canManag
               </tr>
             </thead>
             <tbody>
-              {filteredTags.map((tag) => (
-                <tr
-                  key={tag.id}
-                  className={`border-b border-[var(--hmi-border)]/50 hover:bg-[var(--hmi-bg-input)]/30 ${selectedTagIds.has(tag.id) ? 'bg-[var(--hmi-accent-bg)]' : ''}`}
-                >
-                  {canManage && (
-                    <td className="w-10 px-3 py-2">
-                      {tag.is_system ? (
-                        <span className="text-[var(--hmi-text-muted)]/30"><Square size={16} /></span>
-                      ) : (
-                        <button onClick={() => toggleTagSelection(tag.id)} className="text-[var(--hmi-text-muted)] hover:text-[var(--hmi-text-secondary)]">
-                          {selectedTagIds.has(tag.id) ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
-                        </button>
+              {(() => {
+                const totalColSpan = (canManage ? 2 : 1) + visibleColumns.size + (canManage ? 1 : 0);
+
+                function renderTagRow(tag: Tag, depth: number) {
+                  const leafSegment = depth > 0 ? (tag.name.split('.').pop() || tag.name) : tag.name;
+                  return (
+                    <tr
+                      key={tag.id}
+                      className={`border-b border-[var(--hmi-border)]/50 hover:bg-[var(--hmi-bg-input)]/30 ${selectedTagIds.has(tag.id) ? 'bg-[var(--hmi-accent-bg)]' : ''}`}
+                    >
+                      {canManage && (
+                        <td className="w-10 px-3 py-2">
+                          {tag.is_system ? (
+                            <span className="text-[var(--hmi-text-muted)]/30"><Square size={16} /></span>
+                          ) : (
+                            <button onClick={() => toggleTagSelection(tag.id)} className="text-[var(--hmi-text-muted)] hover:text-[var(--hmi-text-secondary)]">
+                              {selectedTagIds.has(tag.id) ? <CheckSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+                            </button>
+                          )}
+                        </td>
                       )}
-                    </td>
-                  )}
-                  <td className="px-4 py-2 max-w-xs">
-                    <div className="text-[var(--hmi-text-primary)] font-mono text-xs truncate">{tag.name}</div>
-                    {tag.display_name && <div className="text-[10px] text-[var(--hmi-text-muted)] truncate">{tag.display_name}</div>}
-                  </td>
-                  {visibleColumns.has('value') && (
-                    <td className="px-4 py-2">
-                      <InlineTagValue tag={tag} tagValues={tagValues} canEdit={canManage && tag.access_mode !== 'read'} />
-                    </td>
-                  )}
-                  {visibleColumns.has('labels') && (
-                    <td className="px-4 py-2">
-                      <div className="flex flex-wrap gap-1">
-                        {(tag.labels || []).length > 0
-                          ? tag.labels.map(l => (
-                              <span key={l.id} className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] text-white"
-                                style={{ backgroundColor: l.color || '#3b82f6' }}>
-                                {l.name}
-                              </span>
-                            ))
-                          : <span className="text-[var(--hmi-text-muted)]">{'\u2014'}</span>}
-                      </div>
-                    </td>
-                  )}
-                  {visibleColumns.has('source') && (
-                    <td className="px-4 py-2 text-[var(--hmi-text-secondary)] text-xs whitespace-nowrap">
-                      {tag.data_source_id ? dsNameMap.get(tag.data_source_id) || `#${tag.data_source_id}` : (tag.simulation_enabled ? 'Simulation' : 'Internal')}
-                    </td>
-                  )}
-                  {visibleColumns.has('type') && <td className="px-4 py-2 text-[var(--hmi-text-secondary)]">{tag.data_type}</td>}
-                  {visibleColumns.has('access') && <td className="px-4 py-2 text-[var(--hmi-text-secondary)]">{tag.access_mode}</td>}
-                  {visibleColumns.has('units') && <td className="px-4 py-2 text-[var(--hmi-text-secondary)]">{tag.engineering_units || '\u2014'}</td>}
-                  {visibleColumns.has('trend') && <td className="px-4 py-2 text-center">{tag.trending_enabled ? '\u2713' : ''}</td>}
-                  {visibleColumns.has('alarm') && <td className="px-4 py-2 text-center">{tag.alarm_enabled ? '\u2713' : ''}</td>}
-                  {visibleColumns.has('sim') && <td className="px-4 py-2 text-center">{tag.simulation_enabled ? '\u2713' : ''}</td>}
-                  {canManage && (
-                    <td className="px-4 py-2">
-                      <div className="flex gap-1 justify-end">
-                        {tag.is_system ? (
-                          <span className="text-[10px] text-amber-400/60 px-1">System</span>
-                        ) : (
-                          <>
-                            <button onClick={() => setEditTag(tag)} className="p-1 text-[var(--hmi-text-muted)] hover:text-blue-400" title="Edit">
-                              <Pencil size={14} />
-                            </button>
-                            <button onClick={() => setDeleteTagTarget(tag)} className="p-1 text-[var(--hmi-text-muted)] hover:text-red-400" title="Delete">
-                              <Trash2 size={14} />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              ))}
-              {filteredTags.length === 0 && (
-                <tr><td colSpan={(canManage ? 2 : 1) + visibleColumns.size} className="px-4 py-8 text-center text-[var(--hmi-text-muted)]">No tags found</td></tr>
-              )}
+                      <td className="px-4 py-2 max-w-xs" style={{ paddingLeft: depth * 20 + 16 }}>
+                        <div className="text-[var(--hmi-text-primary)] font-mono text-xs truncate">{leafSegment}</div>
+                        {tag.display_name && <div className="text-[10px] text-[var(--hmi-text-muted)] truncate">{tag.display_name}</div>}
+                      </td>
+                      {visibleColumns.has('value') && (
+                        <td className="px-4 py-2">
+                          <InlineTagValue tag={tag} tagValues={tagValues} canEdit={canManage && tag.access_mode !== 'read'} />
+                        </td>
+                      )}
+                      {visibleColumns.has('labels') && (
+                        <td className="px-4 py-2">
+                          <div className="flex flex-wrap gap-1">
+                            {(tag.labels || []).length > 0
+                              ? tag.labels.map(l => (
+                                  <span key={l.id} className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] text-white"
+                                    style={{ backgroundColor: l.color || '#3b82f6' }}>
+                                    {l.name}
+                                  </span>
+                                ))
+                              : <span className="text-[var(--hmi-text-muted)]">{'\u2014'}</span>}
+                          </div>
+                        </td>
+                      )}
+                      {visibleColumns.has('source') && (
+                        <td className="px-4 py-2 text-[var(--hmi-text-secondary)] text-xs whitespace-nowrap">
+                          {tag.data_source_id ? dsNameMap.get(tag.data_source_id) || `#${tag.data_source_id}` : (tag.simulation_enabled ? 'Simulation' : 'Internal')}
+                        </td>
+                      )}
+                      {visibleColumns.has('type') && <td className="px-4 py-2 text-[var(--hmi-text-secondary)]">{tag.data_type}</td>}
+                      {visibleColumns.has('access') && <td className="px-4 py-2 text-[var(--hmi-text-secondary)]">{tag.access_mode}</td>}
+                      {visibleColumns.has('units') && <td className="px-4 py-2 text-[var(--hmi-text-secondary)]">{tag.engineering_units || '\u2014'}</td>}
+                      {visibleColumns.has('trend') && <td className="px-4 py-2 text-center">{tag.trending_enabled ? '\u2713' : ''}</td>}
+                      {visibleColumns.has('alarm') && <td className="px-4 py-2 text-center">{tag.alarm_enabled ? '\u2713' : ''}</td>}
+                      {visibleColumns.has('sim') && <td className="px-4 py-2 text-center">{tag.simulation_enabled ? '\u2713' : ''}</td>}
+                      {canManage && (
+                        <td className="px-4 py-2">
+                          <div className="flex gap-1 justify-end">
+                            {tag.is_system ? (
+                              <span className="text-[10px] text-amber-400/60 px-1">System</span>
+                            ) : (
+                              <>
+                                <button onClick={() => setEditTag(tag)} className="p-1 text-[var(--hmi-text-muted)] hover:text-blue-400" title="Edit">
+                                  <Pencil size={14} />
+                                </button>
+                                <button onClick={() => setDeleteTagTarget(tag)} className="p-1 text-[var(--hmi-text-muted)] hover:text-red-400" title="Delete">
+                                  <Trash2 size={14} />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                }
+
+                function renderGroupNode(node: TagTreeNode, depth: number): React.ReactNode[] {
+                  const expanded = isTreeExpanded(node.path);
+                  const descendants = getDescendantTags(node).filter(t => !t.is_system);
+                  const descendantIds = descendants.map(t => t.id);
+                  const selectedCount = descendantIds.filter(id => selectedTagIds.has(id)).length;
+                  const allSelected = descendantIds.length > 0 && selectedCount === descendantIds.length;
+                  const someSelected = selectedCount > 0 && !allSelected;
+                  const tagCount = countDescendantTags(node);
+
+                  const rows: React.ReactNode[] = [];
+                  rows.push(
+                    <tr
+                      key={`group-${node.path}`}
+                      className="border-b border-[var(--hmi-border)]/50 bg-[var(--hmi-bg-input)]/40 hover:bg-[var(--hmi-bg-input)]/60 cursor-pointer select-none"
+                      onClick={() => toggleTreePath(node.path)}
+                    >
+                      {canManage && (
+                        <td className="w-10 px-3 py-2">
+                          <button
+                            onClick={e => { e.stopPropagation(); toggleTreeGroupSelection(node); }}
+                            className="text-[var(--hmi-text-muted)] hover:text-[var(--hmi-text-secondary)]"
+                          >
+                            {allSelected ? <CheckSquare size={16} className="text-blue-400" /> : someSelected ? <MinusSquare size={16} className="text-blue-400" /> : <Square size={16} />}
+                          </button>
+                        </td>
+                      )}
+                      <td colSpan={totalColSpan - (canManage ? 1 : 0)} className="px-4 py-2" style={{ paddingLeft: depth * 20 + 16 }}>
+                        <div className="flex items-center gap-1.5 text-[var(--hmi-text-secondary)]">
+                          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                          {expanded ? <FolderOpen size={14} className="text-[var(--hmi-text-muted)]" /> : <Folder size={14} className="text-[var(--hmi-text-muted)]" />}
+                          <span className="font-medium text-xs">{node.segment}</span>
+                          <span className="text-[10px] text-[var(--hmi-text-muted)] ml-1">({tagCount})</span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+
+                  if (expanded) {
+                    for (const child of node.children) {
+                      rows.push(...renderGroupNode(child, depth + 1));
+                    }
+                    for (const tag of node.tags) {
+                      rows.push(renderTagRow(tag, depth + 1));
+                    }
+                  }
+
+                  return rows;
+                }
+
+                const allRows: React.ReactNode[] = [];
+                // Render tree groups first
+                for (const child of tagTree.children) {
+                  allRows.push(...renderGroupNode(child, 0));
+                }
+                // Then root-level leaf tags
+                for (const tag of tagTree.tags) {
+                  allRows.push(renderTagRow(tag, 0));
+                }
+
+                if (allRows.length === 0) {
+                  allRows.push(
+                    <tr key="empty"><td colSpan={totalColSpan} className="px-4 py-8 text-center text-[var(--hmi-text-muted)]">No tags found</td></tr>
+                  );
+                }
+
+                return allRows;
+              })()}
             </tbody>
           </table>
         </div>

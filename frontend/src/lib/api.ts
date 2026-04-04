@@ -41,6 +41,7 @@ import type {
   ProjectFile,
   LogEntry,
   ServiceConfig,
+  WidgetTemplate,
 } from '../types/index';
 
 // Using a relative URL (no "http://...") means requests go to the same host that
@@ -220,6 +221,22 @@ export const api = {
     request(`/screens/${id}`, { method: 'DELETE' }),
   reorderScreens: (items: Array<{ id: number; sort_order: number }>) =>
     request<ScreenData[]>('/screens/reorder', { method: 'PUT', body: JSON.stringify(items) }),
+
+  // Widget Templates
+  getWidgetTemplates: async (): Promise<WidgetTemplate[]> => {
+    const raw = await request<Array<Record<string, unknown>>>('/screens/templates/list');
+    return raw.map(t => ({ ...t, layout: typeof t.layout === 'string' ? JSON.parse(t.layout) : t.layout })) as WidgetTemplate[];
+  },
+  getWidgetTemplate: async (id: number): Promise<WidgetTemplate> => {
+    const raw = await request<Record<string, unknown>>(`/screens/templates/${id}`);
+    return { ...raw, layout: typeof raw.layout === 'string' ? JSON.parse(raw.layout) : raw.layout } as WidgetTemplate;
+  },
+  createWidgetTemplate: (data: { name: string; description?: string; layout: unknown[]; placeholders?: unknown[] }) =>
+    request<WidgetTemplate>('/screens/templates', { method: 'POST', body: JSON.stringify(data) }),
+  updateWidgetTemplate: (id: number, data: { name?: string; description?: string; layout?: unknown[]; placeholders?: unknown[] }) =>
+    request<WidgetTemplate>(`/screens/templates/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteWidgetTemplate: (id: number) =>
+    request(`/screens/templates/${id}`, { method: 'DELETE' }),
 
   // Jobs
   getJobs: () => request<JobData[]>('/jobs/'),

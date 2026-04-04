@@ -169,6 +169,17 @@ export interface Widget {
   parentId?: string;       // links widget to a container widget for grouping
 }
 
+// WidgetTemplate is a reusable layout of widgets with relative tag bindings.
+// When a template_instance widget references a template, its children are rendered
+// with the instance's tagPrefix prepended to all relative (dot-prefixed) tags.
+export interface WidgetTemplate {
+  id: number;
+  name: string;
+  description?: string | null;
+  layout: Widget[];        // child widgets with relative tags (e.g., ".speed")
+  placeholders?: string;   // JSON string of placeholder definitions (unused for now)
+}
+
 export interface UserData {
   id: number;
   username: string;

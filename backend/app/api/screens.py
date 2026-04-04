@@ -224,3 +224,62 @@ async def create_template(
     session.add(template)
     await session.flush()
     return template
+
+
+class TemplateUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    layout: list | None = None
+    placeholders: list | None = None
+
+
+@router.get("/templates/{template_id}")
+async def get_template(template_id: int, session: AsyncSession = Depends(get_db)):
+    result = await session.execute(
+        select(ScreenTemplate).where(ScreenTemplate.id == template_id)
+    )
+    template = result.scalar_one_or_none()
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return template
+
+
+@router.put("/templates/{template_id}")
+async def update_template(
+    template_id: int,
+    body: TemplateUpdate,
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.DESIGNER)),
+):
+    result = await session.execute(
+        select(ScreenTemplate).where(ScreenTemplate.id == template_id)
+    )
+    template = result.scalar_one_or_none()
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    if body.name is not None:
+        template.name = body.name
+    if body.description is not None:
+        template.description = body.description
+    if body.layout is not None:
+        template.layout = json.dumps(body.layout)
+    if body.placeholders is not None:
+        template.placeholders = json.dumps(body.placeholders)
+    await session.flush()
+    return template
+
+
+@router.delete("/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_template(
+    template_id: int,
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.DESIGNER)),
+):
+    result = await session.execute(
+        select(ScreenTemplate).where(ScreenTemplate.id == template_id)
+    )
+    template = result.scalar_one_or_none()
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    await session.delete(template)
+    await session.flush()

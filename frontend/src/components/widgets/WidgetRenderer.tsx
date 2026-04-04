@@ -36,6 +36,8 @@ import { ZebraPrinterWidget } from './ZebraPrinterWidget';
 import { QRCodeWidget } from './QRCodeWidget';
 import { TrendWidget } from './TrendWidget';
 import { ZplPreviewWidget } from './ZplPreviewWidget';
+import { TemplateInstanceWidget } from './TemplateInstanceWidget';
+import type { WidgetTemplate } from '../../types';
 
 // TypeScript interface defining the data this component receives from its parent.
 // `Record<string, TagValue>` is a dictionary type — keys are tag name strings,
@@ -45,6 +47,7 @@ interface Props {
   tagValues: Record<string, TagValue>;
   alarms?: AlarmData[];
   tagVisibilityMap?: TagVisibilityMap;
+  templateMap?: Map<string, WidgetTemplate>;
   collapsed?: boolean;
   onToggleCollapsed?: (collapsed: boolean) => void;
   pageCount?: number;
@@ -59,7 +62,7 @@ interface Props {
  * two values change, not when any of the hundreds of other tags update.
  * This is a huge performance win on screens with many widgets.
  */
-function getWidgetTagNames(widget: Widget): string[] {
+function getWidgetTagNames(widget: Widget, templateMap?: Map<string, WidgetTemplate>): string[] {
   const p = widget.props as Record<string, unknown>;
   const tags: string[] = [];
   // Single-tag widgets
@@ -81,6 +84,19 @@ function getWidgetTagNames(widget: Widget): string[] {
     const pfx = p.tagPrefix;
     tags.push(`${pfx}.status`, `${pfx}.labels_in_queue`, `${pfx}.print_speed`, `${pfx}.darkness`, `${pfx}.head_open`, `${pfx}.paper_out`, `${pfx}.ribbon_out`, `${pfx}.paused`);
   }
+  // Template instance — collect resolved tags from all template children
+  if (widget.type === 'template_instance' && typeof p.templateName === 'string' && typeof p.tagPrefix === 'string' && p.tagPrefix) {
+    const template = templateMap?.get(p.templateName);
+    if (template) {
+      const prefix = p.tagPrefix as string;
+      for (const child of template.layout) {
+        const childTags = getWidgetTagNames(child);
+        for (const ct of childTags) {
+          tags.push(ct.startsWith('.') ? prefix + ct : ct);
+        }
+      }
+    }
+  }
   // Multi-value / control_group
   if (Array.isArray(p.tags)) {
     for (const t of p.tags) if (t && typeof t.tag === 'string') tags.push(t.tag);
@@ -94,7 +110,7 @@ function getWidgetTagNames(widget: Widget): string[] {
 // memo() is a React optimization that wraps this component to skip re-rendering
 // if its props haven't changed. The second argument (after the component function)
 // is a custom comparison function that decides whether to skip — see bottom of file.
-export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, alarms = [], tagVisibilityMap = {}, collapsed, onToggleCollapsed, pageCount, currentPage, onPageChange }: Props) {
+export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, alarms = [], tagVisibilityMap = {}, templateMap, collapsed, onToggleCollapsed, pageCount, currentPage, onPageChange }: Props) {
   const p = widget.props as Record<string, unknown>;
   const chrome = widget.chrome;
 
@@ -150,6 +166,8 @@ export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, 
       return <TrendWidget title={p.title as string} tags={p.tags as Array<{ tag: string; color?: string }> || []} hours={p.hours as number} refreshSeconds={p.refreshSeconds as number} chrome={chrome} />;
     case 'zpl_preview':
       return <ZplPreviewWidget title={p.title as string} tag={p.tag as string} staticZpl={p.staticZpl as string} dpi={p.dpi as number} refreshOnTagChange={p.refreshOnTagChange as boolean} tagValues={tagValues} titleStyle={p.titleStyle as undefined} chrome={chrome} />;
+    case 'template_instance':
+      return <TemplateInstanceWidget title={p.title as string} templateName={p.templateName as string || ''} tagPrefix={p.tagPrefix as string || ''} tagValues={tagValues} alarms={alarms} template={templateMap?.get(p.templateName as string)} titleStyle={p.titleStyle as undefined} chrome={chrome} />;
     default:
       return (
         <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 text-slate-400 text-sm">
@@ -178,8 +196,9 @@ export const WidgetRenderer = memo(function WidgetRenderer({ widget, tagValues, 
   if (prev.collapsed !== next.collapsed) return false;
   if (prev.pageCount !== next.pageCount) return false;
   if (prev.currentPage !== next.currentPage) return false;
+  if (prev.templateMap !== next.templateMap) return false;
   // Only compare tag values this widget actually uses — ignore changes to unrelated tags
-  const tagNames = getWidgetTagNames(prev.widget);
+  const tagNames = getWidgetTagNames(prev.widget, prev.templateMap);
   if (tagNames.length === 0) return prev.tagValues === next.tagValues;
   for (const name of tagNames) {
     const pv = prev.tagValues[name];
