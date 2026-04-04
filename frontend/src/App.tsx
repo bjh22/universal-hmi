@@ -115,6 +115,14 @@ export default function App() {
   const handleProjectChanged = useCallback(() => {
     refreshActiveProject();
     refreshTags();
+    // Load custom themes first so they're available when applyTheme runs
+    api.getCustomThemes().then((ct) => {
+      if (ct.themes && Object.keys(ct.themes).length > 0) {
+        saveCustomThemes(ct.themes as Record<string, import('./lib/theme').ThemePreset>);
+      } else {
+        saveCustomThemes({});
+      }
+    }).catch(() => {});
     // Reload branding since it may have changed with the project
     api.getBranding().then((b) => {
       setSiteTitle(b.site_title);

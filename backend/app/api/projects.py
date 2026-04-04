@@ -26,6 +26,8 @@ router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 EXPORT_FORMAT_VERSION = "1.0"
 
+BRANDING_KEYS = ["site_title", "nav_title", "favicon", "theme_accent", "theme_preset", "custom_themes"]
+
 
 # ─── Pydantic schemas ───
 
@@ -604,11 +606,16 @@ async def _build_snapshot(session: AsyncSession, project: Project) -> dict:
         })
 
     # Branding settings
-    branding_keys = ["site_title", "nav_title", "favicon"]
     branding_result = await session.execute(
-        select(AppSetting).where(AppSetting.key.in_(branding_keys))
+        select(AppSetting).where(AppSetting.key.in_(BRANDING_KEYS))
     )
-    branding = {s.key: s.value for s in branding_result.scalars().all() if s.value}
+    branding = {}
+    for s in branding_result.scalars().all():
+        if s.value:
+            if s.key == "custom_themes":
+                branding[s.key] = _safe_json_parse(s.value) or {}
+            else:
+                branding[s.key] = s.value
 
     # Service config
     service_config_result = await session.execute(
@@ -774,14 +781,16 @@ async def load_project(
     # Restore branding settings
     branding = data.get("branding", {})
     if branding:
-        branding_keys = ["site_title", "nav_title", "favicon"]
         # Clear existing branding
-        await session.execute(delete(AppSetting).where(AppSetting.key.in_(branding_keys)))
+        await session.execute(delete(AppSetting).where(AppSetting.key.in_(BRANDING_KEYS)))
         await session.flush()
-        for key in branding_keys:
+        for key in BRANDING_KEYS:
             val = branding.get(key)
-            if val:
-                session.add(AppSetting(key=key, value=val))
+            if val is not None:
+                if key == "custom_themes" and isinstance(val, dict):
+                    session.add(AppSetting(key=key, value=json.dumps(val)))
+                else:
+                    session.add(AppSetting(key=key, value=str(val)))
 
     # Restore service config
     service_config = data.get("service_config")
@@ -1610,13 +1619,15 @@ async def import_project(
         # Restore branding settings if present
         branding = data.get("branding", {})
         if branding:
-            branding_keys = ["site_title", "nav_title", "favicon"]
-            await session.execute(delete(AppSetting).where(AppSetting.key.in_(branding_keys)))
+            await session.execute(delete(AppSetting).where(AppSetting.key.in_(BRANDING_KEYS)))
             await session.flush()
-            for key in branding_keys:
+            for key in BRANDING_KEYS:
                 val = branding.get(key)
-                if val:
-                    session.add(AppSetting(key=key, value=val))
+                if val is not None:
+                    if key == "custom_themes" and isinstance(val, dict):
+                        session.add(AppSetting(key=key, value=json.dumps(val)))
+                    else:
+                        session.add(AppSetting(key=key, value=str(val)))
 
         # Restore service config if present
         service_config = data.get("service_config")
@@ -1761,13 +1772,15 @@ async def open_project_file(
     # Restore branding
     branding = data.get("branding", {})
     if branding:
-        branding_keys = ["site_title", "nav_title", "favicon"]
-        await session.execute(delete(AppSetting).where(AppSetting.key.in_(branding_keys)))
+        await session.execute(delete(AppSetting).where(AppSetting.key.in_(BRANDING_KEYS)))
         await session.flush()
-        for key in branding_keys:
+        for key in BRANDING_KEYS:
             val = branding.get(key)
-            if val:
-                session.add(AppSetting(key=key, value=val))
+            if val is not None:
+                if key == "custom_themes" and isinstance(val, dict):
+                    session.add(AppSetting(key=key, value=json.dumps(val)))
+                else:
+                    session.add(AppSetting(key=key, value=str(val)))
 
     # Restore service config
     service_config = data.get("service_config")
