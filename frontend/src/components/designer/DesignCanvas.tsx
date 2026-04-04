@@ -378,7 +378,7 @@ export function DesignCanvas({
                 return (
                   <div
                     key={w.id}
-                    className={`absolute group ${dragging?.id === w.id ? 'opacity-70' : ''}`}
+                    className={`absolute group overflow-hidden ${dragging?.id === w.id ? 'opacity-70' : ''}`}
                     style={{
                       left: w.x,
                       top: w.y,
