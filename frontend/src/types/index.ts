@@ -372,6 +372,15 @@ export interface ProjectDetail extends ProjectData {
   job_count: number;
 }
 
+export interface ProjectFile {
+  filename: string;
+  project_name: string;
+  version: string;
+  description: string;
+  size_bytes: number;
+  modified_at: string;
+}
+
 export interface IntegrationType {
   type_name: string;
   display_name: string;

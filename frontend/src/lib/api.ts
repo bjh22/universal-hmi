@@ -38,6 +38,7 @@ import type {
   GitStatus,
   GitCommitEntry,
   GitOperationResult,
+  ProjectFile,
   LogEntry,
   ServiceConfig,
 } from '../types/index';
@@ -396,6 +397,20 @@ export const api = {
         default_conflict_resolution: params.defaultConflictResolution || 'skip',
       }),
     }),
+
+  // Project file operations (File > Save / Open / Save As)
+  listProjectFiles: () =>
+    request<{ files: ProjectFile[] }>('/projects/files'),
+  openProjectFile: (filename: string) =>
+    request<{ status: string; project_id: number; project_name: string }>(
+      '/projects/open-file',
+      { method: 'POST', body: JSON.stringify({ filename }) },
+    ),
+  saveProjectAs: (id: number, name: string) =>
+    request<{ status: string; project_id: number; project_name: string; snapshot_saved_at: string }>(
+      `/projects/${id}/save-as`,
+      { method: 'POST', body: JSON.stringify({ name }) },
+    ),
 
   // Project Git
   getGitStatus: () => request<GitStatus>('/projects/git/status'),

@@ -101,6 +101,29 @@ export default function App() {
   const plcVersion = plcVersionRaw != null && plcVersionRaw !== 'None' ? String(plcVersionRaw) : null;
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  // Active project state for FileMenu
+  const [activeProjectId, setActiveProjectId] = useState<number | null>(null);
+  const [activeProjectName, setActiveProjectName] = useState<string | null>(null);
+
+  const refreshActiveProject = useCallback(() => {
+    api.getActiveProject().then(p => {
+      setActiveProjectId(p.id);
+      setActiveProjectName(p.name);
+    }).catch(() => {});
+  }, []);
+
+  const handleProjectChanged = useCallback(() => {
+    refreshActiveProject();
+    refreshTags();
+    // Reload branding since it may have changed with the project
+    api.getBranding().then((b) => {
+      setSiteTitle(b.site_title);
+      setNavTitle(b.nav_title);
+      applyBranding(b);
+    }).catch(() => {});
+    api.getSystemSettings().then(s => setPlcVersionTag(s.plc_version_tag)).catch(() => {});
+  }, [refreshActiveProject, refreshTags]);
+
   // Fault help dialog auto-popup state
   const [helpAlarm, setHelpAlarm] = useState<AlarmData | null>(null);
   const shownHelpIds = useRef<Set<number>>(new Set());
@@ -158,10 +181,11 @@ export default function App() {
         applyBranding(b);
       }).catch(() => {});
       api.getSystemSettings().then(s => setPlcVersionTag(s.plc_version_tag)).catch(() => {});
+      refreshActiveProject();
     } catch {
       timerRef.current = setTimeout(checkHealth, 1500);
     }
-  }, [refreshTags]);
+  }, [refreshTags, refreshActiveProject]);
 
   useEffect(() => {
     checkHealth();
@@ -205,6 +229,9 @@ export default function App() {
               datasourceStatuses={datasourceStatuses}
               plcVersion={plcVersion}
               tagValues={tagValues}
+              activeProjectId={activeProjectId}
+              activeProjectName={activeProjectName}
+              onProjectChanged={handleProjectChanged}
             >
               {/* Suspense wraps lazy-loaded pages. While a page's code is downloading,
                   React shows the <PageLoader /> fallback instead of a blank screen. */}

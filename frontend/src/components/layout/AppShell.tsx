@@ -25,6 +25,7 @@ import {
 import type { UserData, AlarmData, DatasourceStatus, TagValue, Tag, ProductionSettings } from '../../types';
 import { api } from '../../lib/api';
 import { SeverityIcon } from '../shared/SeverityIcon';
+import { FileMenu } from './FileMenu';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -37,6 +38,9 @@ interface AppShellProps {
   datasourceStatuses?: DatasourceStatus[];
   plcVersion?: string | null;
   tagValues?: Record<string, TagValue>;
+  activeProjectId?: number | null;
+  activeProjectName?: string | null;
+  onProjectChanged?: () => void;
 }
 
 // Declarative navigation config — each item defines its URL path, icon, label,
@@ -153,7 +157,7 @@ function getStatusStyle(value: unknown, enumMapping?: Record<string, string> | n
   return { bg: 'bg-slate-500/20', text: 'text-slate-300', label: display };
 }
 
-export function AppShell({ children, user, wsConnected, alarms, onLogout, navTitle = 'HMI', activeJobName, datasourceStatuses: _ds = [], plcVersion, tagValues }: AppShellProps) {
+export function AppShell({ children, user, wsConnected, alarms, onLogout, navTitle = 'HMI', activeJobName, datasourceStatuses: _ds = [], plcVersion, tagValues, activeProjectId = null, activeProjectName = null, onProjectChanged }: AppShellProps) {
   void _ds; // Datasource statuses are now shown on the Support page, but prop kept for API compat
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     const saved = localStorage.getItem('hmi_sidebar_open');
@@ -443,6 +447,14 @@ export function AppShell({ children, user, wsConnected, alarms, onLogout, navTit
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar — compact header with inline alarm display */}
         <header className="h-14 bg-[var(--hmi-bg-surface)] border-b border-[var(--hmi-border)] flex items-center px-3 gap-2 shrink-0">
+          {/* File menu — project save/open/new for engineer/designer roles */}
+          <FileMenu
+            activeProjectId={activeProjectId}
+            activeProjectName={activeProjectName}
+            userRole={user?.role ?? null}
+            onProjectChanged={onProjectChanged ?? (() => {})}
+          />
+
           {/* Active job */}
           {activeJobName && (
             <Link
