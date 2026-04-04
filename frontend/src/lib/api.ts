@@ -38,6 +38,7 @@ import type {
   GitStatus,
   GitCommitEntry,
   GitOperationResult,
+  ProjectFile,
   LogEntry,
   ServiceConfig,
 } from '../types/index';
@@ -397,8 +398,30 @@ export const api = {
       }),
     }),
 
+  // Project file operations (File > Save / Open / Save As)
+  listProjectFiles: () =>
+    request<{ files: ProjectFile[] }>('/projects/files'),
+  openProjectFile: (filename: string) =>
+    request<{ status: string; project_id: number; project_name: string }>(
+      '/projects/open-file',
+      { method: 'POST', body: JSON.stringify({ filename }) },
+    ),
+  saveProjectAs: (id: number, name: string) =>
+    request<{ status: string; project_id: number; project_name: string; snapshot_saved_at: string }>(
+      `/projects/${id}/save-as`,
+      { method: 'POST', body: JSON.stringify({ name }) },
+    ),
+  deleteProjectFile: (filename: string) =>
+    request<void>(`/projects/files/${encodeURIComponent(filename)}`, { method: 'DELETE' }),
+  downloadProjectFile: (filename: string) =>
+    request<Record<string, unknown>>(`/projects/files/${encodeURIComponent(filename)}/download`),
+
   // Project Git
   getGitStatus: () => request<GitStatus>('/projects/git/status'),
+  getGitDiff: (file: string, maxLines = 500) =>
+    request<{ file: string; diff: string; truncated: boolean; total_lines: number }>(
+      `/projects/git/diff?file=${encodeURIComponent(file)}&max_lines=${maxLines}`,
+    ),
   getGitLog: (limit = 20) => request<GitCommitEntry[]>(`/projects/git/log?limit=${limit}`),
   gitCommit: (message: string) =>
     request<GitOperationResult>('/projects/git/commit', {

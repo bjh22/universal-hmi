@@ -50,7 +50,7 @@ frontend/              React SPA (Vite + TypeScript)
 | **Python** | 3.10+ | [python.org](https://www.python.org/downloads/) or `winget install Python.Python.3.12` / `brew install python@3.12` |
 | **Node.js** | 18+ LTS | [nodejs.org](https://nodejs.org/) or `winget install OpenJS.NodeJS.LTS` / `brew install node@22` |
 
-`pip` and `npm` come bundled with Python and Node.js respectively. No C compiler or native build tools are needed — all Python dependencies ship prebuilt wheels.
+`pip` and `npm` come bundled with Python and Node.js respectively. No C compiler or native build tools are needed — all Python dependencies ship prebuilt wheels. The dev scripts automatically create a Python virtual environment at `.venv/` on first run.
 
 **Offline install:** If a `backend/wheels/` directory exists, `install` uses `pip install --no-index --find-links=wheels` for fully offline Python dependency installation. To bundle wheels for offline use, run `pip download -r backend/requirements.txt -d backend/wheels` on a machine with internet access.
 

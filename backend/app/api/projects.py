@@ -149,11 +149,16 @@ def _get_projects_dir() -> Path:
     return data_dir() / "projects"
 
 
+def _project_name_to_filename(name: str) -> str:
+    """Convert a project name to its canonical .hmi.json filename."""
+    safe_name = re.sub(r"[^\w\-]+", "_", name).strip("_").lower()
+    return f"{safe_name}.hmi.json"
+
+
 def _save_snapshot_to_disk(project_name: str, snapshot_data: dict) -> None:
     """Write a project snapshot to the projects/ directory as a .hmi.json file."""
     _get_projects_dir().mkdir(parents=True, exist_ok=True)
-    safe_name = re.sub(r"[^\w\-]+", "_", project_name).strip("_").lower()
-    path = _get_projects_dir() / f"{safe_name}.hmi.json"
+    path = _get_projects_dir() / _project_name_to_filename(project_name)
     path.write_text(json.dumps(snapshot_data, indent=2) + "\n", encoding="utf-8")
 
 
@@ -185,12 +190,12 @@ async def list_projects(session: AsyncSession = Depends(get_db)):
 
 @router.get("/active")
 async def get_active_project(session: AsyncSession = Depends(get_db)):
-    """Return the currently active project's id and name, or null if none."""
+    """Return the currently active project's id, name, and filename, or null if none."""
     result = await session.execute(select(Project).where(Project.is_active == True))  # noqa: E712
     project = result.scalar_one_or_none()
     if not project:
-        return {"id": None, "name": None}
-    return {"id": project.id, "name": project.name}
+        return {"id": None, "name": None, "filename": None}
+    return {"id": project.id, "name": project.name, "filename": project.source_filename}
 
 
 def _snapshot_comparable(snapshot: dict) -> dict:
@@ -319,6 +324,103 @@ async def create_project(
         id=project.id, name=project.name, description=project.description, version=project.version,
         is_active=project.is_active, has_snapshot=True, snapshot_saved_at=project.snapshot_saved_at,
         created_at=project.created_at, updated_at=project.updated_at,
+    )
+
+
+@router.get("/files")
+async def list_project_files(
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    """List .hmi.json files in the projects directory."""
+    projects_dir = _get_projects_dir()
+    if not projects_dir.is_dir():
+        return {"files": []}
+
+    # Determine which file is currently active
+    result = await session.execute(select(Project).where(Project.is_active == True))  # noqa: E712
+    active_project = result.scalar_one_or_none()
+    active_filename = active_project.source_filename if active_project else None
+
+    files = []
+    for f in sorted(projects_dir.glob("*.hmi.json")):
+        stat = f.stat()
+        try:
+            raw = json.loads(f.read_text(encoding="utf-8"))
+            proj = raw.get("project", {})
+            name = proj.get("name", f.stem)
+            version = proj.get("version", "")
+            description = proj.get("description") or ""
+            tag_count = len(raw.get("tags", []))
+            screen_count = len(raw.get("screens", []))
+            data_source_count = len(raw.get("data_sources", []))
+            job_count = len(raw.get("jobs", []))
+        except Exception:
+            name = f.stem
+            version = ""
+            description = ""
+            tag_count = screen_count = data_source_count = job_count = 0
+        files.append({
+            "filename": f.name,
+            "project_name": name,
+            "version": version,
+            "description": description,
+            "size_bytes": stat.st_size,
+            "modified_at": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+            "tag_count": tag_count,
+            "screen_count": screen_count,
+            "data_source_count": data_source_count,
+            "job_count": job_count,
+            "is_active": f.name == active_filename,
+        })
+    return {"files": files}
+
+
+@router.get("/files/{filename}/download")
+async def download_project_file(
+    filename: str,
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    """Download a .hmi.json file from the projects directory."""
+    projects_dir = _get_projects_dir()
+    file_path = projects_dir / filename
+    if not file_path.resolve().parent == projects_dir.resolve():
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    data = file_path.read_text(encoding="utf-8")
+    return JSONResponse(
+        content=json.loads(data),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.delete("/files/{filename}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_project_file(
+    filename: str,
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.DESIGNER)),
+):
+    """Delete a .hmi.json file from the projects directory."""
+    projects_dir = _get_projects_dir()
+    file_path = projects_dir / filename
+    if not file_path.resolve().parent == projects_dir.resolve():
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Refuse to delete the currently active project's file
+    result = await session.execute(select(Project).where(Project.is_active == True))  # noqa: E712
+    active_project = result.scalar_one_or_none()
+    if active_project and active_project.source_filename == filename:
+        raise HTTPException(status_code=409, detail="Cannot delete the currently active project")
+
+    file_path.unlink()
+
+    # Clean up any DB project record referencing this file
+    await session.execute(
+        delete(Project).where(Project.source_filename == filename)
     )
 
 
@@ -593,6 +695,8 @@ async def save_project(
     snapshot_data = await _build_snapshot(session, project)
     project.snapshot = json.dumps(snapshot_data)
     project.snapshot_saved_at = datetime.now(timezone.utc)
+    if not project.source_filename:
+        project.source_filename = _project_name_to_filename(project.name)
     await session.flush()
     _save_snapshot_to_disk(project.name, snapshot_data)
     return {"status": "saved", "snapshot_saved_at": project.snapshot_saved_at.isoformat()}
@@ -725,6 +829,7 @@ async def create_blank_project(
         raise HTTPException(status_code=409, detail="Project name already exists")
 
     project = Project(**body.model_dump())
+    project.source_filename = _project_name_to_filename(body.name)
     session.add(project)
     await session.flush()
 
@@ -772,6 +877,7 @@ async def create_demo_project(
         raise HTTPException(status_code=409, detail="Project name already exists")
 
     project = Project(**body.model_dump())
+    project.source_filename = _project_name_to_filename(body.name)
     session.add(project)
     await session.flush()
 
@@ -1546,3 +1652,194 @@ async def import_project(
         results=results,
         warnings=warnings,
     )
+
+
+# ─── File-based project operations (File > Save / Open / Save As) ───
+
+
+class OpenFileBody(BaseModel):
+    filename: str
+
+
+class SaveAsBody(BaseModel):
+    name: str
+
+
+@router.post("/open-file")
+async def open_project_file(
+    body: OpenFileBody,
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    """Open a .hmi.json file from the projects directory, loading it as the active project."""
+    from app.services.tag_engine import tag_engine
+
+    projects_dir = _get_projects_dir()
+    file_path = projects_dir / body.filename
+    # Prevent path traversal
+    if not file_path.resolve().parent == projects_dir.resolve():
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    try:
+        data = json.loads(file_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON: {exc}")
+
+    if not isinstance(data, dict) or "format_version" not in data:
+        raise HTTPException(status_code=400, detail="Not a valid .hmi.json project file")
+
+    project_meta = data.get("project", {})
+    project_name = project_meta.get("name", file_path.stem)
+
+    # Find or create a Project record for this file
+    result = await session.execute(select(Project).where(Project.name == project_name))
+    project = result.scalar_one_or_none()
+    if not project:
+        project = Project(
+            name=project_name,
+            description=project_meta.get("description"),
+            version=project_meta.get("version", "1.0.0"),
+        )
+        session.add(project)
+        await session.flush()
+
+    # Store snapshot and load it
+    project.snapshot = json.dumps(data)
+    project.snapshot_saved_at = datetime.now(timezone.utc)
+    project.version = project_meta.get("version", project.version)
+    project.description = project_meta.get("description", project.description)
+    project.source_filename = body.filename
+    await session.flush()
+
+    # Wipe and restore
+    await _wipe_all_resources(session)
+
+    pid = project.id
+    ds_name_map: dict[str, int] = {}
+    label_name_map: dict[str, int] = {}
+
+    ds_items = data.get("data_sources", [])
+    if ds_items:
+        ds_name_map, _ = await _import_data_sources(ds_items, pid, session, "overwrite", {})
+
+    label_items = data.get("tag_labels", [])
+    if label_items:
+        label_name_map, _ = await _import_tag_labels(label_items, pid, session, "overwrite", {})
+
+    tag_items = data.get("tags", [])
+    if tag_items:
+        await _import_tags(tag_items, pid, session, "overwrite", {}, ds_name_map, label_name_map)
+
+    tt_items = data.get("tag_templates", [])
+    if tt_items:
+        await _import_tag_templates(tt_items, pid, session, "overwrite", {})
+
+    scr_items = data.get("screens", [])
+    if scr_items:
+        await _import_screens(scr_items, pid, session, "overwrite", {})
+
+    st_items = data.get("screen_templates", [])
+    if st_items:
+        await _import_screen_templates(st_items, pid, session, "overwrite", {})
+
+    job_items = data.get("jobs", [])
+    if job_items:
+        await _import_jobs(job_items, pid, session, "overwrite", {})
+
+    reason_items = data.get("reason_codes", [])
+    if reason_items:
+        for rc_data in reason_items:
+            existing = await session.execute(
+                select(ReasonCode).where(ReasonCode.code == rc_data["code"])
+            )
+            if not existing.scalar_one_or_none():
+                session.add(ReasonCode(**rc_data))
+
+    # Restore branding
+    branding = data.get("branding", {})
+    if branding:
+        branding_keys = ["site_title", "nav_title", "favicon"]
+        await session.execute(delete(AppSetting).where(AppSetting.key.in_(branding_keys)))
+        await session.flush()
+        for key in branding_keys:
+            val = branding.get(key)
+            if val:
+                session.add(AppSetting(key=key, value=val))
+
+    # Restore service config
+    service_config = data.get("service_config")
+    if service_config is not None:
+        await session.execute(delete(AppSetting).where(AppSetting.key == "service.config"))
+        await session.flush()
+        session.add(AppSetting(key="service.config", value=json.dumps(service_config)))
+
+    # Restore system settings
+    system_settings = data.get("system_settings", {})
+    if system_settings:
+        system_settings_keys = ["system.plc_version_tag"]
+        await session.execute(delete(AppSetting).where(AppSetting.key.in_(system_settings_keys)))
+        await session.flush()
+        for key in system_settings_keys:
+            val = system_settings.get(key)
+            if val:
+                session.add(AppSetting(key=key, value=val))
+
+    await session.flush()
+    await _set_active_project(session, project.id)
+
+    # Reload services
+    await tag_engine.reload(session)
+    await request.app.state.alarm_service.load_alarm_configs(session)
+    request.app.state.alarm_service.broadcast_alarms_snapshot()
+    await request.app.state.trend_service.reload_trending_tags()
+
+    return {"status": "loaded", "project_id": project.id, "project_name": project.name}
+
+
+@router.post("/{project_id}/save-as")
+async def save_project_as(
+    project_id: int,
+    body: SaveAsBody,
+    session: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.ENGINEER, UserRole.DESIGNER)),
+):
+    """Save the current HMI state as a new project with a different name."""
+    source = await session.get(Project, project_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Source project not found")
+
+    # Check name uniqueness
+    existing = await session.execute(select(Project).where(Project.name == body.name))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="Project name already exists")
+
+    # Create the new project
+    new_project = Project(
+        name=body.name,
+        description=source.description,
+        version=source.version,
+        source_filename=_project_name_to_filename(body.name),
+    )
+    session.add(new_project)
+    await session.flush()
+
+    # Build snapshot from current state, override project metadata
+    snapshot_data = await _build_snapshot(session, new_project)
+    snapshot_data["project"]["name"] = body.name
+    new_project.snapshot = json.dumps(snapshot_data)
+    new_project.snapshot_saved_at = datetime.now(timezone.utc)
+    await session.flush()
+    _save_snapshot_to_disk(body.name, snapshot_data)
+
+    # Set the new project as active
+    await _set_active_project(session, new_project.id)
+
+    return {
+        "status": "saved",
+        "project_id": new_project.id,
+        "project_name": new_project.name,
+        "snapshot_saved_at": new_project.snapshot_saved_at.isoformat(),
+    }
