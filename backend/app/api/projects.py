@@ -28,6 +28,23 @@ EXPORT_FORMAT_VERSION = "1.0"
 
 BRANDING_KEYS = ["site_title", "nav_title", "favicon", "theme_accent", "theme_preset", "custom_themes"]
 
+PRODUCTION_SETTINGS_KEYS = [
+    "production.good_count_tag",
+    "production.reject_fault_tags",
+    "production.cycling_tag",
+    "production.downtime_exception_tags",
+    "production.target_rate",
+    "production.machine_status_tag",
+    "production.cycle_start_tag",
+    "production.reset_tag",
+    "production.alarm_marquee_speed",
+]
+
+# Keys that store JSON arrays/objects (need json.loads/json.dumps)
+_PRODUCTION_JSON_KEYS = {"production.reject_fault_tags", "production.downtime_exception_tags"}
+
+PREFERENCES_KEYS = ["default_screen_layout", "default_screen_resolution"]
+
 
 # ─── Pydantic schemas ───
 
@@ -624,12 +641,31 @@ async def _build_snapshot(session: AsyncSession, project: Project) -> dict:
     service_config_row = service_config_result.scalar_one_or_none()
     service_config = _safe_json_parse(service_config_row.value) if service_config_row and service_config_row.value else None
 
-    # System settings (e.g. PLC version tag binding)
-    system_settings_keys = ["system.plc_version_tag"]
-    system_settings_result = await session.execute(
-        select(AppSetting).where(AppSetting.key.in_(system_settings_keys))
+    # Production settings (tag bindings for reporting/OEE + PLC version)
+    all_prod_keys = PRODUCTION_SETTINGS_KEYS + ["system.plc_version_tag"]
+    prod_result = await session.execute(
+        select(AppSetting).where(AppSetting.key.in_(all_prod_keys))
     )
-    system_settings = {s.key: s.value for s in system_settings_result.scalars().all() if s.value}
+    production_settings: dict = {}
+    for s in prod_result.scalars().all():
+        if s.value is not None:
+            if s.key == "system.plc_version_tag":
+                production_settings["plc_version_tag"] = s.value
+            elif s.key in _PRODUCTION_JSON_KEYS:
+                short_key = s.key.removeprefix("production.")
+                production_settings[short_key] = _safe_json_parse(s.value, [])
+            else:
+                short_key = s.key.removeprefix("production.")
+                production_settings[short_key] = s.value
+
+    # Application preferences (default screen layout/resolution)
+    pref_result = await session.execute(
+        select(AppSetting).where(AppSetting.key.in_(PREFERENCES_KEYS))
+    )
+    preferences: dict = {}
+    for s in pref_result.scalars().all():
+        if s.value is not None:
+            preferences[s.key] = s.value
 
     return {
         "format_version": EXPORT_FORMAT_VERSION,
@@ -640,8 +676,9 @@ async def _build_snapshot(session: AsyncSession, project: Project) -> dict:
         },
         "exported_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "branding": branding,
+        "production_settings": production_settings,
+        "preferences": preferences,
         "service_config": service_config,
-        "system_settings": system_settings,
         "data_sources": data_sources,
         "tag_labels": tag_labels,
         "tags": tags,
@@ -663,7 +700,50 @@ async def _wipe_all_resources(session: AsyncSession):
     await session.execute(delete(Tag).where(Tag.is_system != True))
     for model in [Screen, Job, TagTemplate, ScreenTemplate, TagLabel, DataSource, ReasonCode]:
         await session.execute(delete(model))
+    # Clear project-level app_settings (production settings, preferences)
+    await session.execute(delete(AppSetting).where(AppSetting.key.in_(PRODUCTION_SETTINGS_KEYS)))
+    await session.execute(delete(AppSetting).where(AppSetting.key.in_(PREFERENCES_KEYS)))
     await session.flush()
+
+
+async def _restore_production_settings(session: AsyncSession, data: dict) -> None:
+    """Restore production_settings from a snapshot dict into app_settings.
+
+    Also handles backward compat: old snapshots stored plc_version_tag under
+    system_settings instead of production_settings.
+    """
+    production_settings = dict(data.get("production_settings", {}))
+
+    # Backward compat: migrate plc_version_tag from old system_settings section
+    old_sys = data.get("system_settings", {})
+    if "plc_version_tag" not in production_settings and old_sys.get("system.plc_version_tag"):
+        production_settings["plc_version_tag"] = old_sys["system.plc_version_tag"]
+
+    all_keys = PRODUCTION_SETTINGS_KEYS + ["system.plc_version_tag"]
+    await session.execute(delete(AppSetting).where(AppSetting.key.in_(all_keys)))
+    await session.flush()
+    for short_key, val in production_settings.items():
+        if short_key == "plc_version_tag":
+            if val is not None:
+                session.add(AppSetting(key="system.plc_version_tag", value=str(val)))
+            continue
+        db_key = f"production.{short_key}"
+        if db_key not in PRODUCTION_SETTINGS_KEYS:
+            continue
+        if db_key in _PRODUCTION_JSON_KEYS and isinstance(val, list):
+            session.add(AppSetting(key=db_key, value=json.dumps(val)))
+        elif val is not None:
+            session.add(AppSetting(key=db_key, value=str(val)))
+
+
+async def _restore_preferences(session: AsyncSession, data: dict) -> None:
+    """Restore preferences from a snapshot dict into app_settings."""
+    preferences = data.get("preferences", {})
+    await session.execute(delete(AppSetting).where(AppSetting.key.in_(PREFERENCES_KEYS)))
+    await session.flush()
+    for key, val in preferences.items():
+        if key in PREFERENCES_KEYS and val is not None:
+            session.add(AppSetting(key=key, value=str(val)))
 
 
 @router.get("/{project_id}/export")
@@ -799,15 +879,9 @@ async def load_project(
     if service_config:
         session.add(AppSetting(key="service.config", value=json.dumps(service_config)))
 
-    # Restore system settings (e.g. PLC version tag binding)
-    system_settings = data.get("system_settings", {})
-    system_settings_keys = ["system.plc_version_tag"]
-    await session.execute(delete(AppSetting).where(AppSetting.key.in_(system_settings_keys)))
-    await session.flush()
-    for key in system_settings_keys:
-        val = system_settings.get(key)
-        if val:
-            session.add(AppSetting(key=key, value=val))
+    # Restore production settings (includes plc_version_tag) and preferences
+    await _restore_production_settings(session, data)
+    await _restore_preferences(session, data)
 
     await session.flush()
 
@@ -1636,16 +1710,12 @@ async def import_project(
             await session.flush()
             session.add(AppSetting(key="service.config", value=json.dumps(service_config)))
 
-        # Restore system settings if present (e.g. PLC version tag binding)
-        system_settings = data.get("system_settings", {})
-        if system_settings:
-            system_settings_keys = ["system.plc_version_tag"]
-            await session.execute(delete(AppSetting).where(AppSetting.key.in_(system_settings_keys)))
-            await session.flush()
-            for key in system_settings_keys:
-                val = system_settings.get(key)
-                if val:
-                    session.add(AppSetting(key=key, value=val))
+        # Restore production settings (includes plc_version_tag, with backward compat
+        # for old snapshots that stored it under system_settings) and preferences
+        if data.get("production_settings") or data.get("system_settings"):
+            await _restore_production_settings(session, data)
+        if data.get("preferences"):
+            await _restore_preferences(session, data)
 
     await session.flush()
     await session.refresh(project)
@@ -1789,16 +1859,9 @@ async def open_project_file(
         await session.flush()
         session.add(AppSetting(key="service.config", value=json.dumps(service_config)))
 
-    # Restore system settings
-    system_settings = data.get("system_settings", {})
-    if system_settings:
-        system_settings_keys = ["system.plc_version_tag"]
-        await session.execute(delete(AppSetting).where(AppSetting.key.in_(system_settings_keys)))
-        await session.flush()
-        for key in system_settings_keys:
-            val = system_settings.get(key)
-            if val:
-                session.add(AppSetting(key=key, value=val))
+    # Restore production settings (includes plc_version_tag) and preferences
+    await _restore_production_settings(session, data)
+    await _restore_preferences(session, data)
 
     await session.flush()
     await _set_active_project(session, project.id)

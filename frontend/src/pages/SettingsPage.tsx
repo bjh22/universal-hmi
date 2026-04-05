@@ -17,7 +17,7 @@ interface Props {
 
 // ─── Main SettingsPage ───
 export function SettingsPage({ user, tagValues, onTagsChanged }: Props) {
-  const [tab, setTab] = useState<'branding' | 'preferences' | 'tags' | 'datasources' | 'integrations' | 'reporting' | 'users' | 'audit' | 'system'>('tags');
+  const [tab, setTab] = useState<'preferences' | 'tags' | 'datasources' | 'integrations' | 'reporting' | 'users' | 'audit' | 'system'>('tags');
   const [systemInfo, setSystemInfo] = useState<{
     app_version: string; platform: string; python_version: string;
     install_path: string; database_path: string; is_compiled: boolean;
@@ -57,7 +57,6 @@ export function SettingsPage({ user, tagValues, onTagsChanged }: Props) {
   }, [tab, loadTags, loadLabels, loadDataSources, refreshUsers]);
 
   const tabList = [
-    { key: 'branding' as const, label: 'Branding' },
     { key: 'preferences' as const, label: 'Preferences' },
     { key: 'tags' as const, label: 'Tags' },
     { key: 'datasources' as const, label: 'Data Sources' },
@@ -86,8 +85,8 @@ export function SettingsPage({ user, tagValues, onTagsChanged }: Props) {
         ))}
       </div>
 
-      {/* ═══ Branding & Preferences ═══ */}
-      {(tab === 'branding' || tab === 'preferences') && (
+      {/* ═══ Preferences (branding + defaults) ═══ */}
+      {tab === 'preferences' && (
         <ThemeSettings />
       )}
 
