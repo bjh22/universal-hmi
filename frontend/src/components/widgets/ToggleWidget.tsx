@@ -31,7 +31,11 @@ export const ToggleWidget = memo(function ToggleWidget({ title, tag, tagValues, 
 
   // Write the INVERTED value — if currently on (true), write off (false), and vice versa
   const handleToggle = useCallback(async () => {
-    await api.writeTag(tag, !value);
+    try {
+      await api.writeTag(tag, !value);
+    } catch {
+      // 401 triggers LoginDialog via hmi:login-required event
+    }
   }, [tag, value]);
 
   return (

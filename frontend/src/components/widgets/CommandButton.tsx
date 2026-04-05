@@ -87,6 +87,8 @@ export const CommandButton = memo(function CommandButton({
       } else if (tag) {
         await api.writeTag(tag, value);
       }
+    } catch {
+      // 401 triggers LoginDialog via hmi:login-required event
     } finally {
       setPending(false);
     }
