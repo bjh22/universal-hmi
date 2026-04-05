@@ -80,9 +80,16 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     if (res.status === 401) {
+      const hadToken = !!localStorage.getItem('hmi_token');
       localStorage.removeItem('hmi_token');
       localStorage.removeItem('hmi_user');
-      window.dispatchEvent(new CustomEvent('hmi:auth-expired'));
+      const method = (options?.method || 'GET').toUpperCase();
+      const isWrite = method !== 'GET' && method !== 'HEAD';
+      if (hadToken) {
+        window.dispatchEvent(new CustomEvent('hmi:auth-expired'));
+      } else if (isWrite) {
+        window.dispatchEvent(new CustomEvent('hmi:login-required'));
+      }
     }
     throw new Error(body.detail || `HTTP ${res.status}`);
   }

@@ -26,7 +26,11 @@ export const DropdownSelectWidget = memo(function DropdownSelectWidget({ title, 
   const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const idx = Number(e.target.value);
     if (idx >= 0 && idx < options.length) {
-      await api.writeTag(tag, options[idx].value);
+      try {
+        await api.writeTag(tag, options[idx].value);
+      } catch {
+        // 401 triggers LoginDialog via hmi:login-required event
+      }
     }
   };
 

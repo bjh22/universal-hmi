@@ -14,6 +14,7 @@ import { FaultHelpDialog } from './components/FaultHelpDialog';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useAuthState } from './hooks/useAuth';
 import { LoginPage } from './pages/LoginPage';
+import { LoginDialog } from './components/LoginDialog';
 import { api } from './lib/api';
 import { applyTheme, saveCustomThemes } from './lib/theme';
 import { buildTagVisibilityMap } from './lib/tagVisibility';
@@ -216,6 +217,7 @@ export default function App() {
       />
     )}
     <BrowserRouter>
+      <LoginDialog onLogin={auth.login} />
       <Routes>
         {/* Login page is outside AppShell so it renders without sidebar/header */}
         <Route

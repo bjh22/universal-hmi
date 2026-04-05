@@ -28,7 +28,11 @@ export const ParameterInput = memo(function ParameterInput({ title, tag, tagValu
     const num = Number(val);
     if (isNaN(num)) return;
     const clamped = Math.max(min, Math.min(max, num));
-    await api.writeTag(tag, clamped);
+    try {
+      await api.writeTag(tag, clamped);
+    } catch {
+      // 401 triggers LoginDialog via hmi:login-required event
+    }
     setShowKeypad(false);
   };
 

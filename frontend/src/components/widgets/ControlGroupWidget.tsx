@@ -61,7 +61,11 @@ function ToggleControl({ item, tagValues, valueStyle }: { item: ControlItem & { 
   const value = Boolean(tv?.value);
 
   const handleToggle = async () => {
-    await api.writeTag(item.tag, !value);
+    try {
+      await api.writeTag(item.tag, !value);
+    } catch {
+      // 401 triggers LoginDialog via hmi:login-required event
+    }
   };
 
   const longDesc = tv?.description;
@@ -127,10 +131,14 @@ function ButtonControl({ item, tagValues }: { item: ControlItem & { type: 'butto
 
   const handleClick = async () => {
     if (item.confirm && !window.confirm(`Execute "${label}"?`)) return;
-    if (item.script) {
-      await api.executeScript(item.script);
-    } else if (item.tag) {
-      await api.writeTag(item.tag, item.value);
+    try {
+      if (item.script) {
+        await api.executeScript(item.script);
+      } else if (item.tag) {
+        await api.writeTag(item.tag, item.value);
+      }
+    } catch {
+      // 401 triggers LoginDialog via hmi:login-required event
     }
   };
 
@@ -160,7 +168,11 @@ function InputControl({ item, tagValues, valueStyle }: { item: ControlItem & { t
     const num = Number(val);
     if (isNaN(num)) return;
     const clamped = Math.max(min, Math.min(max, num));
-    await api.writeTag(item.tag, clamped);
+    try {
+      await api.writeTag(item.tag, clamped);
+    } catch {
+      // 401 triggers LoginDialog via hmi:login-required event
+    }
     setShowKeypad(false);
   };
 
@@ -209,7 +221,11 @@ function DropdownControl({ item, tagValues, valueStyle }: { item: ControlItem & 
   const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const idx = Number(e.target.value);
     if (idx >= 0 && idx < options.length) {
-      await api.writeTag(item.tag, options[idx].value);
+      try {
+        await api.writeTag(item.tag, options[idx].value);
+      } catch {
+        // 401 triggers LoginDialog via hmi:login-required event
+      }
     }
   };
 

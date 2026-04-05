@@ -29,7 +29,11 @@ export const LightIndicator = memo(function LightIndicator({ title, tag, writeTa
 
   const handleClick = async () => {
     if (!writeTag) return;
-    await api.writeTag(writeTag, !value);
+    try {
+      await api.writeTag(writeTag, !value);
+    } catch {
+      // 401 triggers LoginDialog via hmi:login-required event
+    }
   };
 
   return (
