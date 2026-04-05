@@ -106,6 +106,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ pin }),
     }),
+  logout: () =>
+    request<{ success: boolean }>('/auth/logout', { method: 'POST' }),
 
   // Tags
   getTags: (projectId?: number) =>

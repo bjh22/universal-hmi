@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.audit import AuditAction
@@ -86,3 +87,20 @@ async def pin_login(body: PinLoginRequest, request: Request, session: AsyncSessi
                 user={"id": user.id, "username": user.username, "display_name": user.display_name, "role": user.role.value},
             )
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid PIN")
+
+
+@router.post("/logout")
+async def logout(
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
+):
+    """Record logout event for audit trail. JWT is stateless so actual
+    token invalidation is handled client-side by removing it from localStorage."""
+    username = current_user.username if current_user else "unknown"
+    await log_audit(
+        session, AuditAction.LOGOUT,
+        user=username,
+        source_ip=request.client.host if request.client else None,
+    )
+    return {"success": True}
