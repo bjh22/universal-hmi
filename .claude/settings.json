@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "PreCommit": [
+      {
+        "command": "cd /Users/bhess/source/universal-hmi && ./dev.sh check && .venv/bin/python3 -m pytest backend/tests/ -x -q --timeout=30",
+        "description": "Run TypeScript type check, Vite build, ESLint, and backend tests before committing"
+      }
+    ]
+  }
+}

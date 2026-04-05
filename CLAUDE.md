@@ -2,6 +2,26 @@
 
 > **For controls engineers:** This file is a reference for AI-assisted development (used by tools like Claude Code). It provides a concise map of the entire codebase. You don't need to read it to use the HMI — see the [User Guide](docs/user-guide.md) for that. But it's useful if you want to understand where things live in the code.
 
+## Git Workflow
+
+Always create a feature branch before committing. Never commit directly to main. Use format: `git checkout -b <descriptive-branch-name>` before any commits.
+
+## Workflow
+
+When fixing bugs, always create a PR at the end of the session. Default PR workflow: fix → test → commit → push → create PR.
+
+## Debugging
+
+When debugging issues, address BOTH backend and frontend concerns. Do not focus on only one side unless explicitly told to.
+
+## UI Development
+
+When iterating on UI changes, get confirmation after each visual change before moving on. Don't batch multiple visual changes without verification.
+
+## Platform-Specific Notes
+
+For Raspberry Pi / ARM deployment: be cautious with GPU flags (--disable-gpu can crash Pi), test Wayland vs X11 display protocols, and handle Chromium already being installed on ARM.
+
 ## Project Overview
 
 Full-stack industrial HMI (Human-Machine Interface) for monitoring and controlling industrial equipment via OPC-UA, Modbus, EtherNet/IP, and MQTT. The **backend** (Python/FastAPI) handles PLC communication, alarm processing, trend logging, and data storage. The **frontend** (React/TypeScript) is the browser-based operator interface with a drag-and-drop screen designer.
