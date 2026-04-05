@@ -2,11 +2,13 @@ import { useEffect, useState, useCallback } from 'react';
 import {
   FolderOpen, Plus, Trash2, Download, Upload, X,
   Package, Tag as TagIcon, Monitor, Database, ClipboardList, PlayCircle, FileText,
+  Save, Copy, RotateCcw,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { Dialog } from '../components/Dialog';
 import { GitPanel } from '../components/GitPanel';
 import { ImportWizard } from '../components/ImportWizard';
+import { SaveAsDialog } from '../components/layout/SaveAsDialog';
 import type { ProjectData, ProjectFile, UserData } from '../types';
 
 interface Props {
@@ -39,6 +41,12 @@ export function ProjectsPage({ user, onProjectChanged }: Props) {
   const [showOpenConfirm, setShowOpenConfirm] = useState(false);
   const [dirtyChanges, setDirtyChanges] = useState<{ section: string; added: string[]; removed: string[]; modified: { name: string; fields: string[] }[] }[]>([]);
 
+  // Active project actions
+  const [showSaveAs, setShowSaveAs] = useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+
   // For ImportWizard (needs DB project list)
   const [dbProjects, setDbProjects] = useState<ProjectData[]>([]);
 
@@ -70,6 +78,20 @@ export function ProjectsPage({ user, onProjectChanged }: Props) {
   }, []);
 
   useEffect(() => { loadFiles(); loadActiveProject(); }, [loadFiles, loadActiveProject]);
+
+  // Poll dirty state for active project
+  useEffect(() => {
+    if (!activeProjectId) return;
+    let cancelled = false;
+    const check = () => {
+      api.getActiveProjectDirty().then(r => {
+        if (!cancelled) setDirty(r.dirty);
+      }).catch(() => {});
+    };
+    check();
+    const interval = setInterval(check, 10_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [activeProjectId]);
 
   const showSuccessMsg = useCallback((msg: string) => {
     setSuccess(msg);
@@ -163,6 +185,53 @@ export function ProjectsPage({ user, onProjectChanged }: Props) {
       setError(e instanceof Error ? e.message : 'Download failed');
     }
   }, []);
+
+  const handleSave = useCallback(async () => {
+    if (!activeProjectId || saving) return;
+    setSaving(true);
+    try {
+      await api.saveProject(activeProjectId);
+      setDirty(false);
+      showSuccessMsg('Project saved');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  }, [activeProjectId, saving, showSuccessMsg]);
+
+  const handleDiscard = useCallback(async () => {
+    if (!activeProjectId) return;
+    setBusy(true);
+    try {
+      await api.loadProject(activeProjectId);
+      setDirty(false);
+      setShowDiscardConfirm(false);
+      await loadFiles();
+      onProjectChanged?.();
+      showSuccessMsg('Changes discarded — project reloaded from last save');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Discard failed');
+    } finally {
+      setBusy(false);
+    }
+  }, [activeProjectId, loadFiles, onProjectChanged, showSuccessMsg]);
+
+  const handleExport = useCallback(async () => {
+    if (!activeProjectId) return;
+    try {
+      const data = await api.exportProject(activeProjectId);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${activeFile?.project_name || 'project'}.hmi.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Export failed');
+    }
+  }, [activeProjectId, activeFile?.project_name]);
 
   const initiateOpen = useCallback(async (filename: string) => {
     // If the file is already active, nothing to do
@@ -277,7 +346,12 @@ export function ProjectsPage({ user, onProjectChanged }: Props) {
             {selected ? (
               <div className="bg-slate-800 rounded-lg border border-slate-700 p-5 space-y-4">
                 <div>
-                  <h2 className="text-lg font-bold text-white">{selected.project_name}</h2>
+                  <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                    {selected.project_name}
+                    {selected.is_active && dirty && (
+                      <span className="text-xs bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded font-normal">Unsaved changes</span>
+                    )}
+                  </h2>
                   {selected.description && <p className="text-sm text-slate-400 mt-1">{selected.description}</p>}
                   <div className="flex items-center gap-3 mt-2 flex-wrap">
                     <span className="text-xs text-slate-500">Version {selected.version}</span>
@@ -316,22 +390,50 @@ export function ProjectsPage({ user, onProjectChanged }: Props) {
                 {/* Actions */}
                 {canEdit && (
                   <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-700">
-                    {!selected.is_active && (
-                      <button
-                        onClick={() => initiateOpen(selected.filename)}
-                        disabled={busy}
-                        className={btnPrimary}
-                      >
-                        <span className="flex items-center gap-1.5"><PlayCircle size={16} /> Open</span>
-                      </button>
-                    )}
-                    <button onClick={() => handleDownload(selected.filename)} className={btnSecondary}>
-                      <span className="flex items-center gap-1.5"><Download size={16} /> Download</span>
-                    </button>
-                    {!selected.is_active && (
-                      <button onClick={() => setShowDelete(true)} className={btnDanger}>
-                        <span className="flex items-center gap-1.5"><Trash2 size={16} /> Delete</span>
-                      </button>
+                    {selected.is_active ? (
+                      <>
+                        <button
+                          onClick={handleSave}
+                          disabled={!dirty || saving}
+                          className={dirty ? btnPrimary : btnSecondary}
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <Save size={16} /> {saving ? 'Saving...' : 'Save'}
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => setShowSaveAs(true)}
+                          className={btnSecondary}
+                        >
+                          <span className="flex items-center gap-1.5"><Copy size={16} /> Save As</span>
+                        </button>
+                        <button
+                          onClick={() => setShowDiscardConfirm(true)}
+                          disabled={!dirty || busy}
+                          className={btnSecondary}
+                        >
+                          <span className="flex items-center gap-1.5"><RotateCcw size={16} /> Discard Changes</span>
+                        </button>
+                        <button onClick={handleExport} className={btnSecondary}>
+                          <span className="flex items-center gap-1.5"><Download size={16} /> Export</span>
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => initiateOpen(selected.filename)}
+                          disabled={busy}
+                          className={btnPrimary}
+                        >
+                          <span className="flex items-center gap-1.5"><PlayCircle size={16} /> Open</span>
+                        </button>
+                        <button onClick={() => handleDownload(selected.filename)} className={btnSecondary}>
+                          <span className="flex items-center gap-1.5"><Download size={16} /> Download</span>
+                        </button>
+                        <button onClick={() => setShowDelete(true)} className={btnDanger}>
+                          <span className="flex items-center gap-1.5"><Trash2 size={16} /> Delete</span>
+                        </button>
+                      </>
                     )}
                   </div>
                 )}
@@ -486,6 +588,37 @@ export function ProjectsPage({ user, onProjectChanged }: Props) {
             </button>
           </div>
         </Dialog>
+      )}
+
+      {/* Discard Confirm */}
+      {showDiscardConfirm && (
+        <Dialog title="Discard Changes" onClose={() => setShowDiscardConfirm(false)}>
+          <p className="text-sm text-slate-300 mb-4">
+            Discard all unsaved changes and reload from the last save? This cannot be undone.
+          </p>
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setShowDiscardConfirm(false)} className={btnSecondary} disabled={busy}>Cancel</button>
+            <button onClick={handleDiscard} disabled={busy} className={btnDanger}>
+              {busy ? 'Discarding...' : 'Discard Changes'}
+            </button>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Save As Dialog */}
+      {showSaveAs && activeProjectId && (
+        <SaveAsDialog
+          activeProjectId={activeProjectId}
+          currentName={activeFile?.project_name || ''}
+          onClose={() => setShowSaveAs(false)}
+          onSaved={() => {
+            setShowSaveAs(false);
+            setDirty(false);
+            loadFiles();
+            loadActiveProject();
+            onProjectChanged?.();
+          }}
+        />
       )}
 
       {/* Import Wizard */}
