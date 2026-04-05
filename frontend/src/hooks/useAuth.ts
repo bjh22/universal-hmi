@@ -84,6 +84,7 @@ export function useAuthState(): AuthState {
       // Navigate to the default dashboard so the screen shows live data
       // rather than whatever authenticated page the user was on.
       if (window.location.pathname !== '/') {
+        window.__hmiAutoLogout = true;
         window.location.href = '/';
       }
     };
@@ -103,6 +104,7 @@ export function useAuthState(): AuthState {
     const onAuthExpired = () => {
       logout();
       if (window.location.pathname !== '/') {
+        window.__hmiAutoLogout = true;
         window.location.href = '/';
       }
     };

@@ -128,6 +128,7 @@ export function FileMenu({ activeProjectId, activeProjectName, userRole, onProje
   useEffect(() => {
     if (!dirty) return;
     const handler = (e: BeforeUnloadEvent) => {
+      if (window.__hmiAutoLogout) return;
       e.preventDefault();
     };
     window.addEventListener('beforeunload', handler);
