@@ -24,6 +24,9 @@ export const QRCodeWidget = memo(function QRCodeWidget({ title, tag, tagValues, 
   const tagValue = tag ? tagValues[tag]?.value : undefined;
   const content = tagValue != null ? String(tagValue) : (staticContent || '');
 
+  // qrcode library requires hex colors — convert 'transparent' to hex with alpha
+  const resolvedBg = bgColor === 'transparent' ? '#00000000' : bgColor;
+
   useEffect(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
@@ -44,11 +47,11 @@ export const QRCodeWidget = memo(function QRCodeWidget({ title, tag, tagValues, 
     QRCode.toCanvas(canvas, content, {
       width: size,
       margin: 1,
-      color: { dark: fgColor, light: bgColor },
+      color: { dark: fgColor, light: resolvedBg },
       errorCorrectionLevel: 'M',
     }).then(() => setError(null))
       .catch(() => setError('Encode error'));
-  }, [content, fgColor, bgColor]);
+  }, [content, fgColor, resolvedBg]);
 
   // Re-render on resize
   useEffect(() => {
@@ -62,23 +65,20 @@ export const QRCodeWidget = memo(function QRCodeWidget({ title, tag, tagValues, 
       QRCode.toCanvas(canvas, content, {
         width: size,
         margin: 1,
-        color: { dark: fgColor, light: bgColor },
+        color: { dark: fgColor, light: resolvedBg },
         errorCorrectionLevel: 'M',
       }).catch(() => {});
     });
     observer.observe(container);
     return () => observer.disconnect();
-  }, [content, fgColor, bgColor]);
+  }, [content, fgColor, resolvedBg]);
 
   return (
     <div className={`${getContainerClasses(chrome)} h-full flex flex-col`}>
       {shouldShowTitle(chrome) && <div className={getTitleClasses(chrome)} style={textStyleToCSS(titleStyle)}>{title}</div>}
       <div ref={containerRef} className="flex-1 flex items-center justify-center min-h-0">
-        {error ? (
-          <span className="text-xs text-slate-500">{error}</span>
-        ) : (
-          <canvas ref={canvasRef} className="max-w-full max-h-full" />
-        )}
+        {error && <span className="text-xs text-slate-500">{error}</span>}
+        <canvas ref={canvasRef} className={`max-w-full max-h-full ${error ? 'hidden' : ''}`} />
       </div>
     </div>
   );
