@@ -171,10 +171,11 @@ async def download_job(
     # Set active job system tag
     tag_engine.set_value("$ACTIVE_JOB", job.name)
 
+    setpoint_summary = ", ".join(f"{k}={v}" for k, v in setpoints.items())
     await log_audit(
         session, AuditAction.JOB_DOWNLOAD,
         user=current_user.username if current_user else "anonymous",
-        details=f"Downloaded job '{job.name}' v{job.version}",
+        details=f"Downloaded job '{job.name}' v{job.version}: {setpoint_summary}",
         source_ip=request.client.host,
     )
     return {"success": True, "results": results}

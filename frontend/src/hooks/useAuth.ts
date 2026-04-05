@@ -55,6 +55,8 @@ export function useAuthState(): AuthState {
   }, []);
 
   const logout = useCallback(() => {
+    // Fire-and-forget: record logout in audit log before clearing token
+    api.logout().catch(() => {});
     localStorage.removeItem('hmi_token');
     localStorage.removeItem('hmi_user');
     setToken(null);

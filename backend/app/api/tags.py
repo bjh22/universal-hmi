@@ -12,7 +12,9 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import require_role
 from app.core.database import get_db
+from app.models.audit import AuditAction
 from app.models.datasource import DataSource
+from app.services.audit_service import log_audit
 from app.models.screen import Screen
 from app.models.tag import Tag, TagAccessMode, TagDataType, TagLabel, TagTemplate
 from app.models.user import User, UserRole
@@ -228,6 +230,7 @@ async def get_tag_value(tag_name: str, session: AsyncSession = Depends(get_db)):
 async def write_tag_value(
     tag_name: str,
     body: dict,
+    request: Request,
     session: AsyncSession = Depends(get_db),
     _user: User = Depends(require_role(
         UserRole.OPERATOR, UserRole.SUPERVISOR,
@@ -249,6 +252,12 @@ async def write_tag_value(
     success = await tag_engine.write_value(tag_name, value)
     if not success:
         raise HTTPException(status_code=404, detail="Tag not found")
+    await log_audit(
+        session, AuditAction.CONTROL_WRITE,
+        user=_user.username,
+        details=f"Wrote tag '{tag_name}' = {value}",
+        source_ip=request.client.host if request.client else None,
+    )
     return {"success": True}
 
 
