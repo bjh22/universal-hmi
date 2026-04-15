@@ -196,8 +196,9 @@ async def git_branches(directory: Path) -> dict:
         parts = line.rsplit(" ", 1)
         if len(parts) == 2:
             name, marker = parts
+            name = name.strip()
             branches.append(name)
-            if marker == "*":
+            if marker.strip() == "*":
                 current = name
     return {"branches": branches, "current": current}
 
