@@ -70,6 +70,8 @@ You need two tools installed on your development machine. These are only needed 
 
 `pip` (Python's package manager) and `npm` (Node.js's package manager) come bundled automatically. No C compiler or special build tools are needed — all dependencies come prebuilt.
 
+> **No admin rights on Windows?** Run `dev.bat install-prereqs` (or `.\dev.ps1 install-prereqs`) to install Python and Node.js entirely under your user profile at `%USERPROFILE%\.universal-hmi\tools\`. The per-user Python installer (`InstallAllUsers=0`) and the Node.js ZIP don't trigger UAC, and the user PATH is updated via `HKCU\Environment` so new terminals pick it up automatically.
+
 > **Offline install:** The `install` command automatically detects a `backend/wheels/` directory and installs Python dependencies from local wheel files without requiring internet access. To pre-download wheels on a machine with internet, run:
 > ```bash
 > pip download -r backend/requirements.txt -d backend/wheels
@@ -103,6 +105,7 @@ cd universal-hmi
 ```cmd
 git clone <repo-url>
 cd universal-hmi
+dev.bat install-prereqs   :: Optional: only if you don't have admin rights and lack Python/Node.js
 dev.bat install
 dev.bat seed
 dev.bat dev
@@ -113,6 +116,7 @@ dev.bat dev
 ```powershell
 git clone <repo-url>
 cd universal-hmi
+.\dev.ps1 install-prereqs   # Optional: only if you don't have admin rights and lack Python/Node.js
 .\dev.ps1 install
 .\dev.ps1 seed
 .\dev.ps1 dev
@@ -137,6 +141,7 @@ All platforms have the same commands — just use the script that matches your s
 
 | Command | Description |
 |---------|-------------|
+| `install-prereqs` | **Windows only.** Install Python and Node.js under `%USERPROFILE%\.universal-hmi\tools\` — no admin required |
 | `install` | Download and install all software libraries the project depends on (offline-capable if `backend/wheels/` exists) |
 | `dev` | Start both servers for development — the backend (port 8080) and the browser UI (port 5173) |
 | `stop` | Stop any running dev servers |

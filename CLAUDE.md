@@ -72,6 +72,8 @@ frontend/              React SPA (Vite + TypeScript)
 
 `pip` and `npm` come bundled with Python and Node.js respectively. No C compiler or native build tools are needed — all Python dependencies ship prebuilt wheels. The dev scripts automatically create a Python virtual environment at `.venv/` on first run.
 
+**No admin rights on Windows?** Run `dev.bat install-prereqs` (or `.\dev.ps1 install-prereqs`) to install Python and Node.js entirely under your user profile at `%USERPROFILE%\.universal-hmi\tools\`. The per-user Python installer (`InstallAllUsers=0`) and Node.js ZIP don't trigger UAC, and the user PATH is updated via `HKCU\Environment` so new terminals pick it up automatically.
+
 **Offline install:** If a `backend/wheels/` directory exists, `install` uses `pip install --no-index --find-links=wheels` for fully offline Python dependency installation. To bundle wheels for offline use, run `pip download -r backend/requirements.txt -d backend/wheels` on a machine with internet access.
 
 Run `doctor` to verify your setup:
@@ -103,6 +105,7 @@ dev.bat doctor         # Windows CMD
 
 **Windows (CMD):**
 ```cmd
+dev.bat install-prereqs  # Install Python + Node.js under %USERPROFILE% (no admin required)
 dev.bat install     # Install all dependencies (pip + npm; uses offline wheels if backend\wheels\ exists)
 dev.bat dev         # Start backend (:8080) + frontend (:5173) dev servers (kills existing first)
 dev.bat stop        # Stop any running dev servers (ports 8080, 5173)
@@ -118,6 +121,7 @@ dev.bat doctor      # Check prerequisites
 
 **Windows (PowerShell):**
 ```powershell
+.\dev.ps1 install-prereqs  # Install Python + Node.js under %USERPROFILE% (no admin required)
 .\dev.ps1 install   # Install all dependencies (pip + npm; uses offline wheels if backend\wheels\ exists)
 .\dev.ps1 dev       # Start backend (:8080) + frontend (:5173) dev servers (kills existing first)
 .\dev.ps1 stop      # Stop any running dev servers (ports 8080, 5173)
