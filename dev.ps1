@@ -1,11 +1,36 @@
 param(
     [Parameter(Position=0)]
-    [ValidateSet("build", "lint", "check", "dev", "stop", "seed", "install", "doctor")]
+    [ValidateSet("build", "lint", "check", "dev", "stop", "seed", "install", "install-prereqs", "doctor")]
     [string]$Command
 )
 
 $ErrorActionPreference = "Stop"
 $RootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+# --- User-local tools directory (no admin required) ---
+# Node.js and Python are installed here by `install-prereqs` so developers
+# without admin rights can set up the environment entirely under their user
+# profile. These paths are prepended to PATH for the current session so
+# subsequent commands (install, dev, etc.) find the tools immediately.
+
+$LocalToolsDir = Join-Path $env:USERPROFILE ".universal-hmi\tools"
+$LocalNodeDir  = Join-Path $LocalToolsDir "node"
+$LocalPyDir    = Join-Path $LocalToolsDir "python"
+
+# Pinned versions for offline-friendly, reproducible installs
+$NodeVersion   = "22.11.0"
+$PythonVersion = "3.12.7"
+
+function Add-LocalToolsToPath {
+    if (Test-Path $LocalNodeDir) {
+        $env:PATH = "$LocalNodeDir;$env:PATH"
+    }
+    if (Test-Path $LocalPyDir) {
+        $env:PATH = "$LocalPyDir;$LocalPyDir\Scripts;$env:PATH"
+    }
+}
+
+Add-LocalToolsToPath
 
 # --- Prerequisite checks ---
 
@@ -14,9 +39,10 @@ function Test-Python {
     if (-not $py) {
         Write-Host "[ERROR] Python is not installed or not on PATH." -ForegroundColor Red
         Write-Host ""
-        Write-Host "  Install Python 3.10+ from https://www.python.org/downloads/" -ForegroundColor Yellow
-        Write-Host "    - Check 'Add python.exe to PATH' during install" -ForegroundColor Yellow
-        Write-Host "  Or:  winget install Python.Python.3.12" -ForegroundColor Yellow
+        Write-Host "  Run '.\dev.ps1 install-prereqs' to install Python to your user folder" -ForegroundColor Yellow
+        Write-Host "  (no admin required), or install Python 3.10+ manually:" -ForegroundColor Yellow
+        Write-Host "    https://www.python.org/downloads/" -ForegroundColor Yellow
+        Write-Host "    winget install Python.Python.3.12" -ForegroundColor Yellow
         return $false
     }
     $ver = (python --version 2>&1) -replace 'Python ',''
@@ -34,8 +60,10 @@ function Test-Node {
     if (-not $nd) {
         Write-Host "[ERROR] Node.js is not installed or not on PATH." -ForegroundColor Red
         Write-Host ""
-        Write-Host "  Install Node.js 18+ LTS from https://nodejs.org/" -ForegroundColor Yellow
-        Write-Host "  Or:  winget install OpenJS.NodeJS.LTS" -ForegroundColor Yellow
+        Write-Host "  Run '.\dev.ps1 install-prereqs' to install Node.js to your user folder" -ForegroundColor Yellow
+        Write-Host "  (no admin required), or install Node.js 18+ LTS manually:" -ForegroundColor Yellow
+        Write-Host "    https://nodejs.org/" -ForegroundColor Yellow
+        Write-Host "    winget install OpenJS.NodeJS.LTS" -ForegroundColor Yellow
         return $false
     }
     $ver = (node --version) -replace 'v',''
@@ -70,6 +98,132 @@ function Ensure-Venv {
         python -m venv (Join-Path $RootDir ".venv")
     }
     $script:VenvPy = $venvPython
+}
+
+# --- User-local installers (no admin required) ---
+
+function Add-UserPath([string]$Dir) {
+    # Persist a directory in the user's PATH (no admin needed). New shells
+    # will pick it up automatically; the current session is updated above.
+    $current = [Environment]::GetEnvironmentVariable("Path", "User")
+    if (-not $current) { $current = "" }
+    $parts = $current.Split(';') | Where-Object { $_ -and $_ -ne $Dir }
+    $newPath = (@($Dir) + $parts) -join ';'
+    [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+}
+
+function Install-NodeLocal {
+    if (Get-Command node -ErrorAction SilentlyContinue) {
+        $existing = (node --version) -replace 'v',''
+        $major = [int]($existing.Split('.')[0])
+        if ($major -ge 18) {
+            Write-Host "[ OK ] Node.js v$existing already available — skipping." -ForegroundColor Green
+            return
+        }
+    }
+
+    Write-Host "==> Installing Node.js v$NodeVersion to $LocalNodeDir ..." -ForegroundColor Cyan
+    $arch = if ([Environment]::Is64BitOperatingSystem) { "x64" } else { "x86" }
+    $zipName = "node-v$NodeVersion-win-$arch"
+    $url = "https://nodejs.org/dist/v$NodeVersion/$zipName.zip"
+    $tmpZip = Join-Path $env:TEMP "$zipName.zip"
+    $tmpExtract = Join-Path $env:TEMP "universal-hmi-node-extract"
+
+    New-Item -ItemType Directory -Force -Path $LocalToolsDir | Out-Null
+    if (Test-Path $LocalNodeDir) { Remove-Item -Recurse -Force $LocalNodeDir }
+    if (Test-Path $tmpExtract)   { Remove-Item -Recurse -Force $tmpExtract }
+
+    Write-Host "    Downloading $url ..." -ForegroundColor DarkGray
+    try {
+        # Force TLS 1.2 for older PowerShell versions
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest -Uri $url -OutFile $tmpZip -UseBasicParsing
+    } catch {
+        Write-Host "[ERROR] Failed to download Node.js: $_" -ForegroundColor Red
+        Write-Host "        Check your internet connection or download manually from https://nodejs.org/" -ForegroundColor Yellow
+        exit 1
+    }
+
+    Write-Host "    Extracting ..." -ForegroundColor DarkGray
+    Expand-Archive -Path $tmpZip -DestinationPath $tmpExtract -Force
+    Move-Item -Path (Join-Path $tmpExtract $zipName) -Destination $LocalNodeDir
+    Remove-Item -Recurse -Force $tmpExtract -ErrorAction SilentlyContinue
+    Remove-Item -Force $tmpZip -ErrorAction SilentlyContinue
+
+    Add-UserPath $LocalNodeDir
+    $env:PATH = "$LocalNodeDir;$env:PATH"
+    Write-Host "[ OK ] Node.js installed to $LocalNodeDir" -ForegroundColor Green
+}
+
+function Install-PythonLocal {
+    if (Get-Command python -ErrorAction SilentlyContinue) {
+        $ver = (python --version 2>&1) -replace 'Python ',''
+        $parts = $ver.Split('.')
+        if ([int]$parts[0] -ge 3 -and [int]$parts[1] -ge 10) {
+            Write-Host "[ OK ] Python $ver already available — skipping." -ForegroundColor Green
+            return
+        }
+    }
+
+    Write-Host "==> Installing Python $PythonVersion (user scope, no admin) ..." -ForegroundColor Cyan
+    $arch = if ([Environment]::Is64BitOperatingSystem) { "amd64" } else { "win32" }
+    $installerName = "python-$PythonVersion-$arch.exe"
+    $url = "https://www.python.org/ftp/python/$PythonVersion/$installerName"
+    $tmpExe = Join-Path $env:TEMP $installerName
+
+    Write-Host "    Downloading $url ..." -ForegroundColor DarkGray
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest -Uri $url -OutFile $tmpExe -UseBasicParsing
+    } catch {
+        Write-Host "[ERROR] Failed to download Python: $_" -ForegroundColor Red
+        Write-Host "        Check your internet connection or download manually from https://www.python.org/downloads/" -ForegroundColor Yellow
+        exit 1
+    }
+
+    Write-Host "    Running installer (user scope, no admin prompt) ..." -ForegroundColor DarkGray
+    # InstallAllUsers=0 -> per-user install to %LOCALAPPDATA%\Programs\Python\...
+    # PrependPath=1     -> add python + Scripts to the user's PATH
+    # Include_launcher=0 -> skip the py launcher (which needs admin)
+    # TargetDir         -> force a known location under user profile
+    New-Item -ItemType Directory -Force -Path $LocalPyDir | Out-Null
+    $installArgs = @(
+        "/passive",
+        "InstallAllUsers=0",
+        "PrependPath=1",
+        "Include_launcher=0",
+        "Include_test=0",
+        "SimpleInstall=1",
+        "TargetDir=$LocalPyDir"
+    )
+    $proc = Start-Process -FilePath $tmpExe -ArgumentList $installArgs -Wait -PassThru
+    Remove-Item -Force $tmpExe -ErrorAction SilentlyContinue
+
+    if ($proc.ExitCode -ne 0) {
+        Write-Host "[ERROR] Python installer exited with code $($proc.ExitCode)" -ForegroundColor Red
+        exit 1
+    }
+
+    # Installer should prepend to user PATH, but ensure our path is present
+    Add-UserPath (Join-Path $LocalPyDir "Scripts")
+    Add-UserPath $LocalPyDir
+    $env:PATH = "$LocalPyDir;$LocalPyDir\Scripts;$env:PATH"
+    Write-Host "[ OK ] Python installed to $LocalPyDir" -ForegroundColor Green
+}
+
+function Invoke-InstallPrereqs {
+    Write-Host "=== Installing developer prerequisites (no admin required) ===" -ForegroundColor White
+    Write-Host "    Tools will be installed under: $LocalToolsDir" -ForegroundColor DarkGray
+    Write-Host ""
+    Install-PythonLocal
+    Install-NodeLocal
+    Write-Host ""
+    Write-Host "==> Prerequisites installed." -ForegroundColor Green
+    Write-Host "    Your user PATH has been updated. New terminals will pick this up" -ForegroundColor DarkGray
+    Write-Host "    automatically. For the current terminal, re-run '.\dev.ps1' commands" -ForegroundColor DarkGray
+    Write-Host "    from this same window (PATH is already set for this session)." -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "    Next: .\dev.ps1 install" -ForegroundColor White
 }
 
 # --- Process management ---
@@ -109,10 +263,10 @@ function Invoke-Doctor {
     $py = Get-Command python -ErrorAction SilentlyContinue
     if ($py) {
         $pyVer = python --version 2>&1
-        Write-Host "[ OK ] $pyVer" -ForegroundColor Green
+        Write-Host "[ OK ] $pyVer  ($($py.Source))" -ForegroundColor Green
     } else {
         Write-Host "[FAIL] Python        not found" -ForegroundColor Red
-        Write-Host "       Install from https://www.python.org/downloads/" -ForegroundColor Yellow
+        Write-Host "       Run '.\dev.ps1 install-prereqs' (no admin needed)" -ForegroundColor Yellow
     }
 
     # pip
@@ -127,10 +281,10 @@ function Invoke-Doctor {
     $nd = Get-Command node -ErrorAction SilentlyContinue
     if ($nd) {
         $ndVer = node --version
-        Write-Host "[ OK ] Node.js $ndVer" -ForegroundColor Green
+        Write-Host "[ OK ] Node.js $ndVer  ($($nd.Source))" -ForegroundColor Green
     } else {
         Write-Host "[FAIL] Node.js       not found" -ForegroundColor Red
-        Write-Host "       Install from https://nodejs.org/" -ForegroundColor Yellow
+        Write-Host "       Run '.\dev.ps1 install-prereqs' (no admin needed)" -ForegroundColor Yellow
     }
 
     # npm
@@ -153,6 +307,11 @@ function Invoke-Doctor {
 
     Write-Host ""
 
+    # User-local tools
+    if (Test-Path $LocalToolsDir) {
+        Write-Host "[INFO] User-local tools dir: $LocalToolsDir" -ForegroundColor Cyan
+    }
+
     # Project state
     if (Test-Path "$RootDir\backend\hmi.db") {
         Write-Host "[ OK ] Database exists (backend\hmi.db)" -ForegroundColor Green
@@ -167,7 +326,12 @@ function Invoke-Doctor {
     }
 
     Write-Host ""
-    Write-Host "Run '.\dev.ps1 install' to install project dependencies." -ForegroundColor White
+    if (-not $py -or -not $nd) {
+        Write-Host "Run '.\dev.ps1 install-prereqs' to install Python and Node.js" -ForegroundColor White
+        Write-Host "to your user folder (no admin required)." -ForegroundColor White
+    } else {
+        Write-Host "Run '.\dev.ps1 install' to install project dependencies." -ForegroundColor White
+    }
 }
 
 function Invoke-Build {
@@ -250,28 +414,32 @@ function Invoke-Install {
 # --- Dispatch ---
 
 switch ($Command) {
-    "build"   { Invoke-Build }
-    "lint"    { Invoke-Lint }
-    "check"   { Invoke-Check }
-    "dev"     { Invoke-Dev }
-    "stop"    { Invoke-Stop }
-    "seed"    { Invoke-Seed }
-    "install" { Invoke-Install }
-    "doctor"  { Invoke-Doctor }
+    "build"           { Invoke-Build }
+    "lint"            { Invoke-Lint }
+    "check"           { Invoke-Check }
+    "dev"             { Invoke-Dev }
+    "stop"            { Invoke-Stop }
+    "seed"            { Invoke-Seed }
+    "install"         { Invoke-Install }
+    "install-prereqs" { Invoke-InstallPrereqs }
+    "doctor"          { Invoke-Doctor }
     default {
         Write-Host "Usage: .\dev.ps1 <command>" -ForegroundColor White
         Write-Host ""
         Write-Host "Commands:"
-        Write-Host "  install     Install all dependencies (pip + npm)"
-        Write-Host "  dev         Start backend (:8080) + frontend (:5173) dev servers"
-        Write-Host "  stop        Stop any running dev servers (ports 8080, 5173)"
-        Write-Host "  build       TypeScript check + Vite build"
-        Write-Host "  lint        Run ESLint on the frontend"
-        Write-Host "  check       Run both build and lint"
-        Write-Host "  seed        Seed the database with default users/tags"
-        Write-Host "  doctor      Check development environment prerequisites"
+        Write-Host "  install-prereqs  Install Python + Node.js to your user folder (no admin required)"
+        Write-Host "  install          Install all project dependencies (pip + npm)"
+        Write-Host "  dev              Start backend (:8080) + frontend (:5173) dev servers"
+        Write-Host "  stop             Stop any running dev servers (ports 8080, 5173)"
+        Write-Host "  build            TypeScript check + Vite build"
+        Write-Host "  lint             Run ESLint on the frontend"
+        Write-Host "  check            Run both build and lint"
+        Write-Host "  seed             Seed the database with default users/tags"
+        Write-Host "  doctor           Check development environment prerequisites"
         Write-Host ""
         Write-Host "Prerequisites: Python 3.10+, Node.js 18+" -ForegroundColor DarkGray
+        Write-Host "No admin rights? Run '.\dev.ps1 install-prereqs' to install both" -ForegroundColor DarkGray
+        Write-Host "to your user folder." -ForegroundColor DarkGray
         Write-Host "Run '.\dev.ps1 doctor' to check your setup." -ForegroundColor DarkGray
     }
 }
