@@ -464,6 +464,15 @@ export function TagDialog({ tag, dataSources, allLabels, allTags, onSave, onClos
 // ─── Bulk Edit Dialog ───
 type BulkFieldState = { enabled: boolean; value: unknown };
 
+// Module-scope constants (stable across renders — hoisted out of BulkEditDialog
+// to satisfy react-hooks/exhaustive-deps without needing useMemo wrappers).
+const BULK_BOOLEAN_KEYS = new Set(['trending_enabled', 'alarm_enabled', 'alarm_help_enabled', 'simulation_enabled', 'visibility_enabled']);
+const BULK_ALARM_CONFIG_KEYS: Record<string, string> = {
+  alarm_severity: 'severity',
+  alarm_help_enabled: 'help_enabled',
+  alarm_help_text: 'help_text',
+};
+
 function BulkEditDialog({ tagCount, dataSources, onApply, onClose }: {
   tagCount: number;
   dataSources: DataSourceData[];
@@ -490,35 +499,26 @@ function BulkEditDialog({ tagCount, dataSources, onApply, onClose }: {
     visibility_enabled:     { enabled: false, value: false },
   });
 
-  // Boolean fields that default to true when first enabled (users enabling
-  // "Alarm" in bulk edit almost always want alarm_enabled=true, not false).
-  const booleanKeys = new Set(['trending_enabled', 'alarm_enabled', 'alarm_help_enabled', 'simulation_enabled', 'visibility_enabled']);
-
+  // Boolean fields (BULK_BOOLEAN_KEYS) default to true when first enabled —
+  // users enabling "Alarm" in bulk edit almost always want alarm_enabled=true.
   const toggle = useCallback((key: string) =>
     setFields(f => {
       const wasEnabled = f[key].enabled;
       const newEnabled = !wasEnabled;
       // When enabling a boolean toggle field, auto-set value to true
-      const value = (!wasEnabled && newEnabled && booleanKeys.has(key)) ? true : f[key].value;
+      const value = (!wasEnabled && newEnabled && BULK_BOOLEAN_KEYS.has(key)) ? true : f[key].value;
       return { ...f, [key]: { ...f[key], enabled: newEnabled, value } };
     }), []);
   const setValue = useCallback((key: string, value: unknown) =>
     setFields(f => ({ ...f, [key]: { ...f[key], value } })), []);
-
-  // Map bulk-edit alarm sub-fields into an alarm_config patch dict
-  const alarmConfigKeys: Record<string, string> = {
-    alarm_severity: 'severity',
-    alarm_help_enabled: 'help_enabled',
-    alarm_help_text: 'help_text',
-  };
 
   const handleApply = useCallback(() => {
     const patch: Record<string, unknown> = {};
     const alarmPatch: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(fields)) {
       if (!v.enabled) continue;
-      if (k in alarmConfigKeys) {
-        alarmPatch[alarmConfigKeys[k]] = v.value;
+      if (k in BULK_ALARM_CONFIG_KEYS) {
+        alarmPatch[BULK_ALARM_CONFIG_KEYS[k]] = v.value;
       } else {
         patch[k] = v.value;
       }
