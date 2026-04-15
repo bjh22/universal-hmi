@@ -35,9 +35,6 @@ export function FileMenu({ activeProjectId, activeProjectName, userRole, onProje
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  // Only render for engineer/designer
-  if (!userRole || !['engineer', 'designer'].includes(userRole)) return null;
-
   // Poll dirty state
   useEffect(() => {
     if (!activeProjectId) return;
@@ -134,6 +131,9 @@ export function FileMenu({ activeProjectId, activeProjectName, userRole, onProje
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [dirty]);
+
+  // Only render for engineer/designer — done AFTER hooks to comply with rules-of-hooks
+  if (!userRole || !['engineer', 'designer'].includes(userRole)) return null;
 
   const displayName = activeProjectName || 'No Project';
 
