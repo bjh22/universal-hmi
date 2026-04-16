@@ -2,25 +2,24 @@
 
 > **For controls engineers:** This file is a reference for AI-assisted development (used by tools like Claude Code). It provides a concise map of the entire codebase. You don't need to read it to use the HMI — see the [User Guide](docs/user-guide.md) for that. But it's useful if you want to understand where things live in the code.
 
-## Git Workflow
+## Project Rules
 
-Always create a feature branch before committing. Never commit directly to main. Use format: `git checkout -b <descriptive-branch-name>` before any commits.
+**Git.** Never commit directly to `main`. Work on feature branches with descriptive names (e.g., `fix/alarm-ack-race`, `feat/zpl-templates`). When the harness assigns a session-specific branch, that assignment takes precedence over any branch suggestion here.
 
-## Workflow
+**Bug fix workflow.** fix → test → commit → push → *offer* to open a PR. Don't open a PR unless the user confirms.
 
-When fixing bugs, always create a PR at the end of the session. Default PR workflow: fix → test → commit → push → create PR.
+**Debugging.** Consider both backend and frontend unless the user explicitly narrows the scope.
 
-## Debugging
+**UI iteration.** In interactive sessions where the user is driving visual changes, confirm each change before moving on — don't batch. In automated or non-interactive runs, group related visual changes and verify via type check / build rather than per-change confirmation.
 
-When debugging issues, address BOTH backend and frontend concerns. Do not focus on only one side unless explicitly told to.
+**Testing expectations.**
+- Run `./dev.sh check` (build + lint) before every commit.
+- Run `./dev.sh test` for changes touching services, hooks, widgets, or API logic.
+- Type checking and tests verify code correctness, not feature correctness — for UI changes, also exercise the feature in a browser when possible.
+- CI should use `install` (auto-uses `backend/wheels/` if present) + `check` + `test`.
+- Don't commit `.venv/`, `backend/wheels/` (unless intentionally shipping offline bundles), or `hmi.db`.
 
-## UI Development
-
-When iterating on UI changes, get confirmation after each visual change before moving on. Don't batch multiple visual changes without verification.
-
-## Platform-Specific Notes
-
-For Raspberry Pi / ARM deployment: be cautious with GPU flags (--disable-gpu can crash Pi), test Wayland vs X11 display protocols, and handle Chromium already being installed on ARM.
+**Platform (Pi/ARM).** Avoid `--disable-gpu` (can crash Pi). Test both Wayland and X11. Chromium is typically pre-installed on ARM — don't reinstall.
 
 ## Project Overview
 
@@ -88,71 +87,12 @@ dev.bat doctor         # Windows CMD
 
 ## Commands
 
-**Linux / macOS:**
-```bash
-./dev.sh install    # Install all dependencies (pip + npm; uses offline wheels if backend/wheels/ exists)
-./dev.sh dev        # Start backend (:8080) + frontend (:5173) dev servers (kills existing first)
-./dev.sh stop       # Stop any running dev servers (ports 8080, 5173)
-./dev.sh build      # TypeScript check + Vite build
-./dev.sh lint       # ESLint
-./dev.sh check      # Build + lint
-./dev.sh test       # Run all tests (backend + frontend)
-./dev.sh test:backend  # Backend tests only (pytest)
-./dev.sh test:frontend # Frontend tests only (vitest)
-./dev.sh seed       # Seed database with default users/tags
-./dev.sh doctor     # Check prerequisites
-```
+The `dev.sh` / `dev.bat` / `dev.ps1` wrappers expose the common dev tasks (`install`, `dev`, `stop`, `build`, `lint`, `check`, `test`, `test:backend`, `test:frontend`, `seed`, `doctor`). See [README.md → Dev Script Commands](README.md#dev-script-commands) for the full matrix across platforms.
 
-**Windows (CMD):**
-```cmd
-dev.bat install-prereqs  # Install Python + Node.js under %USERPROFILE% (no admin required)
-dev.bat install     # Install all dependencies (pip + npm; uses offline wheels if backend\wheels\ exists)
-dev.bat dev         # Start backend (:8080) + frontend (:5173) dev servers (kills existing first)
-dev.bat stop        # Stop any running dev servers (ports 8080, 5173)
-dev.bat build       # TypeScript check + Vite build
-dev.bat lint        # ESLint
-dev.bat check       # Build + lint
-dev.bat test        # Run all tests (backend + frontend)
-dev.bat test:backend   # Backend tests only (pytest)
-dev.bat test:frontend  # Frontend tests only (vitest)
-dev.bat seed        # Seed database with default users/tags
-dev.bat doctor      # Check prerequisites
-```
-
-**Windows (PowerShell):**
-```powershell
-.\dev.ps1 install-prereqs  # Install Python + Node.js under %USERPROFILE% (no admin required)
-.\dev.ps1 install   # Install all dependencies (pip + npm; uses offline wheels if backend\wheels\ exists)
-.\dev.ps1 dev       # Start backend (:8080) + frontend (:5173) dev servers (kills existing first)
-.\dev.ps1 stop      # Stop any running dev servers (ports 8080, 5173)
-.\dev.ps1 build     # TypeScript check + Vite build
-.\dev.ps1 lint      # ESLint
-.\dev.ps1 check     # Build + lint
-.\dev.ps1 test      # Run all tests (backend + frontend)
-.\dev.ps1 test:backend  # Backend tests only (pytest)
-.\dev.ps1 test:frontend # Frontend tests only (vitest)
-.\dev.ps1 seed      # Seed database with default users/tags
-.\dev.ps1 doctor    # Check prerequisites
-```
-
-**Frontend only:**
-```bash
-cd frontend
-npm run dev          # Vite dev server on :5173
-npm run build        # tsc -b && vite build
-npm run lint         # eslint .
-npx tsc --noEmit     # Type check only
-npx vitest run       # Run frontend tests
-```
-
-**Backend only:**
-```bash
-cd backend
-python run.py        # Start on :8080
-python -m app.seed   # Seed database
-python -m pytest tests/ -v          # Run backend tests
-python -m pytest --cov=app tests/   # Run with coverage
-```
+Most AI-relevant shortcuts:
+- `./dev.sh check` — build + lint (run before committing)
+- `./dev.sh test` — run all tests
+- `./dev.sh dev` — start backend (:8080) + frontend (:5173)
 
 ## Authentication & Roles
 
@@ -183,56 +123,11 @@ Environment variables prefixed with `HMI_` (or `.env` file):
 - `HMI_PROJECTS_DIR` — override projects directory (point at a cloned git repo for sharing)
 - `HMI_HOST`, `HMI_PORT`, `HMI_DEBUG`
 
-## Key API Endpoints
+## API Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/auth/login` | Password login |
-| POST | `/api/auth/pin-login` | PIN login |
-| GET | `/api/tags/` | List tags |
-| GET | `/api/tags/values` | Current tag values |
-| POST | `/api/tags/values/{name}/write` | Write tag value |
-| GET | `/api/screens/` | List screens |
-| GET | `/api/screens/by-slug/{slug}` | Get screen by slug |
-| POST | `/api/screens/` | Create screen |
-| PUT | `/api/screens/{id}` | Update screen layout |
-| DELETE | `/api/screens/{id}` | Delete screen |
-| GET | `/api/alarms/active` | Active alarms |
-| POST | `/api/alarms/{id}/acknowledge` | Acknowledge alarm |
-| GET | `/api/trends/data/{tag_id}` | Trend data |
-| GET | `/api/reporting/summary` | Compute report metrics for a timeframe |
-| GET | `/api/reporting/time-series` | Bucketed metrics for charts (day/week/month) |
-| GET | `/api/reporting/downtime-periods` | List downtime periods in timeframe |
-| PUT | `/api/reporting/downtime-periods/{id}/annotate` | Tag a downtime period with reason code |
-| GET | `/api/reporting/downtime-summary` | Downtime Pareto analysis by reason code |
-| GET | `/api/production/settings/` | Get production settings (tag bindings + reporting config) |
-| PUT | `/api/production/settings/` | Update production settings (tag bindings + reporting config) |
-| GET | `/api/service/config/` | Get service page configuration |
-| PUT | `/api/service/config/` | Update service page configuration |
-| POST | `/api/zpl-preview/render` | Render ZPL text to PNG |
-| POST | `/api/zpl-preview/render-file` | Render uploaded ZPL file to PNG |
-| GET | `/api/reason-codes/` | List downtime reason codes |
-| POST | `/api/reason-codes/` | Create a reason code |
-| PUT | `/api/reason-codes/{id}` | Update a reason code |
-| DELETE | `/api/reason-codes/{id}` | Soft-delete a reason code |
-| POST | `/api/media/upload` | Upload fault help image (multipart) |
-| GET | `/api/media/{media_id}` | Serve a fault help image |
-| GET | `/api/media/` | List uploaded fault help images |
-| DELETE | `/api/media/{media_id}` | Delete a fault help image |
-| GET | `/api/system/health` | Unauthenticated health check (kiosk startup probe) |
-| GET | `/api/system/info` | System info (version, platform, install type) |
-| POST | `/api/system/update/validate` | Validate update package (source or compiled) |
-| POST | `/api/system/update/apply` | Apply update package and restart |
-| GET | `/api/projects/git/status` | Git repo status (branch, dirty, ahead/behind) |
-| GET | `/api/projects/git/log` | Recent git commit history |
-| POST | `/api/projects/git/commit` | Stage .hmi.json files and commit |
-| POST | `/api/projects/git/push` | Push to remote |
-| POST | `/api/projects/git/pull` | Pull from remote (rebase) |
-| GET | `/api/projects/git/branches` | List git branches |
-| POST | `/api/projects/git/checkout` | Switch git branch |
-| WS | `/ws` | Real-time tag values + alarms |
+The full endpoint catalog lives in [DEVELOPER.md → API Reference](DEVELOPER.md#api-reference), grouped by resource (Auth, Tags, Screens, Alarms, Trends, Data Sources, Jobs, Reporting, Reason Codes, Users, Service Config, Media, ZPL Preview, System Update, WebSocket). Route handlers live in `backend/app/api/` — one file per resource.
 
-**WebSocket messages:** `snapshot` (initial), `tag_update` (deltas), `alarm` (state changes), `keepalive` (30s)
+**WebSocket (`/ws`) messages:** `snapshot` (initial), `tag_update` (deltas), `alarm` (state changes), `alarms_snapshot` (full list on reconnect), `keepalive` (30s).
 
 ## Key Backend Services
 
